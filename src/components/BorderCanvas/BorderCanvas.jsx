@@ -319,8 +319,35 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings }, ref) 
           const fmt = FORMAT_PREFERENCE.find(f => MediaRecorder.isTypeSupported(f.mime))
             ?? { mime: 'video/webm', fileMime: 'video/webm', ext: 'webm' }
 
-          const stream = canvas.captureStream(30)
-          const recorder = new MediaRecorder(stream, { mimeType: fmt.mime })
+          // Canvas only captures pixels — we must separately pull audio
+          // from the video element and add it to the stream.
+          source.muted = false
+          const canvasStream = canvas.captureStream(30)
+
+          // Prefer captureStream() on the video element itself (gets the
+          // original audio track directly). Fall back to Web Audio API.
+          let audioCleanup = null
+          try {
+            if (typeof source.captureStream === 'function') {
+              source.captureStream().getAudioTracks().forEach(t => canvasStream.addTrack(t))
+            } else if (typeof source.mozCaptureStream === 'function') {
+              source.mozCaptureStream().getAudioTracks().forEach(t => canvasStream.addTrack(t))
+            } else {
+              // Web Audio API fallback
+              const AudioCtx = window.AudioContext || window.webkitAudioContext
+              const audioCtx = new AudioCtx()
+              const src = audioCtx.createMediaElementSource(source)
+              const dst = audioCtx.createMediaStreamDestination()
+              src.connect(dst)
+              src.connect(audioCtx.destination)
+              dst.stream.getAudioTracks().forEach(t => canvasStream.addTrack(t))
+              audioCleanup = () => audioCtx.close()
+            }
+          } catch (e) {
+            console.warn('Audio capture unavailable:', e)
+          }
+
+          const recorder = new MediaRecorder(canvasStream, { mimeType: fmt.mime })
           const chunks = []
 
           recorder.ondataavailable = e => {
@@ -331,9 +358,11 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings }, ref) 
             const blob = new Blob(chunks, { type: fmt.fileMime })
             const filename = `border-studio.${fmt.ext}`
 
-            // Resume looping preview before any async work
+            // Restore muted preview loop
+            source.muted = true
             source.loop = true
             source.play().catch(() => {})
+            if (audioCleanup) audioCleanup()
             startLoop()
 
             // iOS: Web Share API → "Save to Photos" appears when sharing a
@@ -388,6 +417,8 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings }, ref) 
           source.play().then(() => {
             requestAnimationFrame(recordLoop)
           }).catch(() => {
+            source.muted = true
+            if (audioCleanup) audioCleanup()
             source.removeEventListener('ended', onEnded)
             recorder.stop()
           })
