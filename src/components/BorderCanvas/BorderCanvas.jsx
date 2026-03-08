@@ -305,37 +305,63 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings }, ref) 
       const source = sourceRef.current
       if (!canvas) return
 
-      // ── Video: record canvas stream as WebM ──────────────────────────────
+      // ── Video: record canvas stream ───────────────────────────────────────
       if (mediaRef.current?.type === 'video' && source) {
         return new Promise((resolve) => {
-          // Pick best supported format
-          const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-            ? 'video/webm;codecs=vp9'
-            : 'video/webm'
-          const ext = 'webm'
+          // iOS Safari only supports video/mp4; desktop supports webm.
+          // Try formats in preference order.
+          const FORMAT_PREFERENCE = [
+            { mime: 'video/mp4;codecs=avc1', fileMime: 'video/mp4', ext: 'mp4' },
+            { mime: 'video/mp4', fileMime: 'video/mp4', ext: 'mp4' },
+            { mime: 'video/webm;codecs=vp9', fileMime: 'video/webm', ext: 'webm' },
+            { mime: 'video/webm', fileMime: 'video/webm', ext: 'webm' },
+          ]
+          const fmt = FORMAT_PREFERENCE.find(f => MediaRecorder.isTypeSupported(f.mime))
+            ?? { mime: 'video/webm', fileMime: 'video/webm', ext: 'webm' }
 
           const stream = canvas.captureStream(30)
-          const recorder = new MediaRecorder(stream, { mimeType })
+          const recorder = new MediaRecorder(stream, { mimeType: fmt.mime })
           const chunks = []
 
           recorder.ondataavailable = e => {
             if (e.data.size > 0) chunks.push(e.data)
           }
 
-          recorder.onstop = () => {
-            const blob = new Blob(chunks, { type: mimeType })
+          recorder.onstop = async () => {
+            const blob = new Blob(chunks, { type: fmt.fileMime })
+            const filename = `border-studio.${fmt.ext}`
+
+            // Resume looping preview before any async work
+            source.loop = true
+            source.play().catch(() => {})
+            startLoop()
+
+            // iOS: Web Share API → "Save to Photos" appears when sharing a
+            // supported video file (MP4). This is the only reliable path to
+            // the camera roll from a PWA.
+            if (navigator.share && navigator.canShare) {
+              const shareFile = new File([blob], filename, { type: fmt.fileMime })
+              if (navigator.canShare({ files: [shareFile] })) {
+                try {
+                  await navigator.share({ files: [shareFile] })
+                  resolve()
+                  return
+                } catch (e) {
+                  if (e.name !== 'AbortError') console.warn('Share failed:', e)
+                  // AbortError = user cancelled; fall through to download
+                }
+              }
+            }
+
+            // Desktop / fallback: trigger browser download
             const url = URL.createObjectURL(blob)
             const a = document.createElement('a')
             a.href = url
-            a.download = `border-studio.${ext}`
+            a.download = filename
             document.body.appendChild(a)
             a.click()
             document.body.removeChild(a)
             URL.revokeObjectURL(url)
-            // Resume looping preview
-            source.loop = true
-            source.play().catch(() => {})
-            startLoop()
             resolve()
           }
 
@@ -346,19 +372,17 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings }, ref) 
           }
           source.addEventListener('ended', onEnded, { once: true })
 
-          // Start from beginning, disable loop for this pass
+          // Start from beginning, disable loop for this one-shot pass
           source.loop = false
           stopLoop()
           source.currentTime = 0
 
           recorder.start()
 
-          // rAF loop that feeds frames into the stream
+          // rAF loop feeds rendered frames into the capture stream
           const recordLoop = () => {
             renderFrame(canvas, source, settingsRef.current)
-            if (!source.ended) {
-              requestAnimationFrame(recordLoop)
-            }
+            if (!source.ended) requestAnimationFrame(recordLoop)
           }
 
           source.play().then(() => {
