@@ -1,0 +1,12 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <script>
+    // GitHub Pages SPA redirect: forward any 404 back to index with the path encoded
+    const path = window.location.pathname.replace('/Borders', '') || '/'
+    window.location.replace('/Borders/?p=' + encodeURIComponent(path))
+  </script>
+</head>
+<body></body>
+</html>
