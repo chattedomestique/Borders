@@ -349,12 +349,14 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings }, ref) 
 
           const recorder = new MediaRecorder(canvasStream, { mimeType: fmt.mime })
           const chunks = []
+          let rafId = null
 
           recorder.ondataavailable = e => {
             if (e.data.size > 0) chunks.push(e.data)
           }
 
           recorder.onstop = async () => {
+            if (rafId) { cancelAnimationFrame(rafId); rafId = null }
             const blob = new Blob(chunks, { type: fmt.fileMime })
             const filename = `border-studio.${fmt.ext}`
 
@@ -394,34 +396,45 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings }, ref) 
             resolve()
           }
 
-          // Stop recording when video reaches the end
-          const onEnded = () => {
-            stopLoop()
-            recorder.stop()
+          const finishRecording = () => {
+            if (recorder.state === 'recording') {
+              recorder.requestData() // flush any buffered data before stop
+              recorder.stop()
+            }
           }
-          source.addEventListener('ended', onEnded, { once: true })
+          source.addEventListener('ended', finishRecording, { once: true })
 
-          // Start from beginning, disable loop for this one-shot pass
+          const startRecording = () => {
+            // timeslice=250ms: iOS needs regular chunk commits or it can drop
+            // the tail of the recording when stop() is called
+            recorder.start(250)
+
+            const renderLoop = () => {
+              renderFrame(canvas, source, settingsRef.current)
+              if (!source.ended && recorder.state === 'recording') {
+                rafId = requestAnimationFrame(renderLoop)
+              }
+            }
+            rafId = requestAnimationFrame(renderLoop)
+          }
+
+          // Seek to start first — currentTime assignment is async.
+          // We must wait for 'seeked' before playing, otherwise the recorder
+          // captures frames from the wrong position and iOS produces glitchy output.
           source.loop = false
           stopLoop()
           source.currentTime = 0
 
-          recorder.start()
-
-          // rAF loop feeds rendered frames into the capture stream
-          const recordLoop = () => {
-            renderFrame(canvas, source, settingsRef.current)
-            if (!source.ended) requestAnimationFrame(recordLoop)
-          }
-
-          source.play().then(() => {
-            requestAnimationFrame(recordLoop)
-          }).catch(() => {
-            source.muted = true
-            if (audioCleanup) audioCleanup()
-            source.removeEventListener('ended', onEnded)
-            recorder.stop()
-          })
+          source.addEventListener('seeked', () => {
+            source.play()
+              .then(startRecording)
+              .catch(() => {
+                source.muted = true
+                if (audioCleanup) audioCleanup()
+                source.removeEventListener('ended', finishRecording)
+                resolve()
+              })
+          }, { once: true })
         })
       }
 
