@@ -8,7 +8,7 @@ const BG_MODES = [
 ]
 
 export default function Controls({ settings, onUpdate, mediaType }) {
-  const { borderThickness, bgMode, cornerRadius, cropSquare } = settings
+  const { borderThickness, bgMode, blurAmount, cornerRadius, cropSquare } = settings
 
   return (
     <div className="controls clay">
@@ -58,6 +58,32 @@ export default function Controls({ settings, onUpdate, mediaType }) {
           ))}
         </div>
       </section>
+
+      {bgMode === 'frosted' && (
+        <>
+          <div className="controls__divider"/>
+          <section className="controls__section" aria-label="Blur amount">
+            <div className="controls__row">
+              <label className="controls__label" htmlFor="blur-slider">
+                Blur
+              </label>
+              <span className="controls__value">{blurAmount}px</span>
+            </div>
+            <input
+              id="blur-slider"
+              type="range"
+              min={10}
+              max={120}
+              step={2}
+              value={blurAmount}
+              onChange={e => onUpdate('blurAmount', Number(e.target.value))}
+              aria-valuenow={blurAmount}
+              aria-valuemin={10}
+              aria-valuemax={120}
+            />
+          </section>
+        </>
+      )}
 
       <div className="controls__divider"/>
 
