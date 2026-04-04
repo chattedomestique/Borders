@@ -78,28 +78,54 @@ function grabFrame(source, w, h) {
 }
 
 /**
- * Draw frosted-glass background: blurred + scaled version of the media.
+ * Draw frosted-glass background with Apple-quality creaminess.
+ *
+ * The trick: a two-pass downsample pyramid (like GPU mipmaps) before
+ * applying the blur filter. Each halving step uses high-quality bilinear
+ * interpolation, so by the time we blur there are no hard pixel edges —
+ * just smooth gradients that the Gaussian spreads into a creamy result.
+ *
+ * 80×80 → instant pixelation at 1800px output (22× scale).
+ * Two-pass (→ 900 → 225) → 8× final scale, completely smooth.
  */
 function drawFrostedBg(ctx, source, canvasW, canvasH, blurAmount) {
-  // Downsample to small canvas for performance, then apply blur
-  const tmp = document.createElement('canvas')
-  tmp.width = 80; tmp.height = 80
-  const tCtx = tmp.getContext('2d')
-  tCtx.drawImage(source, 0, 0, 80, 80)
-
-  ctx.save()
-  ctx.filter = `blur(${blurAmount}px) saturate(1.6) brightness(0.85)`
-  // Scale to cover
-  const srcAr = source.videoWidth !== undefined
-    ? (source.videoWidth || 1) / (source.videoHeight || 1)
-    : (source.naturalWidth || 1) / (source.naturalHeight || 1)
+  const srcAr = (source.videoWidth ?? source.naturalWidth ?? canvasW) /
+                (source.videoHeight ?? source.naturalHeight ?? canvasH)
   const dstAr = canvasW / canvasH
+
+  // Cover geometry — same for every pass
   let sw, sh, sx, sy
   if (srcAr > dstAr) { sh = canvasH; sw = sh * srcAr; sy = 0; sx = (canvasW - sw) / 2 }
   else { sw = canvasW; sh = sw / srcAr; sx = 0; sy = (canvasH - sh) / 2 }
-  // Draw slightly larger to ensure blur doesn't leave transparent edges
+
+  // Pass 1 — draw source cover-scaled to half output size
+  const p1w = Math.round(canvasW / 2), p1h = Math.round(canvasH / 2)
+  const pass1 = document.createElement('canvas')
+  pass1.width = p1w; pass1.height = p1h
+  const c1 = pass1.getContext('2d')
+  c1.imageSmoothingEnabled = true
+  c1.imageSmoothingQuality = 'high'
+  c1.drawImage(source, sx / 2, sy / 2, sw / 2, sh / 2)
+
+  // Pass 2 — downsample pass1 to quarter output size (1/8 of final)
+  const p2w = Math.round(p1w / 4), p2h = Math.round(p1h / 4)
+  const pass2 = document.createElement('canvas')
+  pass2.width = p2w; pass2.height = p2h
+  const c2 = pass2.getContext('2d')
+  c2.imageSmoothingEnabled = true
+  c2.imageSmoothingQuality = 'high'
+  c2.drawImage(pass1, 0, 0, p2w, p2h)
+
+  // Final draw — upscale pass2 (8×) to output with high-quality interpolation
+  // + Gaussian blur filter. The upscale itself produces smooth gradients;
+  // the blur then spreads them into the creamy frosted-glass look.
+  // Oversized draw rect prevents blur from leaving transparent edges.
   const pad = blurAmount * 2
-  ctx.drawImage(tmp, sx - pad, sy - pad, sw + pad * 2, sh + pad * 2)
+  ctx.save()
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  ctx.filter = `blur(${blurAmount}px) saturate(1.8) brightness(0.82)`
+  ctx.drawImage(pass2, -pad, -pad, canvasW + pad * 2, canvasH + pad * 2)
   ctx.filter = 'none'
   ctx.restore()
 }
