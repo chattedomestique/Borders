@@ -3,31 +3,23 @@ import {
 } from 'react'
 import './BorderCanvas.css'
 
-// Output canvas size (square, high-res)
+// The inner media (without border) is scaled so its longest side = OUT_SIZE.
+// The border pixels are then ADDED around it, so the border is always uniform
+// on all four sides regardless of the media's aspect ratio.
 const OUT_SIZE = 1800
 
-/**
- * Sample the average color from an ImageData region.
- */
 function sampleAverageColor(imageData) {
   const { data } = imageData
   let r = 0, g = 0, b = 0, count = 0
-  // Sample every 4th pixel for speed
   for (let i = 0; i < data.length; i += 16) {
     const a = data[i + 3]
     if (a < 128) continue
-    r += data[i]
-    g += data[i + 1]
-    b += data[i + 2]
-    count++
+    r += data[i]; g += data[i + 1]; b += data[i + 2]; count++
   }
   if (count === 0) return [200, 200, 200]
   return [Math.round(r / count), Math.round(g / count), Math.round(b / count)]
 }
 
-/**
- * Convert RGB → HSL
- */
 function rgbToHsl(r, g, b) {
   r /= 255; g /= 255; b /= 255
   const max = Math.max(r, g, b), min = Math.min(r, g, b)
@@ -59,113 +51,94 @@ function hslToRgb(h, s, l) {
       if (t < 2/3) return p + (q - p) * (2/3 - t) * 6
       return p
     }
-    r = hue2rgb(p, q, h + 1/3)
-    g = hue2rgb(p, q, h)
-    b = hue2rgb(p, q, h - 1/3)
+    r = hue2rgb(p, q, h + 1/3); g = hue2rgb(p, q, h); b = hue2rgb(p, q, h - 1/3)
   }
   return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)]
 }
 
-/**
- * Draw the current frame of a media source onto an offscreen canvas and return its ImageData.
- */
 function grabFrame(source, w, h) {
   const tmp = document.createElement('canvas')
   tmp.width = w; tmp.height = h
   const ctx = tmp.getContext('2d')
   ctx.drawImage(source, 0, 0, w, h)
-  return { ctx, canvas: tmp, imageData: ctx.getImageData(0, 0, w, h) }
+  return ctx.getImageData(0, 0, w, h)
 }
 
 /**
- * Draw frosted-glass background with Apple-quality creaminess.
- *
- * The trick: a two-pass downsample pyramid (like GPU mipmaps) before
- * applying the blur filter. Each halving step uses high-quality bilinear
- * interpolation, so by the time we blur there are no hard pixel edges —
- * just smooth gradients that the Gaussian spreads into a creamy result.
- *
- * 80×80 → instant pixelation at 1800px output (22× scale).
- * Two-pass (→ 900 → 225) → 8× final scale, completely smooth.
+ * Frosted glass background with Apple-quality blur.
+ * Two-pass downsample pyramid avoids the pixelation that comes from
+ * scaling a tiny canvas up to output size. Canvas elements are reused
+ * via `cache` to avoid GC churn on every video frame.
  */
-function drawFrostedBg(ctx, source, canvasW, canvasH, blurAmount) {
+function drawFrostedBg(ctx, source, canvasW, canvasH, blurAmount, cache) {
   const srcAr = (source.videoWidth ?? source.naturalWidth ?? canvasW) /
                 (source.videoHeight ?? source.naturalHeight ?? canvasH)
   const dstAr = canvasW / canvasH
 
-  // Cover geometry — same for every pass
   let sw, sh, sx, sy
   if (srcAr > dstAr) { sh = canvasH; sw = sh * srcAr; sy = 0; sx = (canvasW - sw) / 2 }
   else { sw = canvasW; sh = sw / srcAr; sx = 0; sy = (canvasH - sh) / 2 }
 
-  // Pass 1 — draw source cover-scaled to half output size
   const p1w = Math.round(canvasW / 2), p1h = Math.round(canvasH / 2)
-  const pass1 = document.createElement('canvas')
-  pass1.width = p1w; pass1.height = p1h
-  const c1 = pass1.getContext('2d')
-  c1.imageSmoothingEnabled = true
-  c1.imageSmoothingQuality = 'high'
+  const p2w = Math.round(p1w / 4), p2h = Math.round(p1h / 4)
+
+  // Reuse cached canvas elements; only resize when dimensions change
+  if (!cache.frost1) cache.frost1 = document.createElement('canvas')
+  if (!cache.frost2) cache.frost2 = document.createElement('canvas')
+  if (cache.frost1.width !== p1w || cache.frost1.height !== p1h) {
+    cache.frost1.width = p1w; cache.frost1.height = p1h
+  }
+  if (cache.frost2.width !== p2w || cache.frost2.height !== p2h) {
+    cache.frost2.width = p2w; cache.frost2.height = p2h
+  }
+
+  const c1 = cache.frost1.getContext('2d')
+  c1.imageSmoothingEnabled = true; c1.imageSmoothingQuality = 'high'
   c1.drawImage(source, sx / 2, sy / 2, sw / 2, sh / 2)
 
-  // Pass 2 — downsample pass1 to quarter output size (1/8 of final)
-  const p2w = Math.round(p1w / 4), p2h = Math.round(p1h / 4)
-  const pass2 = document.createElement('canvas')
-  pass2.width = p2w; pass2.height = p2h
-  const c2 = pass2.getContext('2d')
-  c2.imageSmoothingEnabled = true
-  c2.imageSmoothingQuality = 'high'
-  c2.drawImage(pass1, 0, 0, p2w, p2h)
+  const c2 = cache.frost2.getContext('2d')
+  c2.imageSmoothingEnabled = true; c2.imageSmoothingQuality = 'high'
+  c2.drawImage(cache.frost1, 0, 0, p2w, p2h)
 
-  // Final draw — upscale pass2 (8×) to output with high-quality interpolation
-  // + Gaussian blur filter. The upscale itself produces smooth gradients;
-  // the blur then spreads them into the creamy frosted-glass look.
-  // Oversized draw rect prevents blur from leaving transparent edges.
   const pad = blurAmount * 2
   ctx.save()
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
   ctx.filter = `blur(${blurAmount}px) saturate(1.8) brightness(0.82)`
-  ctx.drawImage(pass2, -pad, -pad, canvasW + pad * 2, canvasH + pad * 2)
+  ctx.drawImage(cache.frost2, -pad, -pad, canvasW + pad * 2, canvasH + pad * 2)
   ctx.filter = 'none'
   ctx.restore()
 }
 
 /**
- * Core render function. Called whenever settings or media change.
+ * Core render. The border is added AROUND the scaled media so it is
+ * always uniform on all four sides, regardless of aspect ratio.
  */
-function renderFrame(canvas, source, settings) {
+function renderFrame(canvas, source, settings, cache) {
   if (!canvas || !source) return
   const { borderThickness, bgMode, blurAmount = 60, cornerRadius, cropSquare } = settings
 
   const srcW = source.videoWidth ?? source.naturalWidth ?? source.width ?? 1
   const srcH = source.videoHeight ?? source.naturalHeight ?? source.height ?? 1
 
-  // Determine inner media dimensions
   let mediaW, mediaH
   if (cropSquare) {
-    const side = Math.min(srcW, srcH)
-    mediaW = side; mediaH = side
+    const s = Math.min(srcW, srcH); mediaW = s; mediaH = s
   } else {
     mediaW = srcW; mediaH = srcH
   }
 
-  // Canvas is always square for simplicity of layout;
-  // fit the bordered media inside it
-  const totalW = OUT_SIZE
-  const totalH = OUT_SIZE
+  // Scale inner media so its longest side = OUT_SIZE
+  const mediaScale = OUT_SIZE / Math.max(mediaW, mediaH)
+  const scaledW = Math.round(mediaW * mediaScale)
+  const scaledH = Math.round(mediaH * mediaScale)
 
-  // Border fraction
-  const border = borderThickness  // in output pixels
-
-  // Scale media to fit inside canvas minus border on all sides
-  const availW = totalW - border * 2
-  const availH = totalH - border * 2
-  const scale = Math.min(availW / mediaW, availH / mediaH)
-  const drawW = mediaW * scale
-  const drawH = mediaH * scale
-
-  const offsetX = (totalW - drawW) / 2
-  const offsetY = (totalH - drawH) / 2
+  // Canvas = scaled media + uniform border on all four sides
+  const border = borderThickness
+  const totalW = scaledW + border * 2
+  const totalH = scaledH + border * 2
+  const offsetX = border
+  const offsetY = border
 
   if (canvas.width !== totalW || canvas.height !== totalH) {
     canvas.width = totalW
@@ -173,14 +146,11 @@ function renderFrame(canvas, source, settings) {
   }
   const ctx = canvas.getContext('2d')
 
-  // 1. Draw background
+  // 1. Background
   if (bgMode === 'frosted') {
-    drawFrostedBg(ctx, source, totalW, totalH, blurAmount)
+    drawFrostedBg(ctx, source, totalW, totalH, blurAmount, cache)
   } else {
-    // Sample colors from source
-    const sampleW = Math.min(srcW, 200)
-    const sampleH = Math.min(srcH, 200)
-    const { imageData } = grabFrame(source, sampleW, sampleH)
+    const imageData = grabFrame(source, Math.min(srcW, 200), Math.min(srcH, 200))
     const [avgR, avgG, avgB] = sampleAverageColor(imageData)
     const [avgH, avgS, avgL] = rgbToHsl(avgR, avgG, avgB)
 
@@ -188,56 +158,43 @@ function renderFrame(canvas, source, settings) {
     if (bgMode === 'average') {
       bgColor = `rgb(${avgR},${avgG},${avgB})`
     } else if (bgMode === 'contrast') {
-      // Use luminance to pick black or white, then shift hue
-      const brightness = 0.299 * avgR + 0.587 * avgG + 0.114 * avgB
-      if (brightness > 128) {
-        const [r, g, b] = hslToRgb((avgH + 180) % 360, Math.min(avgS * 0.7, 80), 15)
-        bgColor = `rgb(${r},${g},${b})`
-      } else {
-        const [r, g, b] = hslToRgb((avgH + 180) % 360, Math.min(avgS * 0.7, 80), 92)
-        bgColor = `rgb(${r},${g},${b})`
-      }
+      const lum = 0.299 * avgR + 0.587 * avgG + 0.114 * avgB
+      const [r, g, b] = hslToRgb((avgH + 180) % 360, Math.min(avgS * 0.7, 80), lum > 128 ? 15 : 92)
+      bgColor = `rgb(${r},${g},${b})`
     } else if (bgMode === 'complementary') {
-      const compH = (avgH + 180) % 360
-      const compS = Math.min(avgS * 1.1, 100)
-      const compL = avgL > 60 ? Math.max(avgL - 30, 30) : Math.min(avgL + 25, 70)
-      const [r, g, b] = hslToRgb(compH, compS, compL)
+      const [r, g, b] = hslToRgb(
+        (avgH + 180) % 360,
+        Math.min(avgS * 1.1, 100),
+        avgL > 60 ? Math.max(avgL - 30, 30) : Math.min(avgL + 25, 70)
+      )
       bgColor = `rgb(${r},${g},${b})`
     }
-
     ctx.fillStyle = bgColor
     ctx.fillRect(0, 0, totalW, totalH)
   }
 
-  // 2. Draw media with corner radius
-  const rx = cornerRadius > 0
-    ? Math.min(drawW, drawH) / 2 * (cornerRadius / 100)
-    : 0
+  // 2. Media with corner radius clipping
+  const rx = cornerRadius > 0 ? Math.min(scaledW, scaledH) / 2 * (cornerRadius / 100) : 0
 
   ctx.save()
   if (rx > 0) {
+    const x = offsetX, y = offsetY, w = scaledW, h = scaledH
     ctx.beginPath()
-    ctx.moveTo(offsetX + rx, offsetY)
-    ctx.lineTo(offsetX + drawW - rx, offsetY)
-    ctx.quadraticCurveTo(offsetX + drawW, offsetY, offsetX + drawW, offsetY + rx)
-    ctx.lineTo(offsetX + drawW, offsetY + drawH - rx)
-    ctx.quadraticCurveTo(offsetX + drawW, offsetY + drawH, offsetX + drawW - rx, offsetY + drawH)
-    ctx.lineTo(offsetX + rx, offsetY + drawH)
-    ctx.quadraticCurveTo(offsetX, offsetY + drawH, offsetX, offsetY + drawH - rx)
-    ctx.lineTo(offsetX, offsetY + rx)
-    ctx.quadraticCurveTo(offsetX, offsetY, offsetX + rx, offsetY)
+    ctx.moveTo(x + rx, y)
+    ctx.lineTo(x + w - rx, y);  ctx.quadraticCurveTo(x + w, y,     x + w, y + rx)
+    ctx.lineTo(x + w, y + h - rx); ctx.quadraticCurveTo(x + w, y + h, x + w - rx, y + h)
+    ctx.lineTo(x + rx, y + h);  ctx.quadraticCurveTo(x,     y + h, x,     y + h - rx)
+    ctx.lineTo(x, y + rx);      ctx.quadraticCurveTo(x,     y,     x + rx, y)
     ctx.closePath()
     ctx.clip()
   }
 
   if (cropSquare) {
-    // Draw centre-cropped square
     const side = Math.min(srcW, srcH)
-    const cropX = (srcW - side) / 2
-    const cropY = (srcH - side) / 2
-    ctx.drawImage(source, cropX, cropY, side, side, offsetX, offsetY, drawW, drawH)
+    ctx.drawImage(source, (srcW - side) / 2, (srcH - side) / 2, side, side,
+                  offsetX, offsetY, scaledW, scaledH)
   } else {
-    ctx.drawImage(source, 0, 0, srcW, srcH, offsetX, offsetY, drawW, drawH)
+    ctx.drawImage(source, 0, 0, srcW, srcH, offsetX, offsetY, scaledW, scaledH)
   }
 
   ctx.restore()
@@ -246,19 +203,19 @@ function renderFrame(canvas, source, settings) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const BorderCanvas = forwardRef(function BorderCanvas({ media, settings }, ref) {
-  const canvasRef = useRef(null)
-  const sourceRef = useRef(null)  // HTMLImageElement | HTMLVideoElement
-  const settingsRef = useRef(settings)
-  const mediaRef = useRef(media)
+  const canvasRef    = useRef(null)
+  const sourceRef    = useRef(null)
+  const settingsRef  = useRef(settings)
+  const mediaRef     = useRef(media)
   const animFrameRef = useRef(null)
+  const cacheRef     = useRef({})   // frosted glass canvas cache
   const [ready, setReady] = useState(false)
 
-  // Keep refs synced without re-running effects
   settingsRef.current = settings
-  mediaRef.current = media
+  mediaRef.current    = media
 
   const redraw = useCallback(() => {
-    renderFrame(canvasRef.current, sourceRef.current, settingsRef.current)
+    renderFrame(canvasRef.current, sourceRef.current, settingsRef.current, cacheRef.current)
   }, [])
 
   const stopLoop = useCallback(() => {
@@ -271,29 +228,25 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings }, ref) 
   const startLoop = useCallback(() => {
     stopLoop()
     const loop = () => {
-      renderFrame(canvasRef.current, sourceRef.current, settingsRef.current)
+      renderFrame(canvasRef.current, sourceRef.current, settingsRef.current, cacheRef.current)
       animFrameRef.current = requestAnimationFrame(loop)
     }
     animFrameRef.current = requestAnimationFrame(loop)
   }, [stopLoop])
 
-  // Load media source
+  // Load media
   useEffect(() => {
     setReady(false)
     stopLoop()
+    cacheRef.current = {}  // clear blur cache when media changes
     if (!media?.url) return
 
     if (media.type === 'image') {
       const img = new Image()
-      img.onload = () => {
-        sourceRef.current = img
-        redraw()
-        setReady(true)
-      }
+      img.onload = () => { sourceRef.current = img; redraw(); setReady(true) }
       img.onerror = () => setReady(false)
       img.src = media.url
     } else {
-      // video — play it live so the preview animates
       const video = document.createElement('video')
       video.playsInline = true
       video.muted = true
@@ -308,7 +261,6 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings }, ref) 
         startLoop()
         setReady(true)
       }
-
       video.addEventListener('loadeddata', onLoaded, { once: true })
       video.load()
 
@@ -320,11 +272,24 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings }, ref) 
     }
   }, [media, redraw, startLoop, stopLoop])
 
-  // Re-render on settings change (images only; videos use the loop)
+  // Re-render on settings change (images only; videos redraw continuously)
   useEffect(() => {
-    if (!ready) return
-    if (mediaRef.current?.type !== 'video') redraw()
+    if (!ready || mediaRef.current?.type === 'video') return
+    redraw()
   }, [settings, ready, redraw])
+
+  // Pause rAF when the page/app is hidden (battery + CPU savings)
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.hidden) {
+        stopLoop()
+      } else if (ready && mediaRef.current?.type === 'video') {
+        startLoop()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [ready, startLoop, stopLoop])
 
   // ── Save ──────────────────────────────────────────────────────────────────
   useImperativeHandle(ref, () => ({
@@ -333,27 +298,21 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings }, ref) 
       const source = sourceRef.current
       if (!canvas) return
 
-      // ── Video: record canvas stream ───────────────────────────────────────
+      // ── Video ────────────────────────────────────────────────────────────
       if (mediaRef.current?.type === 'video' && source) {
         return new Promise((resolve) => {
-          // iOS Safari only supports video/mp4; desktop supports webm.
-          // Try formats in preference order.
           const FORMAT_PREFERENCE = [
             { mime: 'video/mp4;codecs=avc1', fileMime: 'video/mp4', ext: 'mp4' },
-            { mime: 'video/mp4', fileMime: 'video/mp4', ext: 'mp4' },
+            { mime: 'video/mp4',             fileMime: 'video/mp4', ext: 'mp4' },
             { mime: 'video/webm;codecs=vp9', fileMime: 'video/webm', ext: 'webm' },
-            { mime: 'video/webm', fileMime: 'video/webm', ext: 'webm' },
+            { mime: 'video/webm',            fileMime: 'video/webm', ext: 'webm' },
           ]
           const fmt = FORMAT_PREFERENCE.find(f => MediaRecorder.isTypeSupported(f.mime))
             ?? { mime: 'video/webm', fileMime: 'video/webm', ext: 'webm' }
 
-          // Canvas only captures pixels — we must separately pull audio
-          // from the video element and add it to the stream.
           source.muted = false
           const canvasStream = canvas.captureStream(30)
 
-          // Prefer captureStream() on the video element itself (gets the
-          // original audio track directly). Fall back to Web Audio API.
           let audioCleanup = null
           try {
             if (typeof source.captureStream === 'function') {
@@ -361,13 +320,11 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings }, ref) 
             } else if (typeof source.mozCaptureStream === 'function') {
               source.mozCaptureStream().getAudioTracks().forEach(t => canvasStream.addTrack(t))
             } else {
-              // Web Audio API fallback
               const AudioCtx = window.AudioContext || window.webkitAudioContext
               const audioCtx = new AudioCtx()
               const src = audioCtx.createMediaElementSource(source)
               const dst = audioCtx.createMediaStreamDestination()
-              src.connect(dst)
-              src.connect(audioCtx.destination)
+              src.connect(dst); src.connect(audioCtx.destination)
               dst.stream.getAudioTracks().forEach(t => canvasStream.addTrack(t))
               audioCleanup = () => audioCtx.close()
             }
@@ -379,69 +336,51 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings }, ref) 
           const chunks = []
           let rafId = null
 
-          recorder.ondataavailable = e => {
-            if (e.data.size > 0) chunks.push(e.data)
-          }
+          recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
 
           recorder.onstop = async () => {
             if (rafId) { cancelAnimationFrame(rafId); rafId = null }
             const blob = new Blob(chunks, { type: fmt.fileMime })
             const filename = `border-studio.${fmt.ext}`
 
-            // Restore muted preview loop
-            source.muted = true
-            source.loop = true
+            source.muted = true; source.loop = true
             source.play().catch(() => {})
             if (audioCleanup) audioCleanup()
             startLoop()
 
-            // iOS: Web Share API → "Save to Photos" appears when sharing a
-            // supported video file (MP4). This is the only reliable path to
-            // the camera roll from a PWA.
             if (navigator.share && navigator.canShare) {
               const shareFile = new File([blob], filename, { type: fmt.fileMime })
               if (navigator.canShare({ files: [shareFile] })) {
                 try {
                   await navigator.share({ files: [shareFile] })
-                  resolve()
-                  return
+                  resolve(); return
                 } catch (e) {
                   if (e.name !== 'AbortError') console.warn('Share failed:', e)
-                  // AbortError = user cancelled; fall through to download
                 }
               }
             }
 
-            // Desktop / fallback: trigger browser download
             const url = URL.createObjectURL(blob)
             const a = document.createElement('a')
-            a.href = url
-            a.download = filename
-            document.body.appendChild(a)
-            a.click()
-            document.body.removeChild(a)
-            URL.revokeObjectURL(url)
+            a.href = url; a.download = filename
+            document.body.appendChild(a); a.click()
+            document.body.removeChild(a); URL.revokeObjectURL(url)
             resolve()
           }
 
           const finishRecording = () => {
             if (recorder.state === 'recording') {
-              recorder.requestData() // flush any buffered data before stop
+              recorder.requestData()
               recorder.stop()
             }
           }
           source.addEventListener('ended', finishRecording, { once: true })
 
           const startRecording = () => {
-            // timeslice=250ms: iOS needs regular chunk commits or it can drop
-            // the tail of the recording when stop() is called
             recorder.start(250)
-
             const renderLoop = () => {
-              renderFrame(canvas, source, settingsRef.current)
-              if (onProgress && source.duration) {
-                onProgress(source.currentTime / source.duration)
-              }
+              renderFrame(canvas, source, settingsRef.current, cacheRef.current)
+              if (onProgress && source.duration) onProgress(source.currentTime / source.duration)
               if (!source.ended && recorder.state === 'recording') {
                 rafId = requestAnimationFrame(renderLoop)
               }
@@ -449,9 +388,6 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings }, ref) 
             rafId = requestAnimationFrame(renderLoop)
           }
 
-          // Seek to start first — currentTime assignment is async.
-          // We must wait for 'seeked' before playing, otherwise the recorder
-          // captures frames from the wrong position and iOS produces glitchy output.
           source.loop = false
           stopLoop()
           source.currentTime = 0
@@ -469,37 +405,27 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings }, ref) 
         })
       }
 
-      // ── Image: export as PNG ─────────────────────────────────────────────
-      const blob = await new Promise(resolve =>
-        canvas.toBlob(resolve, 'image/png')
-      )
+      // ── Image ────────────────────────────────────────────────────────────
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
       if (!blob) return
-
       const url = URL.createObjectURL(blob)
 
-      // iOS: use Web Share API with Files if available (saves to Photos)
       if (navigator.share && navigator.canShare) {
         const file = new File([blob], 'border-studio.png', { type: 'image/png' })
         if (navigator.canShare({ files: [file] })) {
           try {
             await navigator.share({ files: [file] })
-            URL.revokeObjectURL(url)
-            return
+            URL.revokeObjectURL(url); return
           } catch (e) {
-            // User cancelled or not supported — fall through to download
             if (e.name !== 'AbortError') console.warn('Share failed:', e)
           }
         }
       }
 
-      // Fallback: trigger a download
       const a = document.createElement('a')
-      a.href = url
-      a.download = 'border-studio.png'
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      a.href = url; a.download = 'border-studio.png'
+      document.body.appendChild(a); a.click()
+      document.body.removeChild(a); URL.revokeObjectURL(url)
     }
   }), [startLoop, stopLoop])
 
