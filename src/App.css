@@ -64,8 +64,8 @@
   align-items: center;
   width: 100%;
   max-width: 480px;
-  padding: 16px 16px 0;
-  gap: 12px;
+  padding: 36px 20px 48px;
+  gap: 16px;
   flex: 1;
 }
 
