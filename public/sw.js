@@ -1,5 +1,5 @@
 // Border Studio Service Worker
-const CACHE = 'border-studio-v1'
+const CACHE = 'border-studio-v3'
 const PRECACHE = [
   '/Borders/',
   '/Borders/index.html',
@@ -30,7 +30,8 @@ self.addEventListener('fetch', event => {
     )
     return
   }
+  // Network-first for all resources so updates land immediately
   event.respondWith(
-    caches.match(request).then(cached => cached || fetch(request))
+    fetch(request).catch(() => caches.match(request))
   )
 })

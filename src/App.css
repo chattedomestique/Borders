@@ -64,7 +64,7 @@
   align-items: center;
   width: 100%;
   max-width: 480px;
-  padding: 36px 20px 48px;
+  padding: clamp(40px, 18vh, 140px) 20px 56px;
   gap: 16px;
   flex: 1;
 }
