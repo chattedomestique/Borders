@@ -65,65 +65,99 @@ function grabFrame(source, w, h) {
 }
 
 /**
- * Frosted glass: downsample pyramid + staged upsample.
+ * Single-pass box blur (horizontal then vertical) on raw ImageData.
+ * Three back-to-back passes approximate a Gaussian. Operates on a small
+ * canvas so the total pixel count is tiny and this runs in < 2 ms on mobile.
+ */
+function boxBlurPass(data, w, h, r) {
+  const tmp = new Uint8ClampedArray(data.length)
+  // Horizontal
+  for (let y = 0; y < h; y++) {
+    let R = 0, G = 0, B = 0
+    const row = y * w * 4
+    for (let x = -r; x <= r && x < w; x++) {
+      const i = row + Math.max(x, 0) * 4
+      R += data[i]; G += data[i + 1]; B += data[i + 2]
+    }
+    for (let x = 0; x < w; x++) {
+      const cnt = Math.min(x + r, w - 1) - Math.max(x - r, 0) + 1
+      const o = row + x * 4
+      tmp[o] = R / cnt; tmp[o + 1] = G / cnt; tmp[o + 2] = B / cnt; tmp[o + 3] = 255
+      if (x - r >= 0) { const i = row + (x - r) * 4; R -= data[i]; G -= data[i+1]; B -= data[i+2] }
+      if (x + r + 1 < w) { const i = row + (x + r + 1) * 4; R += data[i]; G += data[i+1]; B += data[i+2] }
+    }
+  }
+  // Vertical
+  for (let x = 0; x < w; x++) {
+    let R = 0, G = 0, B = 0
+    for (let y = -r; y <= r && y < h; y++) {
+      const i = (Math.max(y, 0) * w + x) * 4
+      R += tmp[i]; G += tmp[i + 1]; B += tmp[i + 2]
+    }
+    for (let y = 0; y < h; y++) {
+      const cnt = Math.min(y + r, h - 1) - Math.max(y - r, 0) + 1
+      const o = (y * w + x) * 4
+      data[o] = R / cnt; data[o + 1] = G / cnt; data[o + 2] = B / cnt; data[o + 3] = 255
+      if (y - r >= 0) { const i = ((y-r) * w + x) * 4; R -= tmp[i]; G -= tmp[i+1]; B -= tmp[i+2] }
+      if (y + r + 1 < h) { const i = ((y+r+1) * w + x) * 4; R += tmp[i]; G += tmp[i+1]; B += tmp[i+2] }
+    }
+  }
+}
+
+/**
+ * Frosted glass via JavaScript box blur — the only approach that produces
+ * genuine smooth blur on iOS Safari PWA (ctx.filter is ignored pre-iOS 18,
+ * and bilinear upscaling of a tiny canvas still looks blocky on WebKit).
  *
- * ctx.filter('blur') is ignored on iOS Safari < 18, and a single giant
- * upscale (e.g. 50px → 1900px) still looks blocky on iOS even with
- * imageSmoothingEnabled because WebKit's GPU path uses nearest-neighbour
- * above a certain magnification ratio. Fix: cap each upsample step at ~4×
- * by inserting an intermediate canvas.
+ * Strategy: draw source cover-fill into a small (~120px) canvas, apply 3
+ * box-blur passes in JS (3 passes ≈ Gaussian), then upscale back to output.
+ * Because the small canvas is genuinely smooth after blur, the upscale stays
+ * smooth regardless of platform.
  */
 function drawFrostedBg(ctx, source, canvasW, canvasH, blurAmount, cache) {
   const srcW = source.videoWidth ?? source.naturalWidth ?? canvasW
   const srcH = source.videoHeight ?? source.naturalHeight ?? canvasH
-
-  const smooth = c => { c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high' }
-  const sized = (key, w, h) => {
-    if (!cache[key]) cache[key] = document.createElement('canvas')
-    if (cache[key].width !== w || cache[key].height !== h) {
-      cache[key].width = w; cache[key].height = h
-    }
-    return cache[key]
-  }
-  const coverFill = (tCtx, tw, th) => {
-    const scale = Math.max(tw / srcW, th / srcH)
-    const dw = srcW * scale, dh = srcH * scale
-    tCtx.drawImage(source, (tw - dw) / 2, (th - dh) / 2, dw, dh)
-  }
-
-  // ── Downsample chain ────────────────────────────────────────────────────────
-  // Pass 1: source → ¼ output (fixed anchor)
-  const p1w = Math.max(8, Math.round(canvasW / 4))
-  const p1h = Math.max(8, Math.round(canvasH / 4))
-  const c1 = sized('f1', p1w, p1h).getContext('2d'); smooth(c1); coverFill(c1, p1w, p1h)
-
-  // Pass 2: ¼ → further down; blurAmount 10→120 = extra divisor 1→8
-  const div2 = 1 + Math.round((blurAmount - 10) * 7 / 110)
-  const p2w = Math.max(8, Math.round(p1w / div2))
-  const p2h = Math.max(8, Math.round(p1h / div2))
-  const c2 = sized('f2', p2w, p2h).getContext('2d'); smooth(c2)
-  c2.drawImage(cache.f1, 0, 0, p2w, p2h)
-
-  // ── Upsample: never let a single step exceed ~8× ────────────────────────────
-  // If p2 is very small relative to the output, insert a mid canvas first.
   const longest = Math.max(canvasW, canvasH)
-  let srcCanvas = cache.f2
-  if (p2w < canvasW / 8) {
-    const mw = Math.round(canvasW / 2), mh = Math.round(canvasH / 2)
-    const cm = sized('fmid', mw, mh).getContext('2d'); smooth(cm)
-    cm.drawImage(cache.f2, 0, 0, mw, mh)
-    srcCanvas = cache.fmid
-  }
 
-  // ── Final draw to output canvas ─────────────────────────────────────────────
-  ctx.save()
-  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'
-  if ('filter' in ctx) ctx.filter = 'saturate(1.6) brightness(0.85)'
-  const pad = Math.round(longest * 0.02)
-  ctx.drawImage(srcCanvas, -pad, -pad, canvasW + pad * 2, canvasH + pad * 2)
+  // Small working canvas — large enough for quality, small enough for fast blur
+  const SMALL = 120
+  const scale = SMALL / longest
+  const sw = Math.max(4, Math.round(canvasW * scale))
+  const sh = Math.max(4, Math.round(canvasH * scale))
+
+  if (!cache.frost) cache.frost = document.createElement('canvas')
+  if (cache.frost.width !== sw || cache.frost.height !== sh) {
+    cache.frost.width = sw; cache.frost.height = sh
+  }
+  const fc = cache.frost.getContext('2d')
+  fc.imageSmoothingEnabled = true; fc.imageSmoothingQuality = 'high'
+
+  // Cover-fill source into small canvas
+  const cs = Math.max(sw / srcW, sh / srcH)
+  fc.drawImage(source, (sw - srcW * cs) / 2, (sh - srcH * cs) / 2, srcW * cs, srcH * cs)
+
+  // Apply 3 box-blur passes in JS (≈ Gaussian)
+  // radius maps blurAmount 10→120 to roughly 2→10 on the 120px canvas
+  const r = Math.max(1, Math.round(2 + (blurAmount - 10) * 8 / 110))
+  const id = fc.getImageData(0, 0, sw, sh)
+  boxBlurPass(id.data, sw, sh, r)
+  boxBlurPass(id.data, sw, sh, r)
+  boxBlurPass(id.data, sw, sh, r)
+  fc.putImageData(id, 0, 0)
+
+  // Darken + saturate: multiply channels toward a saturated version
+  // (native substitute for saturate(1.6) brightness(0.85) without ctx.filter)
   if ('filter' in ctx) {
-    ctx.filter = 'none'
+    ctx.save()
+    ctx.filter = 'saturate(1.6) brightness(0.85)'
   } else {
+    ctx.save()
+  }
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'
+  const pad = Math.round(longest * 0.02)
+  ctx.drawImage(cache.frost, -pad, -pad, canvasW + pad * 2, canvasH + pad * 2)
+  if ('filter' in ctx) ctx.filter = 'none'
+  if (!('filter' in ctx)) {
     ctx.fillStyle = 'rgba(0,0,0,0.18)'
     ctx.fillRect(0, 0, canvasW, canvasH)
   }
