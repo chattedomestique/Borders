@@ -167,8 +167,10 @@ function renderFrame(canvas, source, settings) {
   const offsetX = (totalW - drawW) / 2
   const offsetY = (totalH - drawH) / 2
 
-  canvas.width = totalW
-  canvas.height = totalH
+  if (canvas.width !== totalW || canvas.height !== totalH) {
+    canvas.width = totalW
+    canvas.height = totalH
+  }
   const ctx = canvas.getContext('2d')
 
   // 1. Draw background
@@ -326,7 +328,7 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings }, ref) 
 
   // ── Save ──────────────────────────────────────────────────────────────────
   useImperativeHandle(ref, () => ({
-    async save() {
+    async save(onProgress) {
       const canvas = canvasRef.current
       const source = sourceRef.current
       if (!canvas) return
@@ -437,6 +439,9 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings }, ref) 
 
             const renderLoop = () => {
               renderFrame(canvas, source, settingsRef.current)
+              if (onProgress && source.duration) {
+                onProgress(source.currentTime / source.duration)
+              }
               if (!source.ended && recorder.state === 'recording') {
                 rafId = requestAnimationFrame(renderLoop)
               }

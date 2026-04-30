@@ -19,6 +19,7 @@ export default function App() {
   const [step, setStep] = useState(STEPS.UPLOAD)
   const [media, setMedia] = useState(null)  // { url, type: 'image'|'video', file }
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
+  const [recordingProgress, setRecordingProgress] = useState(0)
   const canvasRef = useRef(null)
 
   const handleMediaLoaded = useCallback((mediaObj) => {
@@ -28,17 +29,22 @@ export default function App() {
   }, [])
 
   const handleReset = useCallback(() => {
-    setMedia(null)
+    setMedia(prev => {
+      if (prev?.url) URL.revokeObjectURL(prev.url)
+      return null
+    })
     setStep(STEPS.UPLOAD)
   }, [])
 
   const handleSave = useCallback(async () => {
     if (!canvasRef.current) return
     setStep(STEPS.SAVING)
+    setRecordingProgress(0)
     try {
-      await canvasRef.current.save()
+      await canvasRef.current.save(setRecordingProgress)
     } finally {
       setStep(STEPS.EDIT)
+      setRecordingProgress(0)
     }
   }, [])
 
@@ -100,6 +106,7 @@ export default function App() {
               onSave={handleSave}
               saving={step === STEPS.SAVING}
               mediaType={media.type}
+              progress={recordingProgress}
             />
           </>
         )}

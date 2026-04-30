@@ -1,6 +1,20 @@
 import './SaveButton.css'
 
-export default function SaveButton({ onSave, saving, mediaType }) {
+export default function SaveButton({ onSave, saving, mediaType, progress }) {
+  const isVideo = mediaType === 'video'
+  const pct = Math.round((progress ?? 0) * 100)
+
+  let label
+  if (saving) {
+    label = isVideo && pct > 0 ? `Recording… ${pct}%` : 'Saving…'
+  } else {
+    label = 'Save to Photos'
+  }
+
+  const hint = navigator.share
+    ? `Share sheet will open — tap Save ${isVideo ? 'Video' : 'Image'}`
+    : `${isVideo ? 'Video' : 'Image'} will download to your device`
+
   return (
     <div className="save-wrap">
       <button
@@ -8,12 +22,17 @@ export default function SaveButton({ onSave, saving, mediaType }) {
         onClick={onSave}
         disabled={saving}
         aria-busy={saving}
-        aria-label={saving ? 'Saving…' : `Save ${mediaType === 'video' ? 'frame' : 'image'} to Photos`}
+        aria-label={label}
       >
         {saving ? (
           <>
             <span className="save-btn__spinner" aria-hidden="true"/>
-            Saving…
+            {isVideo && pct > 0 ? (
+              <>
+                Recording…
+                <span className="save-btn__progress">{pct}%</span>
+              </>
+            ) : 'Saving…'}
           </>
         ) : (
           <>
@@ -25,11 +44,14 @@ export default function SaveButton({ onSave, saving, mediaType }) {
           </>
         )}
       </button>
-      <p className="save-hint">
-        {typeof navigator !== 'undefined' && navigator.share
-          ? 'Share sheet will open — tap Save Image'
-          : 'Image will download to your device'}
-      </p>
+
+      {saving && isVideo && (
+        <div className="save-progress-bar" aria-hidden="true">
+          <div className="save-progress-bar__fill" style={{ width: `${pct}%` }}/>
+        </div>
+      )}
+
+      <p className="save-hint">{hint}</p>
     </div>
   )
 }
