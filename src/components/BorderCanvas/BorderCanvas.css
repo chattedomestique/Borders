@@ -2,14 +2,14 @@
 .border-canvas {
   position: relative;
   width: 100%;
-  background: rgba(0, 0, 0, 0.04);
-  border-radius: var(--radius-lg);
+  background: var(--border);
+  border-radius: var(--r-lg);
   overflow: hidden;
 }
 
 .border-canvas__el {
   width: 100%;
-  height: auto;   /* intrinsic aspect ratio from canvas width/height attrs */
+  height: auto;
   display: block;
   opacity: 0;
   transition: opacity 0.3s ease;
@@ -29,10 +29,10 @@
 }
 
 .border-canvas__spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid rgba(168, 85, 247, 0.2);
-  border-top-color: var(--purple);
+  width: 32px;
+  height: 32px;
+  border: 2.5px solid var(--border-strong);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }

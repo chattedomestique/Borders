@@ -3,8 +3,11 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  padding: 8px 0;
-  border-radius: var(--radius-lg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
 }
 
 .controls__section {
@@ -16,8 +19,8 @@
 
 .controls__divider {
   height: 1px;
-  background: rgba(168, 85, 247, 0.1);
-  margin: 0 16px;
+  background: var(--border);
+  margin: 0;
 }
 
 .controls__row {
@@ -26,109 +29,92 @@
   justify-content: space-between;
 }
 
-.controls__row--spaced {
-  width: 100%;
-}
-
 .controls__label {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--ink);
   letter-spacing: -0.1px;
-}
-
-.controls__label--solo {
-  margin-bottom: -2px;
 }
 
 .controls__value {
   font-size: 13px;
   font-weight: 600;
-  color: var(--purple);
-  background: rgba(168, 85, 247, 0.1);
-  padding: 4px 10px;
-  border-radius: 99px;
-  min-width: 52px;
+  color: var(--accent);
+  background: var(--accent-subtle);
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  min-width: 48px;
   text-align: center;
 }
 
 .controls__hint {
   font-size: 12px;
-  color: var(--text-light);
+  color: var(--ink-3);
   margin-top: -4px;
 }
 
-/* ── Background Mode Grid ── */
-.controls__bg-grid {
+/* ── Segmented Control (Background Mode) ── */
+.controls__seg {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg);
+  border-radius: var(--r-md);
 }
 
-.controls__bg-option {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 4px 10px;
-  border-radius: var(--radius-md);
-  border: 1.5px solid rgba(168, 85, 247, 0.12);
-  background: rgba(168, 85, 247, 0.04);
-  color: var(--text-muted);
-  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s, transform 0.15s;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.controls__bg-option:active {
-  transform: scale(0.96);
-}
-
-.controls__bg-option--active {
-  background: linear-gradient(135deg, var(--purple), var(--blue));
-  border-color: transparent;
-  color: white;
-  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.35);
-}
-
-.controls__bg-label {
-  font-size: 11px;
+.controls__seg-btn {
+  padding: 8px 4px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.1px;
-  text-align: center;
+  color: var(--ink-2);
+  letter-spacing: -0.1px;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  -webkit-tap-highlight-color: transparent;
   line-height: 1.2;
+  text-align: center;
+}
+
+.controls__seg-btn:active {
+  transform: scale(0.97);
+}
+
+.controls__seg-btn--active {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
 }
 
 /* ── Toggle Switch ── */
 .controls__toggle {
   position: relative;
-  width: 50px;
-  height: 28px;
-  border-radius: 99px;
-  background: rgba(168, 85, 247, 0.15);
-  border: 1.5px solid rgba(168, 85, 247, 0.2);
-  transition: background 0.25s, border-color 0.25s, box-shadow 0.25s;
+  width: 46px;
+  height: 26px;
+  border-radius: var(--r-pill);
+  background: var(--border-strong);
+  border: none;
+  transition: background 0.2s;
   flex-shrink: 0;
   padding: 0;
 }
 
 .controls__toggle--on {
-  background: linear-gradient(135deg, var(--purple), var(--blue));
-  border-color: transparent;
-  box-shadow: 0 2px 10px rgba(139, 92, 246, 0.4);
+  background: var(--accent);
 }
 
 .controls__toggle-thumb {
   position: absolute;
-  top: 2px;
-  left: 2px;
+  top: 3px;
+  left: 3px;
   width: 20px;
   height: 20px;
   border-radius: 50%;
   background: white;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .controls__toggle--on .controls__toggle-thumb {
-  transform: translateX(22px);
+  transform: translateX(20px);
 }

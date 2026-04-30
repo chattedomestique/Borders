@@ -1,4 +1,4 @@
-/* ── App Shell ── */
+/* ── App Shell ─────────────────────────────────────────────────────────────── */
 .app {
   display: flex;
   flex-direction: column;
@@ -7,76 +7,72 @@
   min-height: 100vh;
 }
 
-/* ── Header ── */
+/* ── Header ────────────────────────────────────────────────────────────────── */
 .app__header {
   position: sticky;
   top: 0;
   z-index: 100;
-  width: calc(100% - 32px);
-  max-width: 480px;
-  margin: 16px auto 0;
-  border-radius: var(--radius-lg);
+  width: 100%;
+  background: rgba(247, 245, 241, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
 }
 
 .app__header-inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 20px;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 0 20px;
+  height: 52px;
 }
 
 .app__logo {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
 }
 
-.app__logo-icon {
-  flex-shrink: 0;
-}
+.app__logo-icon { flex-shrink: 0; }
 
 .app__logo-text {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
-  letter-spacing: -0.3px;
-  background: linear-gradient(135deg, var(--purple), var(--blue));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.4px;
+  color: var(--ink);
 }
 
 .app__reset-btn {
-  padding: 8px 18px;
   font-size: 14px;
   font-weight: 600;
-  color: var(--purple);
-  background: rgba(168, 85, 247, 0.1);
-  border: 1.5px solid rgba(168, 85, 247, 0.2);
-  border-radius: 99px;
-  transition: background 0.2s, box-shadow 0.2s;
+  color: var(--accent);
+  padding: 6px 14px;
+  border-radius: var(--r-pill);
+  transition: background 0.15s;
 }
 
 .app__reset-btn:active {
-  background: rgba(168, 85, 247, 0.18);
-  box-shadow: var(--shadow-pressed);
+  background: var(--accent-dim);
 }
 
-/* ── Main ── */
+/* ── Main ──────────────────────────────────────────────────────────────────── */
 .app__main {
   display: flex;
   flex-direction: column;
   align-items: center;
   width: 100%;
   max-width: 480px;
-  padding: 20px 16px 0;
-  gap: 16px;
+  padding: 16px 16px 0;
+  gap: 12px;
   flex: 1;
 }
 
-/* ── Canvas Wrapper ── */
+/* ── Canvas Wrapper ────────────────────────────────────────────────────────── */
 .app__canvas-wrap {
   width: 100%;
-  border-radius: var(--radius-lg);
+  border-radius: var(--r-lg);
   overflow: hidden;
-  box-shadow: var(--shadow-float);
+  box-shadow: var(--shadow-lg);
 }

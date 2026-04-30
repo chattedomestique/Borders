@@ -54,18 +54,12 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="app__header clay clay--strong">
+      <header className="app__header">
         <div className="app__header-inner">
           <div className="app__logo" aria-label="Border Studio">
-            <svg className="app__logo-icon" width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
-              <rect x="1" y="1" width="20" height="20" rx="4" fill="none" stroke="url(#lg)" strokeWidth="3"/>
-              <rect x="6" y="6" width="10" height="10" rx="2" fill="url(#lg)"/>
-              <defs>
-                <linearGradient id="lg" x1="0" y1="0" x2="22" y2="22" gradientUnits="userSpaceOnUse">
-                  <stop offset="0%" stopColor="#c084fc"/>
-                  <stop offset="100%" stopColor="#6366f1"/>
-                </linearGradient>
-              </defs>
+            <svg className="app__logo-icon" width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+              <rect x="1" y="1" width="20" height="20" rx="5" stroke="#5B4FEA" strokeWidth="2.5"/>
+              <rect x="6" y="6" width="10" height="10" rx="2.5" fill="#5B4FEA"/>
             </svg>
             <span className="app__logo-text">Border Studio</span>
           </div>

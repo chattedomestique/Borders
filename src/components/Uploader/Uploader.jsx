@@ -27,38 +27,28 @@ export default function Uploader({ onMediaLoaded }) {
     }
 
     const url = URL.createObjectURL(file)
-    onMediaLoaded({
-      url,
-      type: isImage ? 'image' : 'video',
-      file,
-    })
+    onMediaLoaded({ url, type: isImage ? 'image' : 'video', file })
   }, [onMediaLoaded])
 
   const handleInputChange = (e) => {
     const file = e.target.files?.[0]
     processFile(file)
-    // reset input so the same file can be re-selected
     e.target.value = ''
   }
 
   const handleDrop = (e) => {
     e.preventDefault()
     setDragging(false)
-    const file = e.dataTransfer.files?.[0]
-    processFile(file)
+    processFile(e.dataTransfer.files?.[0])
   }
 
-  const handleDragOver = (e) => {
-    e.preventDefault()
-    setDragging(true)
-  }
-
+  const handleDragOver = (e) => { e.preventDefault(); setDragging(true) }
   const handleDragLeave = () => setDragging(false)
 
   return (
     <div className="uploader">
       <div
-        className={`uploader__drop${dragging ? ' uploader__drop--active' : ''} clay clay--strong`}
+        className={`uploader__drop${dragging ? ' uploader__drop--active' : ''}`}
         onClick={() => inputRef.current?.click()}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
@@ -69,16 +59,9 @@ export default function Uploader({ onMediaLoaded }) {
         onKeyDown={(e) => e.key === 'Enter' && inputRef.current?.click()}
       >
         <div className="uploader__icon" aria-hidden="true">
-          <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
-            <rect width="56" height="56" rx="18" fill="url(#ug)"/>
-            <path d="M28 18v12m0 0l-5-5m5 5l5-5" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-            <rect x="14" y="34" width="28" height="4" rx="2" fill="white" fillOpacity="0.5"/>
-            <defs>
-              <linearGradient id="ug" x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor="#c084fc"/>
-                <stop offset="100%" stopColor="#6366f1"/>
-              </linearGradient>
-            </defs>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M12 4v12m0-12L8 8m4-4l4 4" stroke="white" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M4 17v1a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1" stroke="white" strokeWidth="2.25" strokeLinecap="round"/>
           </svg>
         </div>
         <p className="uploader__title">Add a photo or video</p>
