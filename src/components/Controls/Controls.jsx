@@ -8,7 +8,8 @@ const BG_MODES = [
 ]
 
 export default function Controls({ settings, onUpdate }) {
-  const { borderThickness, bgMode, blurAmount, cornerRadius, cropSquare } = settings
+  const { borderThickness, bgMode, blurAmount, cornerRadius, cropSquare,
+          showMedia, grainAmount } = settings
 
   return (
     <div className="controls">
@@ -37,11 +38,7 @@ export default function Controls({ settings, onUpdate }) {
       {/* Background Mode */}
       <section className="controls__section" aria-label="Background style">
         <p className="controls__label">Background</p>
-        <div
-          className="controls__seg"
-          role="radiogroup"
-          aria-label="Background style"
-        >
+        <div className="controls__seg" role="radiogroup" aria-label="Background style">
           {BG_MODES.map(mode => (
             <button
               key={mode.id}
@@ -82,6 +79,30 @@ export default function Controls({ settings, onUpdate }) {
 
       <div className="controls__divider"/>
 
+      {/* Grain */}
+      <section className="controls__section" aria-label="Grain">
+        <div className="controls__row">
+          <label className="controls__label" htmlFor="grain-slider">Grain</label>
+          <span className="controls__value">
+            {grainAmount === 0 ? 'Off' : `${grainAmount}%`}
+          </span>
+        </div>
+        <input
+          id="grain-slider"
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={grainAmount}
+          onChange={e => onUpdate('grainAmount', Number(e.target.value))}
+          aria-valuenow={grainAmount}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        />
+      </section>
+
+      <div className="controls__divider"/>
+
       {/* Corner Radius */}
       <section className="controls__section" aria-label="Corner radius">
         <div className="controls__row">
@@ -106,7 +127,7 @@ export default function Controls({ settings, onUpdate }) {
 
       <div className="controls__divider"/>
 
-      {/* Crop Mode */}
+      {/* Square Crop */}
       <section className="controls__section" aria-label="Crop mode">
         <div className="controls__row">
           <span className="controls__label">Square crop</span>
@@ -122,6 +143,27 @@ export default function Controls({ settings, onUpdate }) {
         </div>
         <p className="controls__hint">
           {cropSquare ? 'Media cropped to square' : 'Original aspect ratio kept'}
+        </p>
+      </section>
+
+      <div className="controls__divider"/>
+
+      {/* Show Media */}
+      <section className="controls__section" aria-label="Media visibility">
+        <div className="controls__row">
+          <span className="controls__label">Show photo</span>
+          <button
+            className={`controls__toggle${showMedia ? ' controls__toggle--on' : ''}`}
+            onClick={() => onUpdate('showMedia', !showMedia)}
+            role="switch"
+            aria-checked={showMedia}
+            aria-label="Toggle photo visibility"
+          >
+            <span className="controls__toggle-thumb"/>
+          </button>
+        </div>
+        <p className="controls__hint">
+          {showMedia ? 'Photo visible over background' : 'Background only'}
         </p>
       </section>
     </div>

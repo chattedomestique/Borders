@@ -8,11 +8,13 @@ import './App.css'
 const STEPS = { UPLOAD: 'upload', EDIT: 'edit', SAVING: 'saving' }
 
 const DEFAULT_SETTINGS = {
-  borderThickness: 40,   // px in output space (0–200)
-  bgMode: 'average',     // 'average' | 'contrast' | 'complementary' | 'frosted'
-  blurAmount: 60,        // px blur for frosted glass (10–120)
-  cornerRadius: 0,       // 0–100 (percent of half the shorter side)
+  borderThickness: 40,
+  bgMode: 'average',
+  blurAmount: 60,
+  cornerRadius: 0,
   cropSquare: false,
+  showMedia: true,
+  grainAmount: 0,
 }
 
 export default function App() {

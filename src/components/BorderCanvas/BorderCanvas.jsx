@@ -157,12 +157,49 @@ function drawFrostedBg(ctx, source, canvasW, canvasH, blurAmount, cache) {
 }
 
 /**
+ * Film grain ported from filmgrainer by Lars Pontoppidan (MIT).
+ * Gaussian noise is generated at 1/4 resolution (gives grain "size" on
+ * upscale), then blended via soft-light composite — which naturally
+ * attenuates grain in shadows and highlights just like real film.
+ */
+function applyGrain(ctx, w, h, grainAmount, cache) {
+  if (!grainAmount) return
+  const nw = Math.max(4, Math.round(w / 4))
+  const nh = Math.max(4, Math.round(h / 4))
+
+  if (!cache.grain) cache.grain = document.createElement('canvas')
+  if (cache.grain.width !== nw || cache.grain.height !== nh) {
+    cache.grain.width = nw; cache.grain.height = nh
+  }
+  const gc = cache.grain.getContext('2d')
+  const id = gc.createImageData(nw, nh)
+  const data = id.data
+  // grainAmount 0-100 → spread ±0 to ±120 around neutral 128
+  const spread = grainAmount * 2.4
+  for (let i = 0; i < data.length; i += 4) {
+    // Box-Muller Gaussian so grain distribution matches film
+    const u1 = Math.random() || 1e-10
+    const n = Math.sqrt(-2 * Math.log(u1)) * Math.cos(6.2832 * Math.random())
+    const v = Math.max(0, Math.min(255, Math.round(128 + n * spread * 0.5)))
+    data[i] = data[i + 1] = data[i + 2] = v; data[i + 3] = 255
+  }
+  gc.putImageData(id, 0, 0)
+
+  ctx.save()
+  ctx.globalCompositeOperation = 'soft-light'
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(cache.grain, 0, 0, w, h)
+  ctx.restore()
+}
+
+/**
  * Core render. The border is added AROUND the scaled media so it is
  * always uniform on all four sides, regardless of aspect ratio.
  */
 function renderFrame(canvas, source, settings, cache) {
   if (!canvas || !source) return
-  const { borderThickness, bgMode, blurAmount = 60, cornerRadius, cropSquare } = settings
+  const { borderThickness, bgMode, blurAmount = 60, cornerRadius, cropSquare,
+          showMedia = true, grainAmount = 0 } = settings
 
   const srcW = source.videoWidth ?? source.naturalWidth ?? source.width ?? 1
   const srcH = source.videoHeight ?? source.naturalHeight ?? source.height ?? 1
@@ -219,31 +256,35 @@ function renderFrame(canvas, source, settings, cache) {
     ctx.fillRect(0, 0, totalW, totalH)
   }
 
-  // 2. Media with corner radius clipping
-  const rx = cornerRadius > 0 ? Math.min(scaledW, scaledH) / 2 * (cornerRadius / 400) : 0
+  // 2. Grain on background (drawn before media so it stays in the border/mat)
+  applyGrain(ctx, totalW, totalH, grainAmount, cache)
 
-  ctx.save()
-  if (rx > 0) {
-    const x = offsetX, y = offsetY, w = scaledW, h = scaledH
-    ctx.beginPath()
-    ctx.moveTo(x + rx, y)
-    ctx.lineTo(x + w - rx, y);  ctx.quadraticCurveTo(x + w, y,     x + w, y + rx)
-    ctx.lineTo(x + w, y + h - rx); ctx.quadraticCurveTo(x + w, y + h, x + w - rx, y + h)
-    ctx.lineTo(x + rx, y + h);  ctx.quadraticCurveTo(x,     y + h, x,     y + h - rx)
-    ctx.lineTo(x, y + rx);      ctx.quadraticCurveTo(x,     y,     x + rx, y)
-    ctx.closePath()
-    ctx.clip()
+  // 3. Media with corner radius clipping (skipped when showMedia is off)
+  if (showMedia) {
+    const rx = cornerRadius > 0 ? Math.min(scaledW, scaledH) / 2 * (cornerRadius / 400) : 0
+
+    ctx.save()
+    if (rx > 0) {
+      const x = offsetX, y = offsetY, w = scaledW, h = scaledH
+      ctx.beginPath()
+      ctx.moveTo(x + rx, y)
+      ctx.lineTo(x + w - rx, y);  ctx.quadraticCurveTo(x + w, y,     x + w, y + rx)
+      ctx.lineTo(x + w, y + h - rx); ctx.quadraticCurveTo(x + w, y + h, x + w - rx, y + h)
+      ctx.lineTo(x + rx, y + h);  ctx.quadraticCurveTo(x,     y + h, x,     y + h - rx)
+      ctx.lineTo(x, y + rx);      ctx.quadraticCurveTo(x,     y,     x + rx, y)
+      ctx.closePath()
+      ctx.clip()
+    }
+
+    if (cropSquare) {
+      const side = Math.min(srcW, srcH)
+      ctx.drawImage(source, (srcW - side) / 2, (srcH - side) / 2, side, side,
+                    offsetX, offsetY, scaledW, scaledH)
+    } else {
+      ctx.drawImage(source, 0, 0, srcW, srcH, offsetX, offsetY, scaledW, scaledH)
+    }
+    ctx.restore()
   }
-
-  if (cropSquare) {
-    const side = Math.min(srcW, srcH)
-    ctx.drawImage(source, (srcW - side) / 2, (srcH - side) / 2, side, side,
-                  offsetX, offsetY, scaledW, scaledH)
-  } else {
-    ctx.drawImage(source, 0, 0, srcW, srcH, offsetX, offsetY, scaledW, scaledH)
-  }
-
-  ctx.restore()
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
