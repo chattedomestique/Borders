@@ -13,6 +13,8 @@ const DEFAULT_SETTINGS = {
   blurAmount: 60,
   cornerRadius: 0,
   cropSquare: false,
+  cropOffsetX: 0.5,
+  cropOffsetY: 0.5,
   showMedia: true,
   grainAmount: 0,
   grainVariability: 0,
@@ -90,6 +92,7 @@ export default function App() {
                 ref={canvasRef}
                 media={media}
                 settings={settings}
+                onUpdate={updateSetting}
               />
             </section>
 

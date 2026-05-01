@@ -206,6 +206,7 @@ function applyGrain(ctx, w, h, grainAmount, grainVariability, cache) {
 function renderFrame(canvas, source, settings, cache) {
   if (!canvas || !source) return
   const { borderThickness, bgMode, blurAmount = 60, cornerRadius, cropSquare,
+          cropOffsetX = 0.5, cropOffsetY = 0.5,
           showMedia = true, grainAmount = 0, grainVariability = 0 } = settings
 
   const srcW = source.videoWidth ?? source.naturalWidth ?? source.width ?? 1
@@ -285,7 +286,9 @@ function renderFrame(canvas, source, settings, cache) {
 
     if (cropSquare) {
       const side = Math.min(srcW, srcH)
-      ctx.drawImage(source, (srcW - side) / 2, (srcH - side) / 2, side, side,
+      const cropLeft = Math.round(cropOffsetX * (srcW - side))
+      const cropTop  = Math.round(cropOffsetY * (srcH - side))
+      ctx.drawImage(source, cropLeft, cropTop, side, side,
                     offsetX, offsetY, scaledW, scaledH)
     } else {
       ctx.drawImage(source, 0, 0, srcW, srcH, offsetX, offsetY, scaledW, scaledH)
@@ -296,17 +299,21 @@ function renderFrame(canvas, source, settings, cache) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-const BorderCanvas = forwardRef(function BorderCanvas({ media, settings }, ref) {
+const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdate }, ref) {
   const canvasRef    = useRef(null)
   const sourceRef    = useRef(null)
   const settingsRef  = useRef(settings)
   const mediaRef     = useRef(media)
+  const onUpdateRef  = useRef(onUpdate)
   const animFrameRef = useRef(null)
-  const cacheRef     = useRef({})   // frosted glass canvas cache
+  const cacheRef     = useRef({})
+  const dragRef      = useRef(null)
+  const [isDragging, setIsDragging] = useState(false)
   const [ready, setReady] = useState(false)
 
   settingsRef.current = settings
   mediaRef.current    = media
+  onUpdateRef.current = onUpdate
 
   const redraw = useCallback(() => {
     renderFrame(canvasRef.current, sourceRef.current, settingsRef.current, cacheRef.current)
@@ -327,6 +334,60 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings }, ref) 
     }
     animFrameRef.current = requestAnimationFrame(loop)
   }, [stopLoop])
+
+  // ── Drag-to-reframe (crop square only) ───────────────────────────────────────
+  const handlePointerDown = useCallback((e) => {
+    const s = settingsRef.current
+    if (!s.cropSquare) return
+    const source = sourceRef.current
+    if (!source) return
+
+    const srcW = source.videoWidth ?? source.naturalWidth ?? source.width ?? 1
+    const srcH = source.videoHeight ?? source.naturalHeight ?? source.height ?? 1
+    if (srcW === srcH) return  // perfect square — nothing to drag
+
+    const side = Math.min(srcW, srcH)
+    const maxOffsetX = srcW - side
+    const maxOffsetY = srcH - side
+
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setIsDragging(true)
+
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startCropLeft: (s.cropOffsetX ?? 0.5) * maxOffsetX,
+      startCropTop:  (s.cropOffsetY ?? 0.5) * maxOffsetY,
+      maxOffsetX,
+      maxOffsetY,
+      side,
+      cssWidth: e.currentTarget.getBoundingClientRect().width,
+    }
+  }, [])
+
+  const handlePointerMove = useCallback((e) => {
+    const drag = dragRef.current
+    if (!drag) return
+
+    const { borderThickness = 40 } = settingsRef.current
+    // 1 CSS px → source image px:
+    // canvas logical width = OUT_SIZE + 2*border; media occupies OUT_SIZE of that
+    // side source px displayed across OUT_SIZE logical px across drag.cssWidth CSS px
+    const srcPxPerCSSPx = drag.side * (OUT_SIZE + borderThickness * 2) / (OUT_SIZE * drag.cssWidth)
+
+    const newLeft = Math.max(0, Math.min(drag.maxOffsetX,
+      drag.startCropLeft - (e.clientX - drag.startX) * srcPxPerCSSPx))
+    const newTop  = Math.max(0, Math.min(drag.maxOffsetY,
+      drag.startCropTop  - (e.clientY - drag.startY) * srcPxPerCSSPx))
+
+    onUpdateRef.current?.('cropOffsetX', drag.maxOffsetX > 0 ? newLeft / drag.maxOffsetX : 0.5)
+    onUpdateRef.current?.('cropOffsetY', drag.maxOffsetY > 0 ? newTop  / drag.maxOffsetY : 0.5)
+  }, [])
+
+  const handlePointerUp = useCallback(() => {
+    dragRef.current = null
+    setIsDragging(false)
+  }, [])
 
   // Load media
   useEffect(() => {
@@ -523,8 +584,16 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings }, ref) 
     }
   }), [startLoop, stopLoop])
 
+  const canDrag = settings.cropSquare
   return (
-    <div className="border-canvas">
+    <div
+      className="border-canvas"
+      style={canDrag ? { cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none' } : undefined}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+    >
       <canvas
         ref={canvasRef}
         className={`border-canvas__el${ready ? ' border-canvas__el--ready' : ''}`}
