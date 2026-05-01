@@ -3,8 +3,6 @@
   position: relative;
   width: 100%;
   background: var(--border);
-  border-radius: var(--r-lg);
-  overflow: hidden;
 }
 
 .border-canvas__el {

@@ -68,13 +68,13 @@ export default function Controls({ settings, onUpdate }) {
               id="blur-slider"
               type="range"
               min={10}
-              max={120}
+              max={240}
               step={2}
               value={blurAmount}
               onChange={e => onUpdate('blurAmount', Number(e.target.value))}
               aria-valuenow={blurAmount}
               aria-valuemin={10}
-              aria-valuemax={120}
+              aria-valuemax={240}
             />
           </section>
         </>
