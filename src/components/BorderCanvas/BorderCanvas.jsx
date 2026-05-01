@@ -205,7 +205,7 @@ function applyGrain(ctx, w, h, grainAmount, grainVariability, cache) {
  */
 function renderFrame(canvas, source, settings, cache, geoRef) {
   if (!canvas || !source) return
-  const { borderThickness, bgMode, blurAmount = 60, cornerRadius, cropSquare,
+  const { borderThickness, bgMode, bgColor = '#ffffff', blurAmount = 60, cornerRadius, cropSquare,
           zoom = 1, panX = 0.5, panY = 0.5,
           showMedia = true, grainAmount = 0, grainVariability = 0 } = settings
 
@@ -241,6 +241,9 @@ function renderFrame(canvas, source, settings, cache, geoRef) {
   // 1. Background
   if (bgMode === 'frosted') {
     drawFrostedBg(ctx, source, totalW, totalH, blurAmount, cache)
+  } else if (bgMode === 'color') {
+    ctx.fillStyle = bgColor
+    ctx.fillRect(0, 0, totalW, totalH)
   } else {
     const imageData = grabFrame(source, Math.min(srcW, 200), Math.min(srcH, 200))
     const [avgR, avgG, avgB] = sampleAverageColor(imageData)
@@ -301,12 +304,14 @@ function renderFrame(canvas, source, settings, cache, geoRef) {
 
 const MAX_ZOOM = 6
 
-const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdate }, ref) {
+const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdate, pickMode, onPickColor }, ref) {
   const canvasRef    = useRef(null)
   const sourceRef    = useRef(null)
   const settingsRef  = useRef(settings)
   const mediaRef     = useRef(media)
-  const onUpdateRef  = useRef(onUpdate)
+  const onUpdateRef    = useRef(onUpdate)
+  const onPickColorRef = useRef(onPickColor)
+  const pickModeRef    = useRef(pickMode)
   const animFrameRef = useRef(null)
   const cacheRef     = useRef({})
   const geoRef       = useRef({ totalW: OUT_SIZE, totalH: OUT_SIZE, scaledW: OUT_SIZE, scaledH: OUT_SIZE,
@@ -318,9 +323,11 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdat
   const [isDragging, setIsDragging] = useState(false)
   const [ready, setReady] = useState(false)
 
-  settingsRef.current = settings
-  mediaRef.current    = media
-  onUpdateRef.current = onUpdate
+  settingsRef.current    = settings
+  mediaRef.current       = media
+  onUpdateRef.current    = onUpdate
+  onPickColorRef.current = onPickColor
+  pickModeRef.current    = pickMode
 
   const redraw = useCallback(() => {
     renderFrame(canvasRef.current, sourceRef.current, settingsRef.current, cacheRef.current, geoRef)
@@ -345,6 +352,19 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdat
   // ── Pinch-to-zoom, drag-to-pan, double-tap-to-reset ──────────────────────────
 
   const handlePointerDown = useCallback((e) => {
+    // Eye-dropper mode: sample the rendered canvas pixel, skip all pan/zoom logic
+    if (pickModeRef.current) {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      const rect = e.currentTarget.getBoundingClientRect()
+      const x = Math.max(0, Math.min(canvas.width  - 1, Math.round((e.clientX - rect.left) * canvas.width  / rect.width)))
+      const y = Math.max(0, Math.min(canvas.height - 1, Math.round((e.clientY - rect.top)  * canvas.height / rect.height)))
+      const [r, g, b] = canvas.getContext('2d').getImageData(x, y, 1, 1).data
+      const hex = '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')
+      onPickColorRef.current?.(hex)
+      return
+    }
+
     e.currentTarget.setPointerCapture(e.pointerId)
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
 
@@ -659,10 +679,11 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdat
     }
   }), [startLoop, stopLoop])
 
+  const cursor = pickMode ? 'crosshair' : (isDragging ? 'grabbing' : 'grab')
   return (
     <div
       className="border-canvas"
-      style={{ cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+      style={{ cursor, touchAction: 'none' }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}

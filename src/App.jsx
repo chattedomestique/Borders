@@ -10,6 +10,7 @@ const STEPS = { UPLOAD: 'upload', EDIT: 'edit', SAVING: 'saving' }
 const DEFAULT_SETTINGS = {
   borderThickness: 40,
   bgMode: 'average',
+  bgColor: '#ffffff',
   blurAmount: 60,
   cornerRadius: 0,
   cropSquare: false,
@@ -26,6 +27,7 @@ export default function App() {
   const [media, setMedia] = useState(null)  // { url, type: 'image'|'video', file }
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
   const [recordingProgress, setRecordingProgress] = useState(0)
+  const [pickMode, setPickMode] = useState(false)
   const canvasRef = useRef(null)
 
   const handleMediaLoaded = useCallback((mediaObj) => {
@@ -56,6 +58,11 @@ export default function App() {
 
   const updateSetting = useCallback((key, value) => {
     setSettings(prev => ({ ...prev, [key]: value }))
+  }, [])
+
+  const handlePickColor = useCallback((hex) => {
+    setSettings(prev => ({ ...prev, bgColor: hex, bgMode: 'color' }))
+    setPickMode(false)
   }, [])
 
   return (
@@ -94,6 +101,8 @@ export default function App() {
                 media={media}
                 settings={settings}
                 onUpdate={updateSetting}
+                pickMode={pickMode}
+                onPickColor={handlePickColor}
               />
             </section>
 
@@ -101,6 +110,8 @@ export default function App() {
               settings={settings}
               onUpdate={updateSetting}
               mediaType={media.type}
+              pickMode={pickMode}
+              onPickMode={() => setPickMode(p => !p)}
             />
 
             <SaveButton
