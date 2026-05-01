@@ -203,10 +203,10 @@ function applyGrain(ctx, w, h, grainAmount, grainVariability, cache) {
  * Core render. The border is added AROUND the scaled media so it is
  * always uniform on all four sides, regardless of aspect ratio.
  */
-function renderFrame(canvas, source, settings, cache) {
+function renderFrame(canvas, source, settings, cache, geoRef) {
   if (!canvas || !source) return
   const { borderThickness, bgMode, blurAmount = 60, cornerRadius, cropSquare,
-          cropOffsetX = 0.5, cropOffsetY = 0.5,
+          zoom = 1, panX = 0.5, panY = 0.5,
           showMedia = true, grainAmount = 0, grainVariability = 0 } = settings
 
   const srcW = source.videoWidth ?? source.naturalWidth ?? source.width ?? 1
@@ -235,6 +235,7 @@ function renderFrame(canvas, source, settings, cache) {
     canvas.width = totalW
     canvas.height = totalH
   }
+  if (geoRef) geoRef.current = { totalW, totalH, scaledW, scaledH, offsetX, offsetY, srcW, srcH, mediaW, mediaH }
   const ctx = canvas.getContext('2d')
 
   // 1. Background
@@ -267,8 +268,15 @@ function renderFrame(canvas, source, settings, cache) {
   // 2. Grain on background (drawn before media so it stays in the border/mat)
   applyGrain(ctx, totalW, totalH, grainAmount, grainVariability, cache)
 
-  // 3. Media with corner radius clipping (skipped when showMedia is off)
+  // 3. Media with zoom/pan and optional corner radius clip
   if (showMedia) {
+    // View box in source image coordinates: mediaW/zoom × mediaH/zoom pixels
+    // centered at pan position, clamped to stay within source bounds
+    const viewW = mediaW / zoom
+    const viewH = mediaH / zoom
+    const srcLeft = Math.max(0, Math.min(srcW - viewW, panX * srcW - viewW / 2))
+    const srcTop  = Math.max(0, Math.min(srcH - viewH, panY * srcH - viewH / 2))
+
     const rx = cornerRadius > 0 ? Math.min(scaledW, scaledH) / 2 * (cornerRadius / 400) : 0
 
     ctx.save()
@@ -284,20 +292,14 @@ function renderFrame(canvas, source, settings, cache) {
       ctx.clip()
     }
 
-    if (cropSquare) {
-      const side = Math.min(srcW, srcH)
-      const cropLeft = Math.round(cropOffsetX * (srcW - side))
-      const cropTop  = Math.round(cropOffsetY * (srcH - side))
-      ctx.drawImage(source, cropLeft, cropTop, side, side,
-                    offsetX, offsetY, scaledW, scaledH)
-    } else {
-      ctx.drawImage(source, 0, 0, srcW, srcH, offsetX, offsetY, scaledW, scaledH)
-    }
+    ctx.drawImage(source, srcLeft, srcTop, viewW, viewH, offsetX, offsetY, scaledW, scaledH)
     ctx.restore()
   }
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
+
+const MAX_ZOOM = 6
 
 const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdate }, ref) {
   const canvasRef    = useRef(null)
@@ -307,7 +309,12 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdat
   const onUpdateRef  = useRef(onUpdate)
   const animFrameRef = useRef(null)
   const cacheRef     = useRef({})
-  const dragRef      = useRef(null)
+  const geoRef       = useRef({ totalW: OUT_SIZE, totalH: OUT_SIZE, scaledW: OUT_SIZE, scaledH: OUT_SIZE,
+                                offsetX: 0, offsetY: 0, srcW: 1, srcH: 1, mediaW: 1, mediaH: 1 })
+  const pointersRef  = useRef(new Map())  // active pointer positions
+  const pinchRef     = useRef(null)       // pinch-zoom start state
+  const dragRef      = useRef(null)       // single-pointer drag start state
+  const lastTapRef   = useRef({ time: 0, x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
   const [ready, setReady] = useState(false)
 
@@ -316,7 +323,7 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdat
   onUpdateRef.current = onUpdate
 
   const redraw = useCallback(() => {
-    renderFrame(canvasRef.current, sourceRef.current, settingsRef.current, cacheRef.current)
+    renderFrame(canvasRef.current, sourceRef.current, settingsRef.current, cacheRef.current, geoRef)
   }, [])
 
   const stopLoop = useCallback(() => {
@@ -329,64 +336,132 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdat
   const startLoop = useCallback(() => {
     stopLoop()
     const loop = () => {
-      renderFrame(canvasRef.current, sourceRef.current, settingsRef.current, cacheRef.current)
+      renderFrame(canvasRef.current, sourceRef.current, settingsRef.current, cacheRef.current, geoRef)
       animFrameRef.current = requestAnimationFrame(loop)
     }
     animFrameRef.current = requestAnimationFrame(loop)
   }, [stopLoop])
 
-  // ── Drag-to-reframe (crop square only) ───────────────────────────────────────
+  // ── Pinch-to-zoom, drag-to-pan, double-tap-to-reset ──────────────────────────
+
   const handlePointerDown = useCallback((e) => {
-    const s = settingsRef.current
-    if (!s.cropSquare) return
-    const source = sourceRef.current
-    if (!source) return
-
-    const srcW = source.videoWidth ?? source.naturalWidth ?? source.width ?? 1
-    const srcH = source.videoHeight ?? source.naturalHeight ?? source.height ?? 1
-    if (srcW === srcH) return  // perfect square — nothing to drag
-
-    const side = Math.min(srcW, srcH)
-    const maxOffsetX = srcW - side
-    const maxOffsetY = srcH - side
-
     e.currentTarget.setPointerCapture(e.pointerId)
-    setIsDragging(true)
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
 
-    dragRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      startCropLeft: (s.cropOffsetX ?? 0.5) * maxOffsetX,
-      startCropTop:  (s.cropOffsetY ?? 0.5) * maxOffsetY,
-      maxOffsetX,
-      maxOffsetY,
-      side,
-      cssWidth: e.currentTarget.getBoundingClientRect().width,
+    // Double-tap: reset zoom and pan
+    if (pointersRef.current.size === 1) {
+      const now = Date.now()
+      const last = lastTapRef.current
+      if (now - last.time < 300 && Math.hypot(e.clientX - last.x, e.clientY - last.y) < 40) {
+        onUpdateRef.current?.('zoom', 1)
+        onUpdateRef.current?.('panX', 0.5)
+        onUpdateRef.current?.('panY', 0.5)
+        lastTapRef.current = { time: 0, x: 0, y: 0 }
+        return
+      }
+      lastTapRef.current = { time: now, x: e.clientX, y: e.clientY }
     }
+
+    const geo = geoRef.current
+    const s = settingsRef.current
+    const currentZoom = s.zoom ?? 1
+    const currentPanX = s.panX ?? 0.5
+    const currentPanY = s.panY ?? 0.5
+    const viewW = geo.mediaW / currentZoom
+    const viewH = geo.mediaH / currentZoom
+    const srcLeft = Math.max(0, Math.min(geo.srcW - viewW, currentPanX * geo.srcW - viewW / 2))
+    const srcTop  = Math.max(0, Math.min(geo.srcH - viewH, currentPanY * geo.srcH - viewH / 2))
+
+    if (pointersRef.current.size >= 2) {
+      // Second finger down → start pinch, cancel single-pointer drag
+      dragRef.current = null
+      const pts = [...pointersRef.current.values()]
+      const [a, b] = pts
+      const startDist = Math.hypot(b.x - a.x, b.y - a.y)
+      const pcx = (a.x + b.x) / 2
+      const pcy = (a.y + b.y) / 2
+      const rect = e.currentTarget.getBoundingClientRect()
+      // Convert pinch center to normalized position in media area, then to source coords
+      const mx = Math.max(0, Math.min(1, ((pcx - rect.left) * geo.totalW / rect.width  - geo.offsetX) / geo.scaledW))
+      const my = Math.max(0, Math.min(1, ((pcy - rect.top)  * geo.totalH / rect.height - geo.offsetY) / geo.scaledH))
+      pinchRef.current = {
+        startDist,
+        startZoom: currentZoom,
+        pinchSrcX: srcLeft + mx * viewW,
+        pinchSrcY: srcTop  + my * viewH,
+        rect,
+      }
+    } else {
+      // Single finger → drag to pan
+      const rect = e.currentTarget.getBoundingClientRect()
+      dragRef.current = { startX: e.clientX, startY: e.clientY, startSrcLeft: srcLeft, startSrcTop: srcTop, viewW, viewH, rect }
+    }
+    setIsDragging(true)
   }, [])
 
   const handlePointerMove = useCallback((e) => {
-    const drag = dragRef.current
-    if (!drag) return
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    const geo = geoRef.current
 
-    const { borderThickness = 40 } = settingsRef.current
-    // 1 CSS px → source image px:
-    // canvas logical width = OUT_SIZE + 2*border; media occupies OUT_SIZE of that
-    // side source px displayed across OUT_SIZE logical px across drag.cssWidth CSS px
-    const srcPxPerCSSPx = drag.side * (OUT_SIZE + borderThickness * 2) / (OUT_SIZE * drag.cssWidth)
+    if (pinchRef.current && pointersRef.current.size >= 2) {
+      const pts = [...pointersRef.current.values()]
+      const [a, b] = pts
+      const currentDist = Math.hypot(b.x - a.x, b.y - a.y)
+      const pcx = (a.x + b.x) / 2
+      const pcy = (a.y + b.y) / 2
+      const pinch = pinchRef.current
 
-    const newLeft = Math.max(0, Math.min(drag.maxOffsetX,
-      drag.startCropLeft - (e.clientX - drag.startX) * srcPxPerCSSPx))
-    const newTop  = Math.max(0, Math.min(drag.maxOffsetY,
-      drag.startCropTop  - (e.clientY - drag.startY) * srcPxPerCSSPx))
+      const newZoom = Math.max(1, Math.min(MAX_ZOOM, pinch.startZoom * currentDist / pinch.startDist))
+      const newViewW = geo.mediaW / newZoom
+      const newViewH = geo.mediaH / newZoom
 
-    onUpdateRef.current?.('cropOffsetX', drag.maxOffsetX > 0 ? newLeft / drag.maxOffsetX : 0.5)
-    onUpdateRef.current?.('cropOffsetY', drag.maxOffsetY > 0 ? newTop  / drag.maxOffsetY : 0.5)
+      // Keep the source point under the pinch center fixed as zoom changes
+      const nmx = Math.max(0, Math.min(1, ((pcx - pinch.rect.left) * geo.totalW / pinch.rect.width  - geo.offsetX) / geo.scaledW))
+      const nmy = Math.max(0, Math.min(1, ((pcy - pinch.rect.top)  * geo.totalH / pinch.rect.height - geo.offsetY) / geo.scaledH))
+      const newSrcLeft = Math.max(0, Math.min(geo.srcW - newViewW, pinch.pinchSrcX - nmx * newViewW))
+      const newSrcTop  = Math.max(0, Math.min(geo.srcH - newViewH, pinch.pinchSrcY - nmy * newViewH))
+
+      onUpdateRef.current?.('zoom', newZoom)
+      onUpdateRef.current?.('panX', (newSrcLeft + newViewW / 2) / geo.srcW)
+      onUpdateRef.current?.('panY', (newSrcTop  + newViewH / 2) / geo.srcH)
+
+    } else if (dragRef.current) {
+      const drag = dragRef.current
+      // Source pixels per CSS pixel: view fills scaledW logical px across the canvas's CSS width
+      const srcPxPerCSS = drag.viewW * geo.totalW / (geo.scaledW * drag.rect.width)
+      const newSrcLeft = Math.max(0, Math.min(geo.srcW - drag.viewW, drag.startSrcLeft - (e.clientX - drag.startX) * srcPxPerCSS))
+      const newSrcTop  = Math.max(0, Math.min(geo.srcH - drag.viewH, drag.startSrcTop  - (e.clientY - drag.startY) * srcPxPerCSS))
+      onUpdateRef.current?.('panX', (newSrcLeft + drag.viewW / 2) / geo.srcW)
+      onUpdateRef.current?.('panY', (newSrcTop  + drag.viewH / 2) / geo.srcH)
+    }
   }, [])
 
-  const handlePointerUp = useCallback(() => {
-    dragRef.current = null
-    setIsDragging(false)
+  const handlePointerUp = useCallback((e) => {
+    pointersRef.current.delete(e.pointerId)
+
+    if (pointersRef.current.size < 2) {
+      pinchRef.current = null
+    }
+    if (pointersRef.current.size === 1) {
+      // Transition from pinch back to drag with the remaining finger
+      const geo = geoRef.current
+      const s = settingsRef.current
+      const viewW = geo.mediaW / (s.zoom ?? 1)
+      const viewH = geo.mediaH / (s.zoom ?? 1)
+      const srcLeft = Math.max(0, Math.min(geo.srcW - viewW, (s.panX ?? 0.5) * geo.srcW - viewW / 2))
+      const srcTop  = Math.max(0, Math.min(geo.srcH - viewH, (s.panY ?? 0.5) * geo.srcH - viewH / 2))
+      const [remainingPos] = [...pointersRef.current.values()]
+      dragRef.current = {
+        startX: remainingPos.x, startY: remainingPos.y,
+        startSrcLeft: srcLeft, startSrcTop: srcTop,
+        viewW, viewH,
+        rect: e.currentTarget.getBoundingClientRect(),
+      }
+    }
+    if (pointersRef.current.size === 0) {
+      dragRef.current = null
+      setIsDragging(false)
+    }
   }, [])
 
   // Load media
@@ -534,7 +609,7 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdat
           const startRecording = () => {
             recorder.start(250)
             const renderLoop = () => {
-              renderFrame(canvas, source, settingsRef.current, cacheRef.current)
+              renderFrame(canvas, source, settingsRef.current, cacheRef.current, geoRef)
               if (onProgress && source.duration) onProgress(source.currentTime / source.duration)
               if (!source.ended && recorder.state === 'recording') {
                 rafId = requestAnimationFrame(renderLoop)
@@ -584,11 +659,10 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdat
     }
   }), [startLoop, stopLoop])
 
-  const canDrag = settings.cropSquare
   return (
     <div
       className="border-canvas"
-      style={canDrag ? { cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none' } : undefined}
+      style={{ cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none' }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
