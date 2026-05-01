@@ -9,7 +9,7 @@ const BG_MODES = [
 
 export default function Controls({ settings, onUpdate }) {
   const { borderThickness, bgMode, blurAmount, cornerRadius, cropSquare,
-          showMedia, grainAmount } = settings
+          showMedia, grainAmount, grainVariability } = settings
 
   return (
     <div className="controls">
@@ -100,6 +100,32 @@ export default function Controls({ settings, onUpdate }) {
           aria-valuemax={100}
         />
       </section>
+
+      {grainAmount > 0 && (
+        <>
+          <div className="controls__divider"/>
+          <section className="controls__section" aria-label="Grain variability">
+            <div className="controls__row">
+              <label className="controls__label" htmlFor="variability-slider">Variability</label>
+              <span className="controls__value">
+                {grainVariability === 0 ? 'Uniform' : `${grainVariability}%`}
+              </span>
+            </div>
+            <input
+              id="variability-slider"
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={grainVariability}
+              onChange={e => onUpdate('grainVariability', Number(e.target.value))}
+              aria-valuenow={grainVariability}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            />
+          </section>
+        </>
+      )}
 
       <div className="controls__divider"/>
 

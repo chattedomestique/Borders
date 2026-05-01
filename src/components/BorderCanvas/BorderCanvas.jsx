@@ -158,38 +158,45 @@ function drawFrostedBg(ctx, source, canvasW, canvasH, blurAmount, cache) {
 
 /**
  * Film grain ported from filmgrainer by Lars Pontoppidan (MIT).
- * Gaussian noise is generated at 1/4 resolution (gives grain "size" on
- * upscale), then blended via soft-light composite — which naturally
- * attenuates grain in shadows and highlights just like real film.
+ * Gaussian noise blended via soft-light naturally attenuates grain in
+ * shadows and highlights just like real film. Multi-scale layers add
+ * variability: a sharp fine base + optional smooth medium/coarse clumps.
  */
-function applyGrain(ctx, w, h, grainAmount, cache) {
+function applyGrain(ctx, w, h, grainAmount, grainVariability, cache) {
   if (!grainAmount) return
-  const nw = Math.max(4, Math.round(w / 4))
-  const nh = Math.max(4, Math.round(h / 4))
+  // σ=30 at 100% matches old 25% feel (old: 25*2.4*0.5=30)
+  const sigma = grainAmount * 0.3
+  const v = (grainVariability ?? 0) / 100
 
-  if (!cache.grain) cache.grain = document.createElement('canvas')
-  if (cache.grain.width !== nw || cache.grain.height !== nh) {
-    cache.grain.width = nw; cache.grain.height = nh
+  const drawLayer = (cacheKey, scale, smooth, alpha) => {
+    const nw = Math.max(2, Math.round(w / scale))
+    const nh = Math.max(2, Math.round(h / scale))
+    if (!cache[cacheKey]) cache[cacheKey] = document.createElement('canvas')
+    if (cache[cacheKey].width !== nw || cache[cacheKey].height !== nh) {
+      cache[cacheKey].width = nw; cache[cacheKey].height = nh
+    }
+    const gc = cache[cacheKey].getContext('2d')
+    const id = gc.createImageData(nw, nh)
+    const d = id.data
+    for (let i = 0; i < d.length; i += 4) {
+      const u = Math.random() || 1e-10
+      const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2832 * Math.random())
+      const val = Math.max(0, Math.min(255, Math.round(128 + n * sigma)))
+      d[i] = d[i + 1] = d[i + 2] = val; d[i + 3] = 255
+    }
+    gc.putImageData(id, 0, 0)
+    ctx.save()
+    ctx.globalAlpha = alpha
+    ctx.globalCompositeOperation = 'soft-light'
+    ctx.imageSmoothingEnabled = smooth
+    if (smooth) ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(cache[cacheKey], 0, 0, w, h)
+    ctx.restore()
   }
-  const gc = cache.grain.getContext('2d')
-  const id = gc.createImageData(nw, nh)
-  const data = id.data
-  // grainAmount 0-100 → spread ±0 to ±120 around neutral 128
-  const spread = grainAmount * 2.4
-  for (let i = 0; i < data.length; i += 4) {
-    // Box-Muller Gaussian so grain distribution matches film
-    const u1 = Math.random() || 1e-10
-    const n = Math.sqrt(-2 * Math.log(u1)) * Math.cos(6.2832 * Math.random())
-    const v = Math.max(0, Math.min(255, Math.round(128 + n * spread * 0.5)))
-    data[i] = data[i + 1] = data[i + 2] = v; data[i + 3] = 255
-  }
-  gc.putImageData(id, 0, 0)
 
-  ctx.save()
-  ctx.globalCompositeOperation = 'soft-light'
-  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'
-  ctx.drawImage(cache.grain, 0, 0, w, h)
-  ctx.restore()
+  drawLayer('grain4', 4, false, 1.0)                                     // fine, sharp, always
+  if (v > 0) drawLayer('grain10', 10, true, v * 0.65)                   // medium, smooth
+  if (v > 0.4) drawLayer('grain22', 22, true, (v - 0.4) / 0.6 * 0.45) // coarse, smooth
 }
 
 /**
@@ -199,7 +206,7 @@ function applyGrain(ctx, w, h, grainAmount, cache) {
 function renderFrame(canvas, source, settings, cache) {
   if (!canvas || !source) return
   const { borderThickness, bgMode, blurAmount = 60, cornerRadius, cropSquare,
-          showMedia = true, grainAmount = 0 } = settings
+          showMedia = true, grainAmount = 0, grainVariability = 0 } = settings
 
   const srcW = source.videoWidth ?? source.naturalWidth ?? source.width ?? 1
   const srcH = source.videoHeight ?? source.naturalHeight ?? source.height ?? 1
@@ -257,7 +264,7 @@ function renderFrame(canvas, source, settings, cache) {
   }
 
   // 2. Grain on background (drawn before media so it stays in the border/mat)
-  applyGrain(ctx, totalW, totalH, grainAmount, cache)
+  applyGrain(ctx, totalW, totalH, grainAmount, grainVariability, cache)
 
   // 3. Media with corner radius clipping (skipped when showMedia is off)
   if (showMedia) {

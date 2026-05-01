@@ -15,6 +15,7 @@ const DEFAULT_SETTINGS = {
   cropSquare: false,
   showMedia: true,
   grainAmount: 0,
+  grainVariability: 0,
 }
 
 export default function App() {
