@@ -220,7 +220,7 @@ function renderFrame(canvas, source, settings, cache) {
   }
 
   // 2. Media with corner radius clipping
-  const rx = cornerRadius > 0 ? Math.min(scaledW, scaledH) / 2 * (cornerRadius / 100) : 0
+  const rx = cornerRadius > 0 ? Math.min(scaledW, scaledH) / 2 * (cornerRadius / 200) : 0
 
   ctx.save()
   if (rx > 0) {

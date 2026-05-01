@@ -22,13 +22,13 @@ export default function Controls({ settings, onUpdate }) {
           id="border-slider"
           type="range"
           min={0}
-          max={200}
+          max={400}
           step={1}
           value={borderThickness}
           onChange={e => onUpdate('borderThickness', Number(e.target.value))}
           aria-valuenow={borderThickness}
           aria-valuemin={0}
-          aria-valuemax={200}
+          aria-valuemax={400}
         />
       </section>
 
