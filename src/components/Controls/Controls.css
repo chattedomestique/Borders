@@ -10,6 +10,58 @@
   overflow: hidden;
 }
 
+/* ── Tab Bar ── */
+.controls__tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.controls__tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 11px 4px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink-3);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  position: relative;
+  transition: color 0.15s, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.controls__tab::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 20%;
+  right: 20%;
+  height: 2px;
+  background: var(--accent);
+  border-radius: var(--r-pill);
+  opacity: 0;
+  transform: scaleX(0.4);
+  transition: opacity 0.15s, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.controls__tab--active {
+  color: var(--accent);
+}
+
+.controls__tab--active::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.controls__tab:active {
+  transform: scale(0.88);
+}
+
+/* ── Section ── */
 .controls__section {
   padding: 16px 20px;
   display: flex;
@@ -23,23 +75,23 @@
   margin: 0;
 }
 
+.controls__divider--inset {
+  margin: 2px 0;
+  opacity: 0.7;
+}
+
 .controls__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-/* Section headings use the serif — this is the personality layer */
-p.controls__label {
-  font-family: var(--font-serif);
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--ink);
-  letter-spacing: -0.2px;
+.controls__row--spaced {
+  margin-top: 4px;
 }
 
-/* Inline labels (inside rows) stay sans */
-label.controls__label {
+/* All labels stay sans (tabs provide the section heading hierarchy now) */
+.controls__label {
   font-size: 14px;
   font-weight: 600;
   color: var(--ink);
@@ -259,6 +311,7 @@ label.controls__label {
   transition: background 0.2s;
   flex-shrink: 0;
   padding: 0;
+  cursor: pointer;
 }
 
 .controls__toggle--on {
