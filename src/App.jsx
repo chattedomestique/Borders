@@ -79,8 +79,8 @@ export default function App() {
         <div className="app__header-inner">
           <div className="app__logo" aria-label="Border Studio">
             <svg className="app__logo-icon" width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-              <rect x="1" y="1" width="20" height="20" rx="5" stroke="#5B4FEA" strokeWidth="2.5"/>
-              <rect x="6" y="6" width="10" height="10" rx="2.5" fill="#5B4FEA"/>
+              <rect x="1" y="1" width="20" height="20" rx="5" stroke="currentColor" strokeWidth="2.5"/>
+              <rect x="6" y="6" width="10" height="10" rx="2.5" fill="currentColor"/>
             </svg>
             <span className="app__logo-text">Border Studio</span>
           </div>

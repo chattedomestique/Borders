@@ -58,14 +58,12 @@ export default function Uploader({ onMediaLoaded }) {
         aria-label="Tap to choose a photo or video"
         onKeyDown={(e) => e.key === 'Enter' && inputRef.current?.click()}
       >
-        <div className="uploader__icon" aria-hidden="true">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-            <path d="M12 4v12m0-12L8 8m4-4l4 4" stroke="white" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M4 17v1a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1" stroke="white" strokeWidth="2.25" strokeLinecap="round"/>
-          </svg>
-        </div>
-        <p className="uploader__title">Add a photo or video</p>
-        <p className="uploader__subtitle">Tap to choose from your library</p>
+        <svg className="uploader__frame-icon" width="44" height="44" viewBox="0 0 44 44" fill="none" aria-hidden="true">
+          <rect x="2" y="2" width="40" height="40" rx="8" stroke="currentColor" strokeWidth="1.75"/>
+          <rect x="9" y="9" width="26" height="26" rx="4" stroke="currentColor" strokeWidth="1.25" opacity="0.45"/>
+        </svg>
+        <p className="uploader__title">Frame your photos.</p>
+        <p className="uploader__subtitle">Tap to choose · photos &amp; video</p>
       </div>
 
       {error && (
@@ -83,7 +81,7 @@ export default function Uploader({ onMediaLoaded }) {
       />
 
       <div className="uploader__features">
-        {['Border styles', 'Corner radius', 'Square crop', 'Save to Photos'].map(f => (
+        {['Border & grain', 'Custom text', 'Pinch to zoom', 'Save to Photos'].map(f => (
           <span key={f} className="uploader__feature-chip">{f}</span>
         ))}
       </div>
