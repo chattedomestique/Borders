@@ -20,6 +20,13 @@ const DEFAULT_SETTINGS = {
   showMedia: true,
   grainAmount: 0,
   grainVariability: 0,
+  textContent: '',
+  textFont: 'system-ui, -apple-system, sans-serif',
+  textSize: 80,
+  textColor: '#ffffff',
+  textAlign: 'center',
+  textX: 0.5,
+  textY: 0.88,
 }
 
 export default function App() {
@@ -28,6 +35,7 @@ export default function App() {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
   const [recordingProgress, setRecordingProgress] = useState(0)
   const [pickMode, setPickMode] = useState(false)
+  const [textMode, setTextMode] = useState(false)
   const canvasRef = useRef(null)
 
   const handleMediaLoaded = useCallback((mediaObj) => {
@@ -103,6 +111,7 @@ export default function App() {
                 onUpdate={updateSetting}
                 pickMode={pickMode}
                 onPickColor={handlePickColor}
+                textMode={textMode}
               />
             </section>
 
@@ -112,6 +121,8 @@ export default function App() {
               mediaType={media.type}
               pickMode={pickMode}
               onPickMode={() => setPickMode(p => !p)}
+              textMode={textMode}
+              onTextMode={() => setTextMode(p => !p)}
             />
 
             <SaveButton

@@ -7,9 +7,22 @@ const BG_MODES = [
   { id: 'frosted',       label: 'Frosted' },
 ]
 
-export default function Controls({ settings, onUpdate, pickMode, onPickMode }) {
+const FONTS = [
+  { id: 'system-ui, -apple-system, sans-serif', label: 'Sans' },
+  { id: 'Georgia, serif',                       label: 'Serif' },
+  { id: "ui-monospace, 'Courier New', monospace", label: 'Mono' },
+]
+
+const ALIGNS = [
+  { id: 'left',   label: 'L' },
+  { id: 'center', label: 'C' },
+  { id: 'right',  label: 'R' },
+]
+
+export default function Controls({ settings, onUpdate, pickMode, onPickMode, textMode, onTextMode }) {
   const { borderThickness, bgMode, bgColor = '#ffffff', blurAmount, cornerRadius, cropSquare,
-          showMedia, grainAmount, grainVariability } = settings
+          showMedia, grainAmount, grainVariability,
+          textContent = '', textFont, textSize = 80, textColor = '#ffffff', textAlign = 'center' } = settings
 
   return (
     <div className="controls">
@@ -223,6 +236,85 @@ export default function Controls({ settings, onUpdate, pickMode, onPickMode }) {
         <p className="controls__hint">
           {showMedia ? 'Photo visible over background' : 'Background only'}
         </p>
+      </section>
+
+      <div className="controls__divider"/>
+
+      {/* Text overlay */}
+      <section className="controls__section" aria-label="Text overlay">
+        <p className="controls__label">Text</p>
+        <textarea
+          className="controls__textarea"
+          placeholder="Add text…"
+          value={textContent}
+          onChange={e => onUpdate('textContent', e.target.value)}
+          rows={2}
+          spellCheck={false}
+        />
+
+        {textContent.trim() && (
+          <>
+            {/* Font */}
+            <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }} role="radiogroup" aria-label="Font family">
+              {FONTS.map(f => (
+                <button
+                  key={f.id}
+                  role="radio"
+                  aria-checked={textFont === f.id}
+                  className={`controls__seg-btn${textFont === f.id ? ' controls__seg-btn--active' : ''}`}
+                  style={{ fontFamily: f.id }}
+                  onClick={() => onUpdate('textFont', f.id)}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Size */}
+            <div className="controls__row">
+              <label className="controls__label" htmlFor="text-size-slider">Size</label>
+              <span className="controls__value">{textSize}</span>
+            </div>
+            <input
+              id="text-size-slider"
+              type="range"
+              min={20}
+              max={300}
+              step={2}
+              value={textSize}
+              onChange={e => onUpdate('textSize', Number(e.target.value))}
+            />
+
+            {/* Color + Alignment */}
+            <div className="controls__text-row">
+              <label className="controls__color-swatch" style={{ background: textColor }} title="Text color" aria-label="Text color">
+                <input type="color" value={textColor} onChange={e => onUpdate('textColor', e.target.value)} />
+              </label>
+              <div className="controls__seg controls__seg--fill" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }} role="radiogroup" aria-label="Text alignment">
+                {ALIGNS.map(a => (
+                  <button
+                    key={a.id}
+                    role="radio"
+                    aria-checked={textAlign === a.id}
+                    className={`controls__seg-btn${textAlign === a.id ? ' controls__seg-btn--active' : ''}`}
+                    onClick={() => onUpdate('textAlign', a.id)}
+                  >
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Position button */}
+            <button
+              className={`controls__text-move${textMode ? ' controls__text-move--active' : ''}`}
+              onClick={onTextMode}
+              aria-pressed={textMode}
+            >
+              {textMode ? 'Tap done when finished' : 'Drag to reposition'}
+            </button>
+          </>
+        )}
       </section>
     </div>
   )

@@ -199,6 +199,27 @@ function applyGrain(ctx, w, h, grainAmount, grainVariability, cache) {
   if (v > 0.4) drawLayer('grain22', 22, true, (v - 0.4) / 0.6 * 0.45) // coarse, smooth
 }
 
+function drawText(ctx, totalW, totalH, settings) {
+  const { textContent, textFont = 'system-ui, sans-serif', textSize = 80,
+          textColor = '#ffffff', textAlign = 'center', textX = 0.5, textY = 0.88 } = settings
+  if (!textContent?.trim()) return
+
+  const lines = textContent.split('\n')
+  const lineHeight = textSize * 1.3
+  const blockH = lines.length * lineHeight
+
+  ctx.save()
+  ctx.font = `${textSize}px ${textFont}`
+  ctx.fillStyle = textColor
+  ctx.textAlign = textAlign
+  ctx.textBaseline = 'middle'
+
+  const px = textX * totalW
+  const startY = textY * totalH - blockH / 2 + lineHeight / 2
+  lines.forEach((line, i) => ctx.fillText(line, px, startY + i * lineHeight))
+  ctx.restore()
+}
+
 /**
  * Core render. The border is added AROUND the scaled media so it is
  * always uniform on all four sides, regardless of aspect ratio.
@@ -298,13 +319,16 @@ function renderFrame(canvas, source, settings, cache, geoRef) {
     ctx.drawImage(source, srcLeft, srcTop, viewW, viewH, offsetX, offsetY, scaledW, scaledH)
     ctx.restore()
   }
+
+  // 4. Text overlay (drawn last, on top of everything)
+  drawText(ctx, totalW, totalH, settings)
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const MAX_ZOOM = 6
 
-const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdate, pickMode, onPickColor }, ref) {
+const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdate, pickMode, onPickColor, textMode }, ref) {
   const canvasRef    = useRef(null)
   const sourceRef    = useRef(null)
   const settingsRef  = useRef(settings)
@@ -312,6 +336,7 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdat
   const onUpdateRef    = useRef(onUpdate)
   const onPickColorRef = useRef(onPickColor)
   const pickModeRef    = useRef(pickMode)
+  const textModeRef    = useRef(textMode)
   const animFrameRef = useRef(null)
   const cacheRef     = useRef({})
   const geoRef       = useRef({ totalW: OUT_SIZE, totalH: OUT_SIZE, scaledW: OUT_SIZE, scaledH: OUT_SIZE,
@@ -328,6 +353,7 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdat
   onUpdateRef.current    = onUpdate
   onPickColorRef.current = onPickColor
   pickModeRef.current    = pickMode
+  textModeRef.current    = textMode
 
   const redraw = useCallback(() => {
     renderFrame(canvasRef.current, sourceRef.current, settingsRef.current, cacheRef.current, geoRef)
@@ -362,6 +388,20 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdat
       const [r, g, b] = canvas.getContext('2d').getImageData(x, y, 1, 1).data
       const hex = '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')
       onPickColorRef.current?.(hex)
+      return
+    }
+
+    // Text-position mode: drag moves the text overlay
+    if (textModeRef.current) {
+      e.currentTarget.setPointerCapture(e.pointerId)
+      const rect = e.currentTarget.getBoundingClientRect()
+      const s = settingsRef.current
+      dragRef.current = {
+        startX: e.clientX, startY: e.clientY,
+        startTextX: s.textX ?? 0.5, startTextY: s.textY ?? 0.88,
+        rect, isText: true,
+      }
+      setIsDragging(true)
       return
     }
 
@@ -420,6 +460,14 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdat
   }, [])
 
   const handlePointerMove = useCallback((e) => {
+    // Text drag takes priority — don't update pointersRef so pinch stays inactive
+    if (dragRef.current?.isText) {
+      const drag = dragRef.current
+      onUpdateRef.current?.('textX', Math.max(0.02, Math.min(0.98, drag.startTextX + (e.clientX - drag.startX) / drag.rect.width)))
+      onUpdateRef.current?.('textY', Math.max(0.02, Math.min(0.98, drag.startTextY + (e.clientY - drag.startY) / drag.rect.height)))
+      return
+    }
+
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
     const geo = geoRef.current
 
@@ -679,7 +727,7 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdat
     }
   }), [startLoop, stopLoop])
 
-  const cursor = pickMode ? 'crosshair' : (isDragging ? 'grabbing' : 'grab')
+  const cursor = pickMode ? 'crosshair' : textMode ? (isDragging ? 'grabbing' : 'move') : (isDragging ? 'grabbing' : 'grab')
   return (
     <div
       className="border-canvas"
