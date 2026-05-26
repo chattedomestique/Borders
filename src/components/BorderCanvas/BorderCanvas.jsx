@@ -162,7 +162,7 @@ function drawFrostedBg(ctx, source, canvasW, canvasH, blurAmount, cache) {
  * shadows and highlights just like real film. Multi-scale layers add
  * variability: a sharp fine base + optional smooth medium/coarse clumps.
  */
-function applyGrain(ctx, w, h, grainAmount, grainVariability, cache) {
+function applyGrain(ctx, w, h, grainAmount, grainVariability, monochrome, cache) {
   if (!grainAmount) return
   // σ=30 at 100% matches old 25% feel (old: 25*2.4*0.5=30)
   const sigma = grainAmount * 0.3
@@ -179,10 +179,19 @@ function applyGrain(ctx, w, h, grainAmount, grainVariability, cache) {
     const id = gc.createImageData(nw, nh)
     const d = id.data
     for (let i = 0; i < d.length; i += 4) {
-      const u = Math.random() || 1e-10
-      const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2832 * Math.random())
-      const val = Math.max(0, Math.min(255, Math.round(128 + n * sigma)))
-      d[i] = d[i + 1] = d[i + 2] = val; d[i + 3] = 255
+      if (monochrome) {
+        const u = Math.random() || 1e-10
+        const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2832 * Math.random())
+        const val = Math.max(0, Math.min(255, Math.round(128 + n * sigma)))
+        d[i] = d[i + 1] = d[i + 2] = val
+      } else {
+        for (let c = 0; c < 3; c++) {
+          const u = Math.random() || 1e-10
+          const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2832 * Math.random())
+          d[i + c] = Math.max(0, Math.min(255, Math.round(128 + n * sigma)))
+        }
+      }
+      d[i + 3] = 255
     }
     gc.putImageData(id, 0, 0)
     ctx.save()
@@ -292,7 +301,7 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
   if (!canvas || !source) return
   const { borderThickness, bgMode, bgColor = '#ffffff', blurAmount = 60, cornerRadius, cropSquare,
           zoom = 1, panX = 0.5, panY = 0.5,
-          showMedia = true, grainAmount = 0, grainVariability = 0,
+          showMedia = true, grainAmount = 0, grainVariability = 0, grainMonochrome = true,
           textLayers = [] } = settings
 
   const srcW = source.videoWidth ?? source.naturalWidth ?? source.width ?? 1
@@ -355,7 +364,7 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
   }
 
   // 2. Grain on background (drawn before media so it stays in the border/mat)
-  applyGrain(ctx, totalW, totalH, grainAmount, grainVariability, cache)
+  applyGrain(ctx, totalW, totalH, grainAmount, grainVariability, grainMonochrome, cache)
 
   // 3. Media with zoom/pan and optional corner radius clip
   if (showMedia) {

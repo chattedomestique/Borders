@@ -46,7 +46,7 @@ export default function Controls({
   const {
     borderThickness, bgMode, bgColor = '#ffffff', blurAmount,
     cornerRadius, cropSquare, showMedia,
-    grainAmount, grainVariability,
+    grainAmount, grainVariability, grainMonochrome = true,
     textLayers = [],
   } = settings
 
@@ -146,18 +146,21 @@ export default function Controls({
           <input id="grain-slider" type="range" min={0} max={100} step={1}
             value={grainAmount} onChange={e => onUpdate('grainAmount', Number(e.target.value))} />
 
-          {grainAmount > 0 && (
-            <>
-              <div className="controls__row controls__row--spaced">
-                <label className="controls__label" htmlFor="variability-slider">Variability</label>
-                <span className="controls__value">
-                  {grainVariability === 0 ? 'Uniform' : `${grainVariability}%`}
-                </span>
-              </div>
-              <input id="variability-slider" type="range" min={0} max={100} step={1}
-                value={grainVariability} onChange={e => onUpdate('grainVariability', Number(e.target.value))} />
-            </>
-          )}
+          <div className="controls__row controls__row--spaced">
+            <label className="controls__label" htmlFor="variability-slider">Variability</label>
+            <span className="controls__value">
+              {grainVariability === 0 ? 'Uniform' : `${grainVariability}%`}
+            </span>
+          </div>
+          <input id="variability-slider" type="range" min={0} max={100} step={1}
+            value={grainVariability} onChange={e => onUpdate('grainVariability', Number(e.target.value))} />
+
+          <div className="controls__divider controls__divider--inset"/>
+
+          <div className="controls__row">
+            <label className="controls__label">Monochrome</label>
+            <Toggle on={grainMonochrome} onChange={v => onUpdate('grainMonochrome', v)} label="Toggle monochrome grain"/>
+          </div>
         </section>
       )}
 
