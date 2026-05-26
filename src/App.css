@@ -103,7 +103,7 @@
 
 /* ── Frosted Glass Overlay ── */
 .app__overlay {
-  position: absolute;
+  position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
