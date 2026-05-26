@@ -1,5 +1,6 @@
 /* ── App Shell ── */
 .app {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -80,18 +81,10 @@
   align-items: center;
 }
 
-/* ── Edit screen ── */
-.app__edit {
+/* ── Edit screen canvas ── */
+.app__canvas-wrap {
   flex: 1;
   min-height: 0;
-  position: relative;
-  overflow: hidden;
-}
-
-/* Canvas fills entire edit area */
-.app__canvas-wrap {
-  position: absolute;
-  inset: 0;
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -103,7 +96,7 @@
 
 /* ── Frosted Glass Overlay ── */
 .app__overlay {
-  position: fixed;
+  position: absolute;
   bottom: 0;
   left: 0;
   right: 0;

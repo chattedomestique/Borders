@@ -178,24 +178,25 @@ export default function App() {
             <Uploader onMediaLoaded={handleMediaLoaded} />
           </div>
         ) : media ? (
-          <div className="app__edit">
-            {/* Canvas fills all available space */}
-            <div className="app__canvas-wrap">
-              <BorderCanvas
-                ref={canvasRef}
-                media={media}
-                settings={settings}
-                onUpdate={updateSetting}
-                pickMode={pickMode}
-                onPickColor={handlePickColor}
-                selectedLayerId={selectedLayerId}
-                onSelectLayer={setSelectedLayerId}
-                onUpdateLayer={updateTextLayer}
-              />
-            </div>
+          <div className="app__canvas-wrap">
+            <BorderCanvas
+              ref={canvasRef}
+              media={media}
+              settings={settings}
+              onUpdate={updateSetting}
+              pickMode={pickMode}
+              onPickColor={handlePickColor}
+              selectedLayerId={selectedLayerId}
+              onSelectLayer={setSelectedLayerId}
+              onUpdateLayer={updateTextLayer}
+            />
+          </div>
+        ) : null}
+      </main>
 
-            {/* Frosted glass overlay — slides up from bottom */}
-            <div className="app__overlay">
+      {/* Frosted glass overlay — direct child of .app so absolute bottom:0 is viewport bottom */}
+      {step !== STEPS.UPLOAD && media && (
+        <div className="app__overlay">
               {/* Sliding controls panel */}
               <div className={`app__panel${activeTab ? ' app__panel--open' : ''}`}>
                 <Controls
@@ -251,10 +252,8 @@ export default function App() {
                   )}
                 </button>
               </div>
-            </div>
-          </div>
-        ) : null}
-      </main>
+        </div>
+      )}
     </div>
   )
 }
