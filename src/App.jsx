@@ -7,6 +7,27 @@ import './App.css'
 
 const STEPS = { UPLOAD: 'upload', EDIT: 'edit', SAVING: 'saving' }
 
+const DEFAULT_LAYER = (id, index = 0) => ({
+  id,
+  content: '',
+  font: 'system-ui, -apple-system, sans-serif',
+  size: 80,
+  color: '#ffffff',
+  align: 'center',
+  x: 0.5,
+  y: Math.min(0.88, 0.4 + index * 0.18),
+  bold: false,
+  italic: false,
+  opacity: 100,
+  shadow: false,
+  stroke: false,
+  strokeColor: '#000000',
+  letterSpacing: 0,
+  bg: 'none',
+  bgColor: '#000000',
+  bgOpacity: 50,
+})
+
 const DEFAULT_SETTINGS = {
   borderThickness: 40,
   bgMode: 'average',
@@ -20,23 +41,7 @@ const DEFAULT_SETTINGS = {
   showMedia: true,
   grainAmount: 0,
   grainVariability: 0,
-  textContent: '',
-  textFont: 'system-ui, -apple-system, sans-serif',
-  textSize: 80,
-  textColor: '#ffffff',
-  textAlign: 'center',
-  textX: 0.5,
-  textY: 0.88,
-  textBold: false,
-  textItalic: false,
-  textOpacity: 100,
-  textShadow: false,
-  textStroke: false,
-  textStrokeColor: '#000000',
-  textLetterSpacing: 0,
-  textBg: 'none',
-  textBgColor: '#000000',
-  textBgOpacity: 50,
+  textLayers: [],
 }
 
 export default function App() {
@@ -45,11 +50,13 @@ export default function App() {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
   const [recordingProgress, setRecordingProgress] = useState(0)
   const [pickMode, setPickMode] = useState(false)
+  const [selectedLayerId, setSelectedLayerId] = useState(null)
   const canvasRef = useRef(null)
 
   const handleMediaLoaded = useCallback((mediaObj) => {
     setMedia(mediaObj)
     setSettings(DEFAULT_SETTINGS)
+    setSelectedLayerId(null)
     setStep(STEPS.EDIT)
   }, [])
 
@@ -58,6 +65,7 @@ export default function App() {
       if (prev?.url) URL.revokeObjectURL(prev.url)
       return null
     })
+    setSelectedLayerId(null)
     setStep(STEPS.UPLOAD)
   }, [])
 
@@ -75,6 +83,27 @@ export default function App() {
 
   const updateSetting = useCallback((key, value) => {
     setSettings(prev => ({ ...prev, [key]: value }))
+  }, [])
+
+  const addTextLayer = useCallback(() => {
+    const id = `text-${Date.now()}`
+    setSettings(prev => ({
+      ...prev,
+      textLayers: [...prev.textLayers, DEFAULT_LAYER(id, prev.textLayers.length)],
+    }))
+    setSelectedLayerId(id)
+  }, [])
+
+  const removeTextLayer = useCallback((id) => {
+    setSettings(prev => ({ ...prev, textLayers: prev.textLayers.filter(l => l.id !== id) }))
+    setSelectedLayerId(prev => (prev === id ? null : prev))
+  }, [])
+
+  const updateTextLayer = useCallback((id, key, value) => {
+    setSettings(prev => ({
+      ...prev,
+      textLayers: prev.textLayers.map(l => l.id === id ? { ...l, [key]: value } : l),
+    }))
   }, [])
 
   const handlePickColor = useCallback((hex) => {
@@ -120,6 +149,9 @@ export default function App() {
                 onUpdate={updateSetting}
                 pickMode={pickMode}
                 onPickColor={handlePickColor}
+                selectedLayerId={selectedLayerId}
+                onSelectLayer={setSelectedLayerId}
+                onUpdateLayer={updateTextLayer}
               />
             </section>
 
@@ -129,6 +161,11 @@ export default function App() {
               mediaType={media.type}
               pickMode={pickMode}
               onPickMode={() => setPickMode(p => !p)}
+              selectedLayerId={selectedLayerId}
+              onSelectLayer={setSelectedLayerId}
+              onAddLayer={addTextLayer}
+              onRemoveLayer={removeTextLayer}
+              onUpdateLayer={updateTextLayer}
             />
 
             <SaveButton
