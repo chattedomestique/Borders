@@ -238,6 +238,40 @@
   font-weight: 600;
 }
 
+/* ── Effects buttons (Shadow / Outline) ── */
+.controls__effects-row {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.controls__effect-btn {
+  flex: 1;
+  padding: 7px 6px;
+  border-radius: var(--r-md);
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: -0.1px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s,
+              transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.controls__effect-btn:active {
+  transform: scale(0.94);
+}
+
+.controls__effect-btn--active {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* ── Text Controls ── */
 .controls__textarea {
   width: 100%;

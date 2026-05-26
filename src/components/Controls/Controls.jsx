@@ -10,7 +10,7 @@ const BG_MODES = [
 
 const FONTS = [
   { id: 'system-ui, -apple-system, sans-serif',   label: 'Sans' },
-  { id: 'Georgia, serif',                          label: 'Serif' },
+  { id: "'New York', Georgia, serif",              label: 'Serif' },
   { id: "ui-monospace, 'Courier New', monospace",  label: 'Mono' },
 ]
 
@@ -18,6 +18,12 @@ const ALIGNS = [
   { id: 'left',   label: 'L' },
   { id: 'center', label: 'C' },
   { id: 'right',  label: 'R' },
+]
+
+const TEXT_BG_MODES = [
+  { id: 'none', label: 'None' },
+  { id: 'pill', label: 'Pill' },
+  { id: 'rect', label: 'Box'  },
 ]
 
 const TABS = [
@@ -36,7 +42,7 @@ const TABS = [
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
         <rect x="1.5" y="1.5" width="15" height="15" rx="2.5" stroke="currentColor" strokeWidth="1.75"/>
         <path d="M1.5 11 C5 6 8 12 11 8 C13 5 15.5 10 16.5 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
-        <rect x="1.5" y="11" width="15" height="5.5" rx="0" fill="currentColor" opacity="0.12" style={{clipPath: 'inset(0 0 0 0 round 0 0 2.5px 2.5px)'}}/>
+        <rect x="1.5" y="11" width="15" height="5.5" rx="0" fill="currentColor" opacity="0.12"/>
       </svg>
     ),
   },
@@ -68,15 +74,33 @@ const TABS = [
   },
 ]
 
-export default function Controls({ settings, onUpdate, pickMode, onPickMode, textMode, onTextMode }) {
+function Toggle({ on, onChange, label }) {
+  return (
+    <button
+      className={`controls__toggle${on ? ' controls__toggle--on' : ''}`}
+      onClick={() => onChange(!on)}
+      role="switch" aria-checked={on} aria-label={label}
+    >
+      <span className="controls__toggle-thumb"/>
+    </button>
+  )
+}
+
+export default function Controls({ settings, onUpdate, pickMode, onPickMode }) {
   const [tab, setTab] = useState('frame')
 
   const {
     borderThickness, bgMode, bgColor = '#ffffff', blurAmount,
     cornerRadius, cropSquare, showMedia,
     grainAmount, grainVariability,
-    textContent = '', textFont, textSize = 80, textColor = '#ffffff', textAlign = 'center',
+    textContent = '', textFont, textSize = 80, textColor = '#ffffff',
+    textAlign = 'center', textBold = false, textItalic = false,
+    textOpacity = 100, textShadow = false, textStroke = false,
+    textStrokeColor = '#000000', textLetterSpacing = 0,
+    textBg = 'none', textBgColor = '#000000', textBgOpacity = 50,
   } = settings
+
+  const hasText = textContent.trim().length > 0
 
   return (
     <div className="controls">
@@ -120,24 +144,11 @@ export default function Controls({ settings, onUpdate, pickMode, onPickMode, tex
 
           <div className="controls__row">
             <label className="controls__label">Square crop</label>
-            <button
-              className={`controls__toggle${cropSquare ? ' controls__toggle--on' : ''}`}
-              onClick={() => onUpdate('cropSquare', !cropSquare)}
-              role="switch" aria-checked={cropSquare} aria-label="Toggle square crop"
-            >
-              <span className="controls__toggle-thumb"/>
-            </button>
+            <Toggle on={cropSquare} onChange={v => onUpdate('cropSquare', v)} label="Toggle square crop"/>
           </div>
-
           <div className="controls__row">
             <label className="controls__label">Show photo</label>
-            <button
-              className={`controls__toggle${showMedia ? ' controls__toggle--on' : ''}`}
-              onClick={() => onUpdate('showMedia', !showMedia)}
-              role="switch" aria-checked={showMedia} aria-label="Toggle photo visibility"
-            >
-              <span className="controls__toggle-thumb"/>
-            </button>
+            <Toggle on={showMedia} onChange={v => onUpdate('showMedia', v)} label="Toggle photo visibility"/>
           </div>
         </section>
       )}
@@ -217,7 +228,7 @@ export default function Controls({ settings, onUpdate, pickMode, onPickMode, tex
         </section>
       )}
 
-      {/* ── Text ── */}
+      {/* ── Text / Type ── */}
       {tab === 'text' && (
         <section className="controls__section" aria-label="Text overlay">
           <textarea
@@ -229,8 +240,9 @@ export default function Controls({ settings, onUpdate, pickMode, onPickMode, tex
             spellCheck={false}
           />
 
-          {textContent.trim() && (
+          {hasText && (
             <>
+              {/* Font family */}
               <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}
                 role="radiogroup" aria-label="Font family">
                 {FONTS.map(f => (
@@ -244,19 +256,23 @@ export default function Controls({ settings, onUpdate, pickMode, onPickMode, tex
                 ))}
               </div>
 
-              <div className="controls__row">
-                <label className="controls__label" htmlFor="text-size-slider">Size</label>
-                <span className="controls__value">{textSize}</span>
-              </div>
-              <input id="text-size-slider" type="range" min={20} max={300} step={2}
-                value={textSize} onChange={e => onUpdate('textSize', Number(e.target.value))} />
-
+              {/* Bold / Italic / Alignment */}
               <div className="controls__text-row">
-                <label className="controls__color-swatch" style={{ background: textColor }}
-                  title="Text color" aria-label="Text color">
-                  <input type="color" value={textColor}
-                    onChange={e => onUpdate('textColor', e.target.value)} />
-                </label>
+                <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(2, 1fr)', flex: '0 0 auto', width: 80 }}
+                  role="group" aria-label="Font style">
+                  <button
+                    className={`controls__seg-btn${textBold ? ' controls__seg-btn--active' : ''}`}
+                    style={{ fontWeight: 700 }}
+                    onClick={() => onUpdate('textBold', !textBold)}
+                    aria-pressed={textBold}
+                  >B</button>
+                  <button
+                    className={`controls__seg-btn${textItalic ? ' controls__seg-btn--active' : ''}`}
+                    style={{ fontStyle: 'italic' }}
+                    onClick={() => onUpdate('textItalic', !textItalic)}
+                    aria-pressed={textItalic}
+                  >I</button>
+                </div>
                 <div className="controls__seg controls__seg--fill"
                   style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}
                   role="radiogroup" aria-label="Text alignment">
@@ -264,19 +280,107 @@ export default function Controls({ settings, onUpdate, pickMode, onPickMode, tex
                     <button key={a.id} role="radio" aria-checked={textAlign === a.id}
                       className={`controls__seg-btn${textAlign === a.id ? ' controls__seg-btn--active' : ''}`}
                       onClick={() => onUpdate('textAlign', a.id)}
-                    >
-                      {a.label}
-                    </button>
+                    >{a.label}</button>
                   ))}
                 </div>
               </div>
 
-              <button
-                className={`controls__text-move${textMode ? ' controls__text-move--active' : ''}`}
-                onClick={onTextMode} aria-pressed={textMode}
-              >
-                {textMode ? 'Tap done when finished' : 'Drag to reposition'}
-              </button>
+              {/* Size */}
+              <div className="controls__row">
+                <label className="controls__label" htmlFor="text-size-slider">Size</label>
+                <span className="controls__value">{textSize}</span>
+              </div>
+              <input id="text-size-slider" type="range" min={20} max={300} step={2}
+                value={textSize} onChange={e => onUpdate('textSize', Number(e.target.value))} />
+
+              {/* Opacity */}
+              <div className="controls__row">
+                <label className="controls__label" htmlFor="text-opacity-slider">Opacity</label>
+                <span className="controls__value">{textOpacity}%</span>
+              </div>
+              <input id="text-opacity-slider" type="range" min={10} max={100} step={1}
+                value={textOpacity} onChange={e => onUpdate('textOpacity', Number(e.target.value))} />
+
+              {/* Letter Spacing */}
+              <div className="controls__row">
+                <label className="controls__label" htmlFor="text-spacing-slider">Spacing</label>
+                <span className="controls__value">{textLetterSpacing === 0 ? 'Normal' : `${textLetterSpacing}px`}</span>
+              </div>
+              <input id="text-spacing-slider" type="range" min={-5} max={40} step={1}
+                value={textLetterSpacing} onChange={e => onUpdate('textLetterSpacing', Number(e.target.value))} />
+
+              <div className="controls__divider controls__divider--inset"/>
+
+              {/* Color + Effects row */}
+              <div className="controls__text-row">
+                <label className="controls__color-swatch" style={{ background: textColor }}
+                  title="Text color" aria-label="Text color">
+                  <input type="color" value={textColor}
+                    onChange={e => onUpdate('textColor', e.target.value)} />
+                </label>
+
+                <div className="controls__effects-row">
+                  <button
+                    className={`controls__effect-btn${textShadow ? ' controls__effect-btn--active' : ''}`}
+                    onClick={() => onUpdate('textShadow', !textShadow)}
+                    aria-pressed={textShadow}
+                  >Shadow</button>
+                  <button
+                    className={`controls__effect-btn${textStroke ? ' controls__effect-btn--active' : ''}`}
+                    onClick={() => onUpdate('textStroke', !textStroke)}
+                    aria-pressed={textStroke}
+                  >Outline</button>
+                </div>
+              </div>
+
+              {/* Stroke color (only when stroke is on) */}
+              {textStroke && (
+                <div className="controls__color-row controls__color-row--active">
+                  <label className="controls__color-swatch" style={{ background: textStrokeColor }}
+                    title="Outline color" aria-label="Outline color">
+                    <input type="color" value={textStrokeColor}
+                      onChange={e => onUpdate('textStrokeColor', e.target.value)} />
+                  </label>
+                  <span className="controls__color-hint">Outline color</span>
+                </div>
+              )}
+
+              <div className="controls__divider controls__divider--inset"/>
+
+              {/* Text background */}
+              <div className="controls__row">
+                <label className="controls__label">Background</label>
+              </div>
+              <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}
+                role="radiogroup" aria-label="Text background style">
+                {TEXT_BG_MODES.map(m => (
+                  <button key={m.id} role="radio" aria-checked={textBg === m.id}
+                    className={`controls__seg-btn${textBg === m.id ? ' controls__seg-btn--active' : ''}`}
+                    onClick={() => onUpdate('textBg', m.id)}
+                  >{m.label}</button>
+                ))}
+              </div>
+
+              {textBg !== 'none' && (
+                <>
+                  <div className="controls__color-row controls__color-row--active">
+                    <label className="controls__color-swatch" style={{ background: textBgColor }}
+                      title="Background color" aria-label="Background color">
+                      <input type="color" value={textBgColor}
+                        onChange={e => onUpdate('textBgColor', e.target.value)} />
+                    </label>
+                    <span className="controls__color-hint" style={{ flex: 1 }}>BG color</span>
+                    <span className="controls__value" style={{ fontSize: 11 }}>{textBgOpacity}%</span>
+                  </div>
+                  <input type="range" min={10} max={100} step={1}
+                    value={textBgOpacity} onChange={e => onUpdate('textBgOpacity', Number(e.target.value))}
+                    aria-label="Background opacity" />
+                </>
+              )}
+
+              <p className="controls__hint" style={{ textAlign: 'center', marginTop: 0 }}>
+                Tap text on canvas to reposition
+              </p>
             </>
           )}
         </section>

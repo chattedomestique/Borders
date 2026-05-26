@@ -27,15 +27,24 @@ const DEFAULT_SETTINGS = {
   textAlign: 'center',
   textX: 0.5,
   textY: 0.88,
+  textBold: false,
+  textItalic: false,
+  textOpacity: 100,
+  textShadow: false,
+  textStroke: false,
+  textStrokeColor: '#000000',
+  textLetterSpacing: 0,
+  textBg: 'none',
+  textBgColor: '#000000',
+  textBgOpacity: 50,
 }
 
 export default function App() {
   const [step, setStep] = useState(STEPS.UPLOAD)
-  const [media, setMedia] = useState(null)  // { url, type: 'image'|'video', file }
+  const [media, setMedia] = useState(null)
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
   const [recordingProgress, setRecordingProgress] = useState(0)
   const [pickMode, setPickMode] = useState(false)
-  const [textMode, setTextMode] = useState(false)
   const canvasRef = useRef(null)
 
   const handleMediaLoaded = useCallback((mediaObj) => {
@@ -111,7 +120,6 @@ export default function App() {
                 onUpdate={updateSetting}
                 pickMode={pickMode}
                 onPickColor={handlePickColor}
-                textMode={textMode}
               />
             </section>
 
@@ -121,8 +129,6 @@ export default function App() {
               mediaType={media.type}
               pickMode={pickMode}
               onPickMode={() => setPickMode(p => !p)}
-              textMode={textMode}
-              onTextMode={() => setTextMode(p => !p)}
             />
 
             <SaveButton

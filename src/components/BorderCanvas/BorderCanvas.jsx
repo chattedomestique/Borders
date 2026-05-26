@@ -199,24 +199,94 @@ function applyGrain(ctx, w, h, grainAmount, grainVariability, cache) {
   if (v > 0.4) drawLayer('grain22', 22, true, (v - 0.4) / 0.6 * 0.45) // coarse, smooth
 }
 
-function drawText(ctx, totalW, totalH, settings) {
-  const { textContent, textFont = 'system-ui, sans-serif', textSize = 80,
-          textColor = '#ffffff', textAlign = 'center', textX = 0.5, textY = 0.88 } = settings
-  if (!textContent?.trim()) return
+function drawText(ctx, totalW, totalH, settings, textBBoxRef) {
+  const {
+    textContent, textFont = 'system-ui, sans-serif', textSize = 80,
+    textColor = '#ffffff', textAlign = 'center', textX = 0.5, textY = 0.88,
+    textBold = false, textItalic = false, textOpacity = 100,
+    textShadow = false, textStroke = false, textStrokeColor = '#000000',
+    textLetterSpacing = 0,
+    textBg = 'none', textBgColor = '#000000', textBgOpacity = 50,
+  } = settings
+
+  if (!textContent?.trim()) {
+    if (textBBoxRef) textBBoxRef.current = null
+    return
+  }
 
   const lines = textContent.split('\n')
   const lineHeight = textSize * 1.3
   const blockH = lines.length * lineHeight
-
-  ctx.save()
-  ctx.font = `${textSize}px ${textFont}`
-  ctx.fillStyle = textColor
-  ctx.textAlign = textAlign
-  ctx.textBaseline = 'middle'
-
   const px = textX * totalW
   const startY = textY * totalH - blockH / 2 + lineHeight / 2
+
+  ctx.save()
+  ctx.font = `${textItalic ? 'italic ' : ''}${textBold ? 'bold ' : ''}${textSize}px ${textFont}`
+  if ('letterSpacing' in ctx) ctx.letterSpacing = `${textLetterSpacing}px`
+  ctx.textAlign = textAlign
+  ctx.textBaseline = 'middle'
+  ctx.globalAlpha = textOpacity / 100
+
+  // Measure for background and hit box
+  const maxLineW = Math.max(...lines.map(l => ctx.measureText(l).width))
+  const boxLeft = textAlign === 'center' ? px - maxLineW / 2
+                : textAlign === 'right'  ? px - maxLineW
+                : px
+
+  // Store bbox in canvas coords for pointer hit-testing
+  if (textBBoxRef) {
+    const pad = 24
+    textBBoxRef.current = {
+      x: boxLeft - pad, y: startY - lineHeight / 2 - pad,
+      w: maxLineW + pad * 2, h: blockH + pad * 2,
+    }
+  }
+
+  // Background shape per line
+  if (textBg !== 'none') {
+    const pad = textSize * 0.28
+    ctx.save()
+    ctx.globalAlpha = (textBgOpacity / 100) * (textOpacity / 100)
+    ctx.fillStyle = textBgColor
+    lines.forEach((line, i) => {
+      const lw = ctx.measureText(line).width
+      const lx = textAlign === 'center' ? px - lw / 2 - pad
+               : textAlign === 'right'  ? px - lw - pad
+               : px - pad
+      const ly = startY + i * lineHeight - lineHeight / 2
+      const rw = lw + pad * 2
+      const rh = lineHeight
+      if (textBg === 'pill') {
+        ctx.beginPath()
+        ctx.roundRect(lx, ly, rw, rh, rh / 2)
+        ctx.fill()
+      } else {
+        ctx.fillRect(lx, ly, rw, rh)
+      }
+    })
+    ctx.restore()
+  }
+
+  // Shadow
+  if (textShadow) {
+    ctx.shadowColor = 'rgba(0,0,0,0.55)'
+    ctx.shadowBlur = textSize * 0.45
+    ctx.shadowOffsetX = textSize * 0.05
+    ctx.shadowOffsetY = textSize * 0.07
+  }
+
+  // Stroke (drawn before fill so fill sits on top)
+  if (textStroke) {
+    ctx.strokeStyle = textStrokeColor
+    ctx.lineWidth = Math.max(2, textSize * 0.07)
+    ctx.lineJoin = 'round'
+    lines.forEach((line, i) => ctx.strokeText(line, px, startY + i * lineHeight))
+  }
+
+  // Fill
+  ctx.fillStyle = textColor
   lines.forEach((line, i) => ctx.fillText(line, px, startY + i * lineHeight))
+
   ctx.restore()
 }
 
@@ -224,7 +294,7 @@ function drawText(ctx, totalW, totalH, settings) {
  * Core render. The border is added AROUND the scaled media so it is
  * always uniform on all four sides, regardless of aspect ratio.
  */
-function renderFrame(canvas, source, settings, cache, geoRef) {
+function renderFrame(canvas, source, settings, cache, geoRef, textBBoxRef) {
   if (!canvas || !source) return
   const { borderThickness, bgMode, bgColor = '#ffffff', blurAmount = 60, cornerRadius, cropSquare,
           zoom = 1, panX = 0.5, panY = 0.5,
@@ -321,14 +391,14 @@ function renderFrame(canvas, source, settings, cache, geoRef) {
   }
 
   // 4. Text overlay (drawn last, on top of everything)
-  drawText(ctx, totalW, totalH, settings)
+  drawText(ctx, totalW, totalH, settings, textBBoxRef)
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const MAX_ZOOM = 6
 
-const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdate, pickMode, onPickColor, textMode }, ref) {
+const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdate, pickMode, onPickColor }, ref) {
   const canvasRef    = useRef(null)
   const sourceRef    = useRef(null)
   const settingsRef  = useRef(settings)
@@ -336,16 +406,17 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdat
   const onUpdateRef    = useRef(onUpdate)
   const onPickColorRef = useRef(onPickColor)
   const pickModeRef    = useRef(pickMode)
-  const textModeRef    = useRef(textMode)
   const animFrameRef = useRef(null)
   const cacheRef     = useRef({})
   const geoRef       = useRef({ totalW: OUT_SIZE, totalH: OUT_SIZE, scaledW: OUT_SIZE, scaledH: OUT_SIZE,
                                 offsetX: 0, offsetY: 0, srcW: 1, srcH: 1, mediaW: 1, mediaH: 1 })
+  const textBBoxRef  = useRef(null)       // text bounding box in canvas coords (for hit-testing)
   const pointersRef  = useRef(new Map())  // active pointer positions
   const pinchRef     = useRef(null)       // pinch-zoom start state
   const dragRef      = useRef(null)       // single-pointer drag start state
   const lastTapRef   = useRef({ time: 0, x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
+  const [isDraggingText, setIsDraggingText] = useState(false)
   const [ready, setReady] = useState(false)
 
   settingsRef.current    = settings
@@ -353,10 +424,9 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdat
   onUpdateRef.current    = onUpdate
   onPickColorRef.current = onPickColor
   pickModeRef.current    = pickMode
-  textModeRef.current    = textMode
 
   const redraw = useCallback(() => {
-    renderFrame(canvasRef.current, sourceRef.current, settingsRef.current, cacheRef.current, geoRef)
+    renderFrame(canvasRef.current, sourceRef.current, settingsRef.current, cacheRef.current, geoRef, textBBoxRef)
   }, [])
 
   const stopLoop = useCallback(() => {
@@ -369,7 +439,7 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdat
   const startLoop = useCallback(() => {
     stopLoop()
     const loop = () => {
-      renderFrame(canvasRef.current, sourceRef.current, settingsRef.current, cacheRef.current, geoRef)
+      renderFrame(canvasRef.current, sourceRef.current, settingsRef.current, cacheRef.current, geoRef, textBBoxRef)
       animFrameRef.current = requestAnimationFrame(loop)
     }
     animFrameRef.current = requestAnimationFrame(loop)
@@ -391,18 +461,25 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdat
       return
     }
 
-    // Text-position mode: drag moves the text overlay
-    if (textModeRef.current) {
-      e.currentTarget.setPointerCapture(e.pointerId)
+    // Text hit-test: if tap lands inside the text bounding box, drag the text
+    if (settingsRef.current.textContent?.trim() && textBBoxRef.current) {
       const rect = e.currentTarget.getBoundingClientRect()
-      const s = settingsRef.current
-      dragRef.current = {
-        startX: e.clientX, startY: e.clientY,
-        startTextX: s.textX ?? 0.5, startTextY: s.textY ?? 0.88,
-        rect, isText: true,
+      const geo = geoRef.current
+      const canvasX = (e.clientX - rect.left) * geo.totalW / rect.width
+      const canvasY = (e.clientY - rect.top)  * geo.totalH / rect.height
+      const bb = textBBoxRef.current
+      if (canvasX >= bb.x && canvasX <= bb.x + bb.w && canvasY >= bb.y && canvasY <= bb.y + bb.h) {
+        e.currentTarget.setPointerCapture(e.pointerId)
+        const s = settingsRef.current
+        dragRef.current = {
+          startX: e.clientX, startY: e.clientY,
+          startTextX: s.textX ?? 0.5, startTextY: s.textY ?? 0.88,
+          rect, isText: true,
+        }
+        setIsDragging(true)
+        setIsDraggingText(true)
+        return
       }
-      setIsDragging(true)
-      return
     }
 
     e.currentTarget.setPointerCapture(e.pointerId)
@@ -529,6 +606,7 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdat
     if (pointersRef.current.size === 0) {
       dragRef.current = null
       setIsDragging(false)
+      setIsDraggingText(false)
     }
   }, [])
 
@@ -677,7 +755,7 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdat
           const startRecording = () => {
             recorder.start(250)
             const renderLoop = () => {
-              renderFrame(canvas, source, settingsRef.current, cacheRef.current, geoRef)
+              renderFrame(canvas, source, settingsRef.current, cacheRef.current, geoRef, null)
               if (onProgress && source.duration) onProgress(source.currentTime / source.duration)
               if (!source.ended && recorder.state === 'recording') {
                 rafId = requestAnimationFrame(renderLoop)
@@ -727,7 +805,7 @@ const BorderCanvas = forwardRef(function BorderCanvas({ media, settings, onUpdat
     }
   }), [startLoop, stopLoop])
 
-  const cursor = pickMode ? 'crosshair' : textMode ? (isDragging ? 'grabbing' : 'move') : (isDragging ? 'grabbing' : 'grab')
+  const cursor = pickMode ? 'crosshair' : (isDraggingText ? 'grabbing' : isDragging ? 'grabbing' : 'grab')
   return (
     <div
       className="border-canvas"
