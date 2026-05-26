@@ -63,13 +63,14 @@
 .app__main {
   flex: 1;
   min-height: 0;
-  position: relative;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 
 /* ── Upload screen ── */
 .app__upload {
-  height: 100%;
+  flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 16px 20px 40px;
@@ -80,8 +81,9 @@
 
 /* ── Edit screen ── */
 .app__edit {
+  flex: 1;
+  min-height: 0;
   position: relative;
-  height: 100%;
   overflow: hidden;
 }
 
