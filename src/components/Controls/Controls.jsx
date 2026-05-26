@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import './Controls.css'
 
 const BG_MODES = [
@@ -26,54 +25,6 @@ const TEXT_BG_MODES = [
   { id: 'rect', label: 'Box'  },
 ]
 
-const TABS = [
-  {
-    id: 'frame', label: 'Frame',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-        <rect x="1.5" y="1.5" width="15" height="15" rx="2.5" stroke="currentColor" strokeWidth="1.75"/>
-        <rect x="5" y="5" width="8" height="8" rx="1.25" stroke="currentColor" strokeWidth="1.25" opacity="0.5"/>
-      </svg>
-    ),
-  },
-  {
-    id: 'bg', label: 'BG',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-        <rect x="1.5" y="1.5" width="15" height="15" rx="2.5" stroke="currentColor" strokeWidth="1.75"/>
-        <path d="M1.5 11 C5 6 8 12 11 8 C13 5 15.5 10 16.5 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
-        <rect x="1.5" y="11" width="15" height="5.5" fill="currentColor" opacity="0.12"/>
-      </svg>
-    ),
-  },
-  {
-    id: 'grain', label: 'Grain',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-        <circle cx="4"    cy="4"   r="1.2" fill="currentColor"/>
-        <circle cx="9"    cy="2.5" r="0.9" fill="currentColor" opacity="0.55"/>
-        <circle cx="14"   cy="4.5" r="1.2" fill="currentColor"/>
-        <circle cx="2.5"  cy="9"   r="0.9" fill="currentColor" opacity="0.55"/>
-        <circle cx="8"    cy="8.5" r="1.5" fill="currentColor"/>
-        <circle cx="13.5" cy="9"   r="1"   fill="currentColor" opacity="0.7"/>
-        <circle cx="5"    cy="14"  r="1.2" fill="currentColor"/>
-        <circle cx="10"   cy="13"  r="0.9" fill="currentColor" opacity="0.5"/>
-        <circle cx="15"   cy="14"  r="1.2" fill="currentColor"/>
-      </svg>
-    ),
-  },
-  {
-    id: 'text', label: 'Type',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-        <path d="M3 4.5h12"  stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
-        <path d="M9 4.5v9"   stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
-        <path d="M6 13.5h6"  stroke="currentColor" strokeWidth="1.5"  strokeLinecap="round" opacity="0.55"/>
-      </svg>
-    ),
-  },
-]
-
 function Toggle({ on, onChange, label }) {
   return (
     <button
@@ -87,10 +38,10 @@ function Toggle({ on, onChange, label }) {
 }
 
 export default function Controls({
-  settings, onUpdate, pickMode, onPickMode,
+  tab, settings, onUpdate, pickMode, onPickMode,
   selectedLayerId, onSelectLayer, onAddLayer, onRemoveLayer, onUpdateLayer,
 }) {
-  const [tab, setTab] = useState('frame')
+  if (!tab) return null
 
   const {
     borderThickness, bgMode, bgColor = '#ffffff', blurAmount,
@@ -104,22 +55,6 @@ export default function Controls({
 
   return (
     <div className="controls">
-
-      {/* ── Tab bar ── */}
-      <div className="controls__tabs" role="tablist">
-        {TABS.map(t => (
-          <button
-            key={t.id}
-            role="tab"
-            aria-selected={tab === t.id}
-            className={`controls__tab${tab === t.id ? ' controls__tab--active' : ''}`}
-            onClick={() => setTab(t.id)}
-          >
-            {t.icon}
-            <span>{t.label}</span>
-          </button>
-        ))}
-      </div>
 
       {/* ── Frame ── */}
       {tab === 'frame' && (
@@ -229,37 +164,26 @@ export default function Controls({
       {/* ── Type ── */}
       {tab === 'text' && (
         <section className="controls__section" aria-label="Text layers">
-
-          {/* Layer strip */}
           <div className="controls__layer-strip">
             <button className="controls__layer-add" onClick={onAddLayer} aria-label="Add text layer">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
                 <path d="M7 2v10M2 7h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
               </svg>
               <span>Add</span>
             </button>
             {textLayers.map(layer => (
-              <div
-                key={layer.id}
-                className={`controls__layer-chip${layer.id === selectedLayerId ? ' controls__layer-chip--active' : ''}`}
-              >
-                <button
-                  className="controls__layer-chip__label"
-                  onClick={() => onSelectLayer(layer.id)}
-                  aria-pressed={layer.id === selectedLayerId}
-                >
-                  {layer.content.trim() ? layer.content.trim().slice(0, 10) : 'Empty'}
+              <div key={layer.id}
+                className={`controls__layer-chip${layer.id === selectedLayerId ? ' controls__layer-chip--active' : ''}`}>
+                <button className="controls__layer-chip__label"
+                  onClick={() => onSelectLayer(layer.id)} aria-pressed={layer.id === selectedLayerId}>
+                  {layer.content.trim() ? layer.content.trim().slice(0, 12) : 'Empty'}
                 </button>
-                <button
-                  className="controls__layer-chip__remove"
-                  onClick={() => onRemoveLayer(layer.id)}
-                  aria-label="Remove layer"
-                >×</button>
+                <button className="controls__layer-chip__remove"
+                  onClick={() => onRemoveLayer(layer.id)} aria-label="Remove layer">×</button>
               </div>
             ))}
           </div>
 
-          {/* Per-layer controls */}
           {selectedLayer ? (
             <>
               <textarea
@@ -273,7 +197,6 @@ export default function Controls({
 
               {selectedLayer.content.trim() && (
                 <>
-                  {/* Font */}
                   <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}
                     role="radiogroup" aria-label="Font family">
                     {FONTS.map(f => (
@@ -285,34 +208,26 @@ export default function Controls({
                     ))}
                   </div>
 
-                  {/* B / I + Align */}
                   <div className="controls__text-row">
                     <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(2, 1fr)', flex: '0 0 auto', width: 80 }}>
                       <button
                         className={`controls__seg-btn${selectedLayer.bold ? ' controls__seg-btn--active' : ''}`}
-                        style={{ fontWeight: 700 }}
-                        onClick={() => ul('bold', !selectedLayer.bold)}
-                        aria-pressed={selectedLayer.bold}
-                      >B</button>
+                        style={{ fontWeight: 700 }} onClick={() => ul('bold', !selectedLayer.bold)}
+                        aria-pressed={selectedLayer.bold}>B</button>
                       <button
                         className={`controls__seg-btn${selectedLayer.italic ? ' controls__seg-btn--active' : ''}`}
-                        style={{ fontStyle: 'italic' }}
-                        onClick={() => ul('italic', !selectedLayer.italic)}
-                        aria-pressed={selectedLayer.italic}
-                      >I</button>
+                        style={{ fontStyle: 'italic' }} onClick={() => ul('italic', !selectedLayer.italic)}
+                        aria-pressed={selectedLayer.italic}>I</button>
                     </div>
-                    <div className="controls__seg controls__seg--fill" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}
-                      role="radiogroup" aria-label="Text alignment">
+                    <div className="controls__seg controls__seg--fill" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
                       {ALIGNS.map(a => (
                         <button key={a.id} role="radio" aria-checked={selectedLayer.align === a.id}
                           className={`controls__seg-btn${selectedLayer.align === a.id ? ' controls__seg-btn--active' : ''}`}
-                          onClick={() => ul('align', a.id)}
-                        >{a.label}</button>
+                          onClick={() => ul('align', a.id)}>{a.label}</button>
                       ))}
                     </div>
                   </div>
 
-                  {/* Size */}
                   <div className="controls__row">
                     <label className="controls__label" htmlFor="text-size-slider">Size</label>
                     <span className="controls__value">{selectedLayer.size}</span>
@@ -320,7 +235,6 @@ export default function Controls({
                   <input id="text-size-slider" type="range" min={20} max={300} step={2}
                     value={selectedLayer.size} onChange={e => ul('size', Number(e.target.value))} />
 
-                  {/* Opacity */}
                   <div className="controls__row">
                     <label className="controls__label" htmlFor="text-opacity-slider">Opacity</label>
                     <span className="controls__value">{selectedLayer.opacity}%</span>
@@ -328,7 +242,6 @@ export default function Controls({
                   <input id="text-opacity-slider" type="range" min={10} max={100} step={1}
                     value={selectedLayer.opacity} onChange={e => ul('opacity', Number(e.target.value))} />
 
-                  {/* Letter Spacing */}
                   <div className="controls__row">
                     <label className="controls__label" htmlFor="text-spacing-slider">Spacing</label>
                     <span className="controls__value">
@@ -340,33 +253,27 @@ export default function Controls({
 
                   <div className="controls__divider controls__divider--inset"/>
 
-                  {/* Color + Effects */}
                   <div className="controls__text-row">
                     <label className="controls__color-swatch" style={{ background: selectedLayer.color }}
                       title="Text color" aria-label="Text color">
-                      <input type="color" value={selectedLayer.color}
-                        onChange={e => ul('color', e.target.value)} />
+                      <input type="color" value={selectedLayer.color} onChange={e => ul('color', e.target.value)} />
                     </label>
                     <div className="controls__effects-row">
                       <button
                         className={`controls__effect-btn${selectedLayer.shadow ? ' controls__effect-btn--active' : ''}`}
-                        onClick={() => ul('shadow', !selectedLayer.shadow)}
-                        aria-pressed={selectedLayer.shadow}
+                        onClick={() => ul('shadow', !selectedLayer.shadow)} aria-pressed={selectedLayer.shadow}
                       >Shadow</button>
                       <button
                         className={`controls__effect-btn${selectedLayer.stroke ? ' controls__effect-btn--active' : ''}`}
-                        onClick={() => ul('stroke', !selectedLayer.stroke)}
-                        aria-pressed={selectedLayer.stroke}
+                        onClick={() => ul('stroke', !selectedLayer.stroke)} aria-pressed={selectedLayer.stroke}
                       >Outline</button>
                     </div>
                   </div>
 
                   {selectedLayer.stroke && (
                     <div className="controls__color-row controls__color-row--active">
-                      <label className="controls__color-swatch" style={{ background: selectedLayer.strokeColor }}
-                        title="Outline color" aria-label="Outline color">
-                        <input type="color" value={selectedLayer.strokeColor}
-                          onChange={e => ul('strokeColor', e.target.value)} />
+                      <label className="controls__color-swatch" style={{ background: selectedLayer.strokeColor }}>
+                        <input type="color" value={selectedLayer.strokeColor} onChange={e => ul('strokeColor', e.target.value)} />
                       </label>
                       <span className="controls__color-hint">Outline color</span>
                     </div>
@@ -374,32 +281,26 @@ export default function Controls({
 
                   <div className="controls__divider controls__divider--inset"/>
 
-                  {/* Text background */}
                   <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}
                     role="radiogroup" aria-label="Text background">
                     {TEXT_BG_MODES.map(m => (
                       <button key={m.id} role="radio" aria-checked={selectedLayer.bg === m.id}
                         className={`controls__seg-btn${selectedLayer.bg === m.id ? ' controls__seg-btn--active' : ''}`}
-                        onClick={() => ul('bg', m.id)}
-                      >{m.label}</button>
+                        onClick={() => ul('bg', m.id)}>{m.label}</button>
                     ))}
                   </div>
 
                   {selectedLayer.bg !== 'none' && (
                     <>
                       <div className="controls__color-row controls__color-row--active">
-                        <label className="controls__color-swatch" style={{ background: selectedLayer.bgColor }}
-                          title="Background color" aria-label="Background color">
-                          <input type="color" value={selectedLayer.bgColor}
-                            onChange={e => ul('bgColor', e.target.value)} />
+                        <label className="controls__color-swatch" style={{ background: selectedLayer.bgColor }}>
+                          <input type="color" value={selectedLayer.bgColor} onChange={e => ul('bgColor', e.target.value)} />
                         </label>
                         <span className="controls__color-hint" style={{ flex: 1 }}>BG color</span>
                         <span className="controls__value" style={{ fontSize: 11 }}>{selectedLayer.bgOpacity}%</span>
                       </div>
-                      <input type="range" min={10} max={100} step={1}
-                        value={selectedLayer.bgOpacity}
-                        onChange={e => ul('bgOpacity', Number(e.target.value))}
-                        aria-label="Background opacity" />
+                      <input type="range" min={10} max={100} step={1} value={selectedLayer.bgOpacity}
+                        onChange={e => ul('bgOpacity', Number(e.target.value))} aria-label="Background opacity"/>
                     </>
                   )}
 
@@ -416,7 +317,6 @@ export default function Controls({
           )}
         </section>
       )}
-
     </div>
   )
 }

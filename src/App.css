@@ -1,18 +1,15 @@
-/* ── App Shell ─────────────────────────────────────────────────────────────── */
+/* ── App Shell ── */
 .app {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  width: 100%;
-  min-height: 100%;
-  overflow-x: hidden;
+  height: 100%;
+  overflow: hidden;
 }
 
-/* ── Header ────────────────────────────────────────────────────────────────── */
+/* ── Header ── */
 .app__header {
-  position: sticky;
-  top: 0;
-  z-index: 100;
+  flex-shrink: 0;
+  z-index: 10;
   width: 100%;
   background: rgba(242, 237, 230, 0.88);
   backdrop-filter: blur(20px);
@@ -37,10 +34,7 @@
   gap: 9px;
 }
 
-.app__logo-icon {
-  flex-shrink: 0;
-  color: var(--accent);
-}
+.app__logo-icon { flex-shrink: 0; color: var(--accent); }
 
 .app__logo-text {
   font-family: var(--font-serif);
@@ -57,28 +51,179 @@
   padding: 6px 14px;
   border-radius: var(--r-pill);
   border: 1.5px solid var(--accent-dim);
-  transition: background 0.15s, border-color 0.15s, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: background 0.15s, border-color 0.15s,
+              transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-
 .app__reset-btn:active {
   background: var(--accent-dim);
   transform: scale(0.95);
 }
 
-/* ── Main ──────────────────────────────────────────────────────────────────── */
+/* ── Main ── */
 .app__main {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── Upload screen ── */
+.app__upload {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 20px 40px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 100%;
-  max-width: 480px;
-  padding: 16px 20px 56px;
-  gap: 16px;
+}
+
+/* ── Edit screen ── */
+.app__edit {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Canvas fills entire edit area */
+.app__canvas-wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Pad bottom so toolbar doesn't permanently cover canvas bottom */
+  padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ── Frosted Glass Overlay ── */
+.app__overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Sliding panel */
+.app__panel {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.38s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(242, 237, 230, 0.78);
+  backdrop-filter: saturate(160%) blur(28px);
+  -webkit-backdrop-filter: saturate(160%) blur(28px);
+  border-top: 0.5px solid rgba(228, 221, 211, 0.6);
+}
+
+.app__panel--open {
+  max-height: 65vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Toolbar — always visible */
+.app__toolbar {
+  display: flex;
+  align-items: stretch;
+  background: rgba(242, 237, 230, 0.88);
+  backdrop-filter: saturate(180%) blur(32px);
+  -webkit-backdrop-filter: saturate(180%) blur(32px);
+  border-top: 0.5px solid rgba(228, 221, 211, 0.7);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.app__toolbar-tabs {
+  display: flex;
   flex: 1;
 }
 
-/* ── Canvas Wrapper ────────────────────────────────────────────────────────── */
-.app__canvas-wrap {
-  width: 100%;
-  box-shadow: var(--shadow-lg);
+.app__toolbar-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 4px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  position: relative;
+  transition: color 0.15s, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app__toolbar-tab::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 20%;
+  right: 20%;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 0 0 var(--r-pill) var(--r-pill);
+  opacity: 0;
+  transform: scaleX(0.4);
+  transition: opacity 0.15s, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.app__toolbar-tab--active {
+  color: var(--accent);
+}
+
+.app__toolbar-tab--active::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.app__toolbar-tab:active {
+  transform: scale(0.86);
+}
+
+/* Save button in toolbar */
+.app__toolbar-save {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 16px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  color: white;
+  background: var(--ink);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-left: 0.5px solid rgba(228, 221, 211, 0.5);
+  transition: opacity 0.15s, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  -webkit-tap-highlight-color: transparent;
+  min-width: 64px;
+}
+
+.app__toolbar-save:active {
+  opacity: 0.8;
+  transform: scale(0.94);
+}
+
+.app__toolbar-save--saving {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.app__toolbar-save-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: toolbar-spin 0.7s linear infinite;
+}
+
+@keyframes toolbar-spin {
+  to { transform: rotate(360deg); }
 }
