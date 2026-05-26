@@ -43,20 +43,28 @@
 /* ── Reset ─────────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html { height: 100%; }
+html {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
 
 body {
-  min-height: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
   background: var(--bg);
   color: var(--ink);
-  overflow-x: hidden;
 }
 
 #root {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-height: 100vh;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: none;
   padding-bottom: max(env(safe-area-inset-bottom, 0px), 20px);
 }
 
@@ -77,6 +85,7 @@ input[type="range"] {
   -webkit-tap-highlight-color: transparent;
   -webkit-appearance: none;
   appearance: none;
+  touch-action: pan-x;
   width: 100%;
   height: 4px;
   border-radius: var(--r-pill);
