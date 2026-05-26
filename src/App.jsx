@@ -199,6 +199,7 @@ export default function App() {
         <div className="app__overlay">
               {/* Sliding controls panel */}
               <div className={`app__panel${activeTab ? ' app__panel--open' : ''}`}>
+                <div className="app__panel-inner">
                 <Controls
                   tab={activeTab}
                   settings={settings}
@@ -211,6 +212,7 @@ export default function App() {
                   onRemoveLayer={removeTextLayer}
                   onUpdateLayer={updateTextLayer}
                 />
+                </div>
               </div>
 
               {/* Toolbar — always visible */}

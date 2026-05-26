@@ -105,11 +105,11 @@
   flex-direction: column;
 }
 
-/* Sliding panel */
+/* Sliding panel — grid trick gives symmetric open/close animation */
 .app__panel {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.38s cubic-bezier(0.4, 0, 0.2, 1);
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.36s cubic-bezier(0.4, 0, 0.2, 1);
   background: rgba(242, 237, 230, 0.45);
   backdrop-filter: saturate(160%) blur(36px);
   -webkit-backdrop-filter: saturate(160%) blur(36px);
@@ -117,8 +117,18 @@
 }
 
 .app__panel--open {
-  max-height: 65vh;
+  grid-template-rows: 1fr;
+}
+
+/* Inner wrapper allows grid row to collapse to 0 and provides scroll container */
+.app__panel-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.app__panel--open .app__panel-inner {
   overflow-y: auto;
+  max-height: 55vh;
   overscroll-behavior: contain;
 }
 
