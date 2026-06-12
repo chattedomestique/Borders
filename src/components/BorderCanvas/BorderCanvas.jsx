@@ -113,7 +113,25 @@ function boxBlurPass(data, w, h, r) {
  * tiny canvas looks blocky. JS box blur on a 240px canvas is ~3 ms on mobile
  * and produces genuinely smooth data before upscaling.
  */
-function drawFrostedBg(ctx, source, canvasW, canvasH, blurAmount, cache) {
+function applyVibrance(data, amount) {
+  if (!amount) return
+  const v = amount / 100
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i] / 255, g = data[i + 1] / 255, b = data[i + 2] / 255
+    const max = Math.max(r, g, b), min = Math.min(r, g, b)
+    const sat = max === 0 ? 0 : (max - min) / max
+    const boost = v * (1 - Math.min(sat * 1.5, 1))
+    if (boost > 0) {
+      const avg = (r + g + b) / 3
+      data[i]     = Math.min(255, Math.max(0, Math.round((r + (r - avg) * boost) * 255)))
+      data[i + 1] = Math.min(255, Math.max(0, Math.round((g + (g - avg) * boost) * 255)))
+      data[i + 2] = Math.min(255, Math.max(0, Math.round((b + (b - avg) * boost) * 255)))
+    }
+  }
+}
+
+function drawFrostedBg(ctx, source, canvasW, canvasH, blurAmount, frostSettings, cache) {
+  const { brightness = -15, contrast = 0, saturation = 60, vibrance = 0 } = frostSettings ?? {}
   const srcW = source.videoWidth ?? source.naturalWidth ?? canvasW
   const srcH = source.videoHeight ?? source.naturalHeight ?? canvasH
   const longest = Math.max(canvasW, canvasH)
@@ -141,12 +159,16 @@ function drawFrostedBg(ctx, source, canvasW, canvasH, blurAmount, cache) {
   boxBlurPass(id.data, sw, sh, r)
   boxBlurPass(id.data, sw, sh, r)
   boxBlurPass(id.data, sw, sh, r)
+  applyVibrance(id.data, vibrance)
   fc.putImageData(id, 0, 0)
 
-  // Upscale blurred result to output canvas
+  // Upscale blurred result to output canvas with user-controlled filters
+  const br = (1 + brightness / 100).toFixed(3)
+  const co = (1 + contrast  / 100).toFixed(3)
+  const sa = Math.max(0, 1 + saturation / 100).toFixed(3)
   ctx.save()
   ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'
-  if ('filter' in ctx) ctx.filter = 'saturate(1.6) brightness(0.85)'
+  if ('filter' in ctx) ctx.filter = `brightness(${br}) contrast(${co}) saturate(${sa})`
   const pad = Math.round(longest * 0.02)
   ctx.drawImage(cache.frost, -pad, -pad, canvasW + pad * 2, canvasH + pad * 2)
   if ('filter' in ctx) { ctx.filter = 'none' } else {
@@ -302,6 +324,7 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
   const { borderThickness, bgMode, bgColor = '#ffffff', blurAmount = 60, cornerRadius, cropRatio = 'free',
           zoom = 1, panX = 0.5, panY = 0.5,
           showMedia = true, grainAmount = 0, grainVariability = 0, grainMonochrome = true,
+          frostBrightness = -15, frostContrast = 0, frostSaturation = 60, frostVibrance = 0,
           textLayers = [] } = settings
 
   const srcW = source.videoWidth ?? source.naturalWidth ?? source.width ?? 1
@@ -342,7 +365,9 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
 
   // 1. Background
   if (bgMode === 'frosted') {
-    drawFrostedBg(ctx, source, totalW, totalH, blurAmount, cache)
+    drawFrostedBg(ctx, source, totalW, totalH, blurAmount,
+      { brightness: frostBrightness, contrast: frostContrast, saturation: frostSaturation, vibrance: frostVibrance },
+      cache)
   } else if (bgMode === 'color') {
     ctx.fillStyle = bgColor
     ctx.fillRect(0, 0, totalW, totalH)

@@ -25,6 +25,7 @@ const DEFAULT_SETTINGS = {
   bgMode: 'average',
   bgColor: '#ffffff',
   blurAmount: 60,
+  frostBrightness: -15, frostContrast: 0, frostSaturation: 60, frostVibrance: 0,
   cornerRadius: 0,
   cropRatio: 'free',
   zoom: 1, panX: 0.5, panY: 0.5,
