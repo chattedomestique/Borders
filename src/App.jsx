@@ -26,7 +26,7 @@ const DEFAULT_SETTINGS = {
   bgColor: '#ffffff',
   blurAmount: 60,
   cornerRadius: 0,
-  cropSquare: false,
+  cropRatio: 'free',
   zoom: 1, panX: 0.5, panY: 0.5,
   showMedia: true,
   grainAmount: 0, grainVariability: 0, grainMonochrome: true,

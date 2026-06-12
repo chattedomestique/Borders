@@ -1,6 +1,19 @@
 import { useState } from 'react'
 import './Controls.css'
 
+const CROP_RATIOS = [
+  { id: 'free', label: 'Free' },
+  { id: '1:1',  label: '1:1'  },
+  { id: '4:5',  label: '4:5'  },
+  { id: '5:4',  label: '5:4'  },
+  { id: '3:4',  label: '3:4'  },
+  { id: '4:3',  label: '4:3'  },
+  { id: '9:16', label: '9:16' },
+  { id: '16:9', label: '16:9' },
+  { id: '2:3',  label: '2:3'  },
+  { id: '3:2',  label: '3:2'  },
+]
+
 const BG_MODES = [
   { id: 'average',       label: 'Average' },
   { id: 'contrast',      label: 'Contrast' },
@@ -230,7 +243,7 @@ export default function Controls({
 
   const {
     borderThickness, bgMode, bgColor = '#ffffff', blurAmount,
-    cornerRadius, cropSquare, showMedia,
+    cornerRadius, cropRatio = 'free', showMedia,
     grainAmount, grainVariability, grainMonochrome = true,
     textLayers = [],
   } = settings
@@ -262,11 +275,16 @@ export default function Controls({
 
           <div className="controls__divider controls__divider--inset"/>
 
-          <div className="controls__row">
-            <label className="controls__label">Square crop</label>
-            <Toggle on={cropSquare} onChange={v => onUpdate('cropSquare', v)} label="Toggle square crop"/>
+          <label className="controls__label" style={{ marginBottom: 4 }}>Crop</label>
+          <div className="controls__layer-strip">
+            {CROP_RATIOS.map(r => (
+              <button key={r.id}
+                className={`controls__ratio-chip${cropRatio === r.id ? ' controls__ratio-chip--active' : ''}`}
+                onClick={() => onUpdate('cropRatio', r.id)}>{r.label}</button>
+            ))}
           </div>
-          <div className="controls__row">
+
+          <div className="controls__row controls__row--spaced">
             <label className="controls__label">Show photo</label>
             <Toggle on={showMedia} onChange={v => onUpdate('showMedia', v)} label="Toggle photo visibility"/>
           </div>

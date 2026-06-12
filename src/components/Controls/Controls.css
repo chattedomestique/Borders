@@ -192,6 +192,28 @@
 }
 .controls__layer-strip::-webkit-scrollbar { display: none; }
 
+/* ── Crop ratio chips ── */
+.controls__ratio-chip {
+  padding: 6px 11px;
+  border-radius: var(--r-pill);
+  border: 1.5px solid var(--border);
+  background: var(--bg);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+  letter-spacing: -0.1px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s,
+              transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  -webkit-tap-highlight-color: transparent;
+}
+.controls__ratio-chip:active { transform: scale(0.93); }
+.controls__ratio-chip--active {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
 .controls__layer-add {
   display: flex;
   align-items: center;

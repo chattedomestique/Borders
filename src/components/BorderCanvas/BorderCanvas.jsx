@@ -299,7 +299,7 @@ function drawTextLayer(ctx, totalW, totalH, layer, bboxMap) {
  */
 function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
   if (!canvas || !source) return
-  const { borderThickness, bgMode, bgColor = '#ffffff', blurAmount = 60, cornerRadius, cropSquare,
+  const { borderThickness, bgMode, bgColor = '#ffffff', blurAmount = 60, cornerRadius, cropRatio = 'free',
           zoom = 1, panX = 0.5, panY = 0.5,
           showMedia = true, grainAmount = 0, grainVariability = 0, grainMonochrome = true,
           textLayers = [] } = settings
@@ -308,10 +308,17 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
   const srcH = source.videoHeight ?? source.naturalHeight ?? source.height ?? 1
 
   let mediaW, mediaH
-  if (cropSquare) {
-    const s = Math.min(srcW, srcH); mediaW = s; mediaH = s
-  } else {
+  if (!cropRatio || cropRatio === 'free') {
     mediaW = srcW; mediaH = srcH
+  } else {
+    const [tw, th] = cropRatio.split(':').map(Number)
+    const targetRatio = tw / th
+    const sourceRatio = srcW / srcH
+    if (targetRatio >= sourceRatio) {
+      mediaW = srcW; mediaH = Math.round(srcW / targetRatio)
+    } else {
+      mediaH = srcH; mediaW = Math.round(srcH * targetRatio)
+    }
   }
 
   // Scale inner media so its longest side = OUT_SIZE
