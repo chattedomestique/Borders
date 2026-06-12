@@ -342,28 +342,28 @@ export default function Controls({
                 <label className="controls__label" htmlFor="frost-brightness">Brightness</label>
                 <span className="controls__value">{frostBrightness > 0 ? `+${frostBrightness}` : frostBrightness}%</span>
               </div>
-              <input id="frost-brightness" type="range" min={-100} max={100} step={1}
+              <input id="frost-brightness" type="range" min={-100} max={200} step={1}
                 value={frostBrightness} onChange={e => onUpdate('frostBrightness', Number(e.target.value))} />
 
               <div className="controls__row">
                 <label className="controls__label" htmlFor="frost-contrast">Contrast</label>
                 <span className="controls__value">{frostContrast > 0 ? `+${frostContrast}` : frostContrast}%</span>
               </div>
-              <input id="frost-contrast" type="range" min={-100} max={100} step={1}
+              <input id="frost-contrast" type="range" min={-100} max={200} step={1}
                 value={frostContrast} onChange={e => onUpdate('frostContrast', Number(e.target.value))} />
 
               <div className="controls__row">
                 <label className="controls__label" htmlFor="frost-saturation">Saturation</label>
                 <span className="controls__value">{frostSaturation > 0 ? `+${frostSaturation}` : frostSaturation}%</span>
               </div>
-              <input id="frost-saturation" type="range" min={-100} max={100} step={1}
+              <input id="frost-saturation" type="range" min={-100} max={300} step={1}
                 value={frostSaturation} onChange={e => onUpdate('frostSaturation', Number(e.target.value))} />
 
               <div className="controls__row">
                 <label className="controls__label" htmlFor="frost-vibrance">Vibrance</label>
                 <span className="controls__value">{frostVibrance === 0 ? 'Off' : `+${frostVibrance}%`}</span>
               </div>
-              <input id="frost-vibrance" type="range" min={0} max={100} step={1}
+              <input id="frost-vibrance" type="range" min={0} max={200} step={1}
                 value={frostVibrance} onChange={e => onUpdate('frostVibrance', Number(e.target.value))} />
             </>
           )}
