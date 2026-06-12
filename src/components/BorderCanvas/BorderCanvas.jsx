@@ -159,22 +159,40 @@ function drawFrostedBg(ctx, source, canvasW, canvasH, blurAmount, frostSettings,
   boxBlurPass(id.data, sw, sh, r)
   boxBlurPass(id.data, sw, sh, r)
   boxBlurPass(id.data, sw, sh, r)
-  applyVibrance(id.data, vibrance)
+
+  // Apply all adjustments pixel-by-pixel on the small canvas (ctx.filter is
+  // silently ignored on iOS Safari < 18, so we do it in JS instead)
+  const d = id.data
+  const br = 1 + brightness / 100
+  const co = 1 + contrast / 100
+  const sa = Math.max(0, 1 + saturation / 100)
+  const needBr = brightness !== 0
+  const needCo = contrast !== 0
+  const needSa = sa !== 1
+  for (let i = 0; i < d.length; i += 4) {
+    let rv = d[i], gv = d[i + 1], bv = d[i + 2]
+    if (needBr) { rv = rv * br; gv = gv * br; bv = bv * br }
+    if (needCo) {
+      rv = (rv - 128) * co + 128
+      gv = (gv - 128) * co + 128
+      bv = (bv - 128) * co + 128
+    }
+    if (needSa) {
+      const luma = 0.2126 * rv + 0.7152 * gv + 0.0722 * bv
+      rv = luma + (rv - luma) * sa
+      gv = luma + (gv - luma) * sa
+      bv = luma + (bv - luma) * sa
+    }
+    d[i] = rv; d[i + 1] = gv; d[i + 2] = bv
+  }
+  applyVibrance(d, vibrance)
   fc.putImageData(id, 0, 0)
 
-  // Upscale blurred result to output canvas with user-controlled filters
-  const br = (1 + brightness / 100).toFixed(3)
-  const co = (1 + contrast  / 100).toFixed(3)
-  const sa = Math.max(0, 1 + saturation / 100).toFixed(3)
+  // Upscale blurred result to output canvas
+  const pad = Math.round(longest * 0.02)
   ctx.save()
   ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'
-  if ('filter' in ctx) ctx.filter = `brightness(${br}) contrast(${co}) saturate(${sa})`
-  const pad = Math.round(longest * 0.02)
   ctx.drawImage(cache.frost, -pad, -pad, canvasW + pad * 2, canvasH + pad * 2)
-  if ('filter' in ctx) { ctx.filter = 'none' } else {
-    ctx.fillStyle = 'rgba(0,0,0,0.18)'
-    ctx.fillRect(0, 0, canvasW, canvasH)
-  }
   ctx.restore()
 }
 
