@@ -215,6 +215,12 @@
   color: var(--accent);
 }
 
+.controls__ratio-flip {
+  flex-shrink: 0;
+  margin-left: 3px;
+  opacity: 0.65;
+}
+
 .controls__layer-add {
   display: flex;
   align-items: center;

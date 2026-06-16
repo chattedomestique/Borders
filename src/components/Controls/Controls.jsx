@@ -2,16 +2,12 @@ import { useState } from 'react'
 import './Controls.css'
 
 const CROP_RATIOS = [
-  { id: 'free', label: 'Free' },
-  { id: '1:1',  label: '1:1'  },
-  { id: '4:5',  label: '4:5'  },
-  { id: '5:4',  label: '5:4'  },
-  { id: '3:4',  label: '3:4'  },
-  { id: '4:3',  label: '4:3'  },
-  { id: '9:16', label: '9:16' },
-  { id: '16:9', label: '16:9' },
-  { id: '2:3',  label: '2:3'  },
-  { id: '3:2',  label: '3:2'  },
+  { id: 'free', label: 'Free', alt: null  },
+  { id: '1:1',  label: '1:1',  alt: null  },
+  { id: '4:5',  label: '4:5',  alt: '5:4' },
+  { id: '3:4',  label: '3:4',  alt: '4:3' },
+  { id: '9:16', label: '9:16', alt: '16:9'},
+  { id: '2:3',  label: '2:3',  alt: '3:2' },
 ]
 
 const BG_MODES = [
@@ -278,11 +274,31 @@ export default function Controls({
 
           <label className="controls__label" style={{ marginBottom: 4 }}>Crop</label>
           <div className="controls__layer-strip">
-            {CROP_RATIOS.map(r => (
-              <button key={r.id}
-                className={`controls__ratio-chip${cropRatio === r.id ? ' controls__ratio-chip--active' : ''}`}
-                onClick={() => onUpdate('cropRatio', r.id)}>{r.label}</button>
-            ))}
+            {CROP_RATIOS.map(r => {
+              const isPortrait  = cropRatio === r.id
+              const isLandscape = r.alt !== null && cropRatio === r.alt
+              const isActive    = isPortrait || isLandscape
+              const displayLabel = isLandscape ? r.alt : r.id
+              const canFlip = r.alt !== null
+              const handleClick = () => {
+                if (!isActive) { onUpdate('cropRatio', r.id) }
+                else if (canFlip) { onUpdate('cropRatio', isPortrait ? r.alt : r.id) }
+              }
+              return (
+                <button key={r.id}
+                  className={`controls__ratio-chip${isActive ? ' controls__ratio-chip--active' : ''}`}
+                  onClick={handleClick} aria-pressed={isActive}>
+                  {displayLabel}
+                  {isActive && canFlip && (
+                    <svg className="controls__ratio-flip" width="11" height="11" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <polyline points="23 4 23 10 17 10"/>
+                      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                    </svg>
+                  )}
+                </button>
+              )
+            })}
           </div>
 
           <div className="controls__row controls__row--spaced">

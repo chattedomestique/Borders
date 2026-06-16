@@ -1,5 +1,5 @@
 // Border Studio Service Worker
-const CACHE = 'border-studio-v17'
+const CACHE = 'border-studio-v18'
 const PRECACHE = [
   '/Borders/',
   '/Borders/index.html',
