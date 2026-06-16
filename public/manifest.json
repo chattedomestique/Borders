@@ -4,8 +4,8 @@
   "description": "Add beautiful borders and frames to your photos and videos",
   "start_url": "/Borders/",
   "display": "standalone",
-  "background_color": "#f0e8ff",
-  "theme_color": "#a855f7",
+  "background_color": "#F2EDE6",
+  "theme_color": "#C9622C",
   "orientation": "portrait",
   "icons": [
     {

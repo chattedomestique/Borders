@@ -1,8 +1,10 @@
 // Border Studio Service Worker
-const CACHE = 'border-studio-v15'
+const CACHE = 'border-studio-v16'
 const PRECACHE = [
   '/Borders/',
   '/Borders/index.html',
+  '/Borders/icon-192.png',
+  '/Borders/icon-512.png',
 ]
 
 self.addEventListener('install', event => {

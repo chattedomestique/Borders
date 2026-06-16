@@ -1,6 +1,6 @@
 /* ── Design Tokens ─────────────────────────────────────────────────────────── */
 :root {
-  /* Palette — warm editorial */
+  /* Palette — warm editorial (light) */
   --bg:             #F2EDE6;
   --surface:        #FDFAF7;
   --border:         #E4DDD3;
@@ -12,7 +12,17 @@
 
   --ink:            #1C1714;          /* warm near-black */
   --ink-2:          #5A4F47;          /* warm medium */
-  --ink-3:          #9A8F86;          /* warm tertiary */
+  --ink-3:          #857A70;          /* warm tertiary (AA on --bg) */
+
+  /* Translucent "glass" surfaces (theme-aware) */
+  --glass-strong:   rgba(242, 237, 230, 0.88);
+  --glass:          rgba(242, 237, 230, 0.55);
+  --glass-toolbar:  rgba(242, 237, 230, 0.46);
+  --glass-border:   rgba(228, 221, 211, 0.5);
+  --seg-track:      rgba(228, 221, 211, 0.45);
+  --surface-raised: rgba(253, 250, 247, 0.92);
+  --save-bg:        rgba(28, 23, 20, 0.78);
+  --save-ink:       #FDFAF7;
 
   /* Shadows — warm-tinted */
   --shadow-sm: 0 1px 3px  rgba(28, 23, 20, 0.08), 0 1px 2px  rgba(28, 23, 20, 0.04);
@@ -37,7 +47,40 @@
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  color-scheme: light;
+  color-scheme: light dark;
+}
+
+/* ── Dark theme — warm, low-glare (ideal backdrop for editing photos) ───────── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:             #181513;
+    --surface:        #23201C;
+    --border:         #38322C;
+    --border-strong:  #4F463E;
+
+    --accent:         #E8783C;          /* brighter terracotta for dark bg */
+    --accent-subtle:  #2B201A;
+    --accent-dim:     rgba(232, 120, 60, 0.18);
+
+    --ink:            #F4EFE9;
+    --ink-2:          #C7BCB1;
+    --ink-3:          #968B80;
+
+    --glass-strong:   rgba(24, 21, 19, 0.86);
+    --glass:          rgba(24, 21, 19, 0.62);
+    --glass-toolbar:  rgba(24, 21, 19, 0.52);
+    --glass-border:   rgba(80, 70, 62, 0.55);
+    --seg-track:      rgba(80, 70, 62, 0.30);
+    --surface-raised: rgba(74, 66, 58, 0.95);
+    --save-bg:        var(--accent);
+    --save-ink:       #1A1310;
+
+    --shadow-sm: 0 1px 3px  rgba(0, 0, 0, 0.40), 0 1px 2px  rgba(0, 0, 0, 0.30);
+    --shadow-md: 0 3px 10px rgba(0, 0, 0, 0.45), 0 1px 4px  rgba(0, 0, 0, 0.30);
+    --shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.55), 0 3px 10px rgba(0, 0, 0, 0.35);
+
+    color-scheme: dark;
+  }
 }
 
 /* ── Reset ─────────────────────────────────────────────────────────────────── */

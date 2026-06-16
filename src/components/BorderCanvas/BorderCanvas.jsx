@@ -202,44 +202,60 @@ function drawFrostedBg(ctx, source, canvasW, canvasH, blurAmount, frostSettings,
  * shadows and highlights just like real film. Multi-scale layers add
  * variability: a sharp fine base + optional smooth medium/coarse clumps.
  */
-function applyGrain(ctx, w, h, grainAmount, grainVariability, monochrome, cache) {
+function applyGrain(ctx, w, h, grainAmount, grainVariability, monochrome, animate, cache) {
   if (!grainAmount) return
   // σ=30 at 100% matches old 25% feel (old: 25*2.4*0.5=30)
   const sigma = grainAmount * 0.3
   const v = (grainVariability ?? 0) / 100
+  // Stable reference grid for static (image) grain. Because the layer is just
+  // random noise, stretching a fixed-size grid to the canvas is invisible — but
+  // it lets us cache the field so it doesn't re-randomize ("dance") when an
+  // unrelated control (border, crop…) is dragged. Video keeps live grain.
+  const REF = 2000
 
   const drawLayer = (cacheKey, scale, smooth, alpha) => {
-    const nw = Math.max(2, Math.round(w / scale))
-    const nh = Math.max(2, Math.round(h / scale))
     if (!cache[cacheKey]) cache[cacheKey] = document.createElement('canvas')
-    if (cache[cacheKey].width !== nw || cache[cacheKey].height !== nh) {
-      cache[cacheKey].width = nw; cache[cacheKey].height = nh
+    const cv = cache[cacheKey]
+    let needGen = animate
+    let nw, nh
+    if (animate) {
+      nw = Math.max(2, Math.round(w / scale))
+      nh = Math.max(2, Math.round(h / scale))
+    } else {
+      nw = nh = Math.max(2, Math.round(REF / scale))
+      const sig = `${nw}:${sigma.toFixed(2)}:${monochrome ? 1 : 0}`
+      if (cv.__sig !== sig) { cv.__sig = sig; needGen = true }
     }
-    const gc = cache[cacheKey].getContext('2d')
-    const id = gc.createImageData(nw, nh)
-    const d = id.data
-    for (let i = 0; i < d.length; i += 4) {
-      if (monochrome) {
-        const u = Math.random() || 1e-10
-        const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2832 * Math.random())
-        const val = Math.max(0, Math.min(255, Math.round(128 + n * sigma)))
-        d[i] = d[i + 1] = d[i + 2] = val
-      } else {
-        for (let c = 0; c < 3; c++) {
+    if (cv.width !== nw || cv.height !== nh) { cv.width = nw; cv.height = nh; needGen = true }
+
+    if (needGen) {
+      const gc = cv.getContext('2d')
+      const id = gc.createImageData(nw, nh)
+      const d = id.data
+      for (let i = 0; i < d.length; i += 4) {
+        if (monochrome) {
           const u = Math.random() || 1e-10
           const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2832 * Math.random())
-          d[i + c] = Math.max(0, Math.min(255, Math.round(128 + n * sigma)))
+          const val = Math.max(0, Math.min(255, Math.round(128 + n * sigma)))
+          d[i] = d[i + 1] = d[i + 2] = val
+        } else {
+          for (let c = 0; c < 3; c++) {
+            const u = Math.random() || 1e-10
+            const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2832 * Math.random())
+            d[i + c] = Math.max(0, Math.min(255, Math.round(128 + n * sigma)))
+          }
         }
+        d[i + 3] = 255
       }
-      d[i + 3] = 255
+      gc.putImageData(id, 0, 0)
     }
-    gc.putImageData(id, 0, 0)
+
     ctx.save()
     ctx.globalAlpha = alpha
     ctx.globalCompositeOperation = 'soft-light'
     ctx.imageSmoothingEnabled = smooth
     if (smooth) ctx.imageSmoothingQuality = 'high'
-    ctx.drawImage(cache[cacheKey], 0, 0, w, h)
+    ctx.drawImage(cv, 0, 0, w, h)
     ctx.restore()
   }
 
@@ -345,6 +361,7 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
           frostBrightness = -15, frostContrast = 0, frostSaturation = 60, frostVibrance = 0,
           textLayers = [] } = settings
 
+  const isVideo = typeof source.videoWidth === 'number'
   const srcW = source.videoWidth ?? source.naturalWidth ?? source.width ?? 1
   const srcH = source.videoHeight ?? source.naturalHeight ?? source.height ?? 1
 
@@ -413,8 +430,9 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
     ctx.fillRect(0, 0, totalW, totalH)
   }
 
-  // 2. Grain on background (drawn before media so it stays in the border/mat)
-  applyGrain(ctx, totalW, totalH, grainAmount, grainVariability, grainMonochrome, cache)
+  // 2. Grain on background (drawn before media so it stays in the border/mat).
+  //    Video animates the grain every frame; images use a frozen, cached field.
+  applyGrain(ctx, totalW, totalH, grainAmount, grainVariability, grainMonochrome, isVideo, cache)
 
   // 3. Media with zoom/pan and optional corner radius clip
   if (showMedia) {

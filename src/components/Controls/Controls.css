@@ -14,7 +14,7 @@
 
 .controls__divider {
   height: 1px;
-  background: rgba(228, 221, 211, 0.7);
+  background: var(--border);
   margin: 0;
 }
 
@@ -65,9 +65,9 @@
   grid-template-columns: repeat(4, 1fr);
   gap: 3px;
   padding: 3px;
-  background: rgba(228, 221, 211, 0.45);
+  background: var(--seg-track);
   border-radius: var(--r-md);
-  border: 1px solid rgba(228, 221, 211, 0.7);
+  border: 1px solid var(--border);
 }
 
 .controls__seg-btn {
@@ -89,7 +89,7 @@
 }
 
 .controls__seg-btn--active {
-  background: rgba(253, 250, 247, 0.9);
+  background: var(--surface-raised);
   color: var(--ink);
   box-shadow: var(--shadow-sm);
 }

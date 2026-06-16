@@ -1,7 +1,8 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import Uploader from './components/Uploader/Uploader'
 import BorderCanvas from './components/BorderCanvas/BorderCanvas'
 import Controls from './components/Controls/Controls'
+import { useHistory } from './useHistory'
 import './App.css'
 
 const STEPS = { UPLOAD: 'upload', EDIT: 'edit', SAVING: 'saving' }
@@ -84,20 +85,36 @@ const TABS = [
 export default function App() {
   const [step, setStep] = useState(STEPS.UPLOAD)
   const [media, setMedia] = useState(null)
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS)
+  const { settings, set: setSettings, undo, redo, reset: resetHistory, canUndo, canRedo } = useHistory(DEFAULT_SETTINGS)
   const [recordingProgress, setRecordingProgress] = useState(0)
   const [pickMode, setPickMode] = useState(false)
   const [selectedLayerId, setSelectedLayerId] = useState(null)
   const [activeTab, setActiveTab] = useState(null)
   const canvasRef = useRef(null)
+  const appRef = useRef(null)
+  const overlayRef = useRef(null)
+
+  // Track the live height of the bottom overlay (toolbar + any open panel) and
+  // expose it as --overlay-h so the canvas reserves exactly that much space and
+  // the controls never cover the part of the image being edited.
+  useEffect(() => {
+    const el = overlayRef.current
+    const root = appRef.current
+    if (!el || !root) return
+    const ro = new ResizeObserver(entries => {
+      root.style.setProperty('--overlay-h', `${Math.round(entries[0].contentRect.height)}px`)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [step, media])
 
   const handleMediaLoaded = useCallback((mediaObj) => {
     setMedia(mediaObj)
-    setSettings(DEFAULT_SETTINGS)
+    resetHistory(DEFAULT_SETTINGS)
     setSelectedLayerId(null)
     setActiveTab(null)
     setStep(STEPS.EDIT)
-  }, [])
+  }, [resetHistory])
 
   const handleReset = useCallback(() => {
     setMedia(prev => { if (prev?.url) URL.revokeObjectURL(prev.url); return null })
@@ -120,42 +137,55 @@ export default function App() {
 
   const updateSetting = useCallback((key, value) => {
     setSettings(prev => ({ ...prev, [key]: value }))
-  }, [])
+  }, [setSettings])
 
   const addTextLayer = useCallback(() => {
     const id = `text-${Date.now()}`
     setSettings(prev => ({
       ...prev,
       textLayers: [...prev.textLayers, DEFAULT_LAYER(id, prev.textLayers.length)],
-    }))
+    }), { immediate: true })
     setSelectedLayerId(id)
-  }, [])
+  }, [setSettings])
 
   const removeTextLayer = useCallback((id) => {
-    setSettings(prev => ({ ...prev, textLayers: prev.textLayers.filter(l => l.id !== id) }))
+    setSettings(prev => ({ ...prev, textLayers: prev.textLayers.filter(l => l.id !== id) }), { immediate: true })
     setSelectedLayerId(prev => prev === id ? null : prev)
-  }, [])
+  }, [setSettings])
 
   const updateTextLayer = useCallback((id, key, value) => {
     setSettings(prev => ({
       ...prev,
       textLayers: prev.textLayers.map(l => l.id === id ? { ...l, [key]: value } : l),
     }))
-  }, [])
+  }, [setSettings])
 
   const handlePickColor = useCallback((hex) => {
-    setSettings(prev => ({ ...prev, bgColor: hex, bgMode: 'color' }))
+    setSettings(prev => ({ ...prev, bgColor: hex, bgMode: 'color' }), { immediate: true })
     setPickMode(false)
-  }, [])
+  }, [setSettings])
 
   const toggleTab = useCallback((id) => {
     setActiveTab(prev => prev === id ? null : id)
   }, [])
 
+  // Keyboard undo/redo (desktop / hardware keyboards)
+  useEffect(() => {
+    if (step === STEPS.UPLOAD) return
+    const onKey = (e) => {
+      const mod = e.metaKey || e.ctrlKey
+      if (!mod || e.key.toLowerCase() !== 'z') return
+      e.preventDefault()
+      if (e.shiftKey) redo(); else undo()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [step, undo, redo])
+
   const saving = step === STEPS.SAVING
 
   return (
-    <div className="app">
+    <div className="app" ref={appRef}>
       <header className="app__header">
         <div className="app__header-inner">
           <div className="app__logo" aria-label="Border Studio">
@@ -166,9 +196,23 @@ export default function App() {
             <span className="app__logo-text">Border Studio</span>
           </div>
           {step !== STEPS.UPLOAD && (
-            <button className="app__reset-btn" onClick={handleReset} aria-label="Start over">
-              New
-            </button>
+            <div className="app__header-actions">
+              <button className="app__icon-btn" onClick={undo} disabled={!canUndo} aria-label="Undo">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 7v6h6"/>
+                  <path d="M3 13a9 9 0 1 0 3-7.7L3 8"/>
+                </svg>
+              </button>
+              <button className="app__icon-btn" onClick={redo} disabled={!canRedo} aria-label="Redo">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 7v6h-6"/>
+                  <path d="M21 13a9 9 0 1 1-3-7.7L21 8"/>
+                </svg>
+              </button>
+              <button className="app__reset-btn" onClick={handleReset} aria-label="Start over">
+                New
+              </button>
+            </div>
           )}
         </div>
       </header>
@@ -197,7 +241,7 @@ export default function App() {
 
       {/* Frosted glass overlay — direct child of .app so absolute bottom:0 is viewport bottom */}
       {step !== STEPS.UPLOAD && media && (
-        <div className="app__overlay">
+        <div className="app__overlay" ref={overlayRef}>
               {/* Sliding controls panel */}
               <div className={`app__panel${activeTab ? ' app__panel--open' : ''}`}>
                 <div className="app__panel-inner">
