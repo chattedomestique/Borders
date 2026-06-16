@@ -210,15 +210,16 @@ function applyGrain(ctx, w, h, grainAmount, grainVariability, monochrome, animat
   const s = (grainSpread ?? 0) / 100
 
   // Luminance-spread path: grain weighted by Fuji T-grain tonal curve.
-  // Samples the current canvas at 160 px → per-pixel luminance → scales each
-  // noise deviation from grey by (1-s) + s·bell(L), where bell peaks at L≈0.40
-  // (shadow-midtone) and falls off toward pure blacks and clipped whites.
+  // Grain is generated at w÷4 resolution (same as the fine layer) so it stays
+  // sharp at full output size. Luminance is sampled separately at 160 px for
+  // speed, then mapped into grain-pixel space for the per-pixel weight.
+  // Bell peaks at L≈0.40 (shadow-midtone); highlights approach 0 at s=1.
   if (s > 0) {
+    // Luminance sample canvas — small is fine, just need tonal distribution
     const LSAMP = 160
     const lscale = LSAMP / Math.max(w, h)
     const lsw = Math.max(2, Math.round(w * lscale))
     const lsh = Math.max(2, Math.round(h * lscale))
-
     if (!cache.lumSamp) cache.lumSamp = document.createElement('canvas')
     const lc = cache.lumSamp
     if (lc.width !== lsw || lc.height !== lsh) { lc.width = lsw; lc.height = lsh }
@@ -226,16 +227,24 @@ function applyGrain(ctx, w, h, grainAmount, grainVariability, monochrome, animat
     lcc.drawImage(ctx.canvas, 0, 0, lsw, lsh)
     const lumD = lcc.getImageData(0, 0, lsw, lsh).data
 
+    // Grain canvas at w÷4 — same scale as the existing fine layer, drawn without
+    // smoothing so each noise pixel maps to a crisp 4×4 block on the output.
+    // Static images use a fixed 500×500 reference grid so changing the border
+    // thickness (which changes totalW) doesn't cause the grain to jump.
+    const GSCALE = 4
+    const gw = animate ? Math.max(2, Math.round(w / GSCALE)) : Math.max(2, Math.round(REF / GSCALE))
+    const gh = animate ? Math.max(2, Math.round(h / GSCALE)) : Math.max(2, Math.round(REF / GSCALE))
+
     if (!cache.sNoise) cache.sNoise = document.createElement('canvas')
     const nc = cache.sNoise
-    const noiseSig = `${lsw}x${lsh}:${sigma.toFixed(2)}:${monochrome ? 1 : 0}`
+    const noiseSig = `${gw}x${gh}:${sigma.toFixed(2)}:${monochrome ? 1 : 0}`
     const needNoise = animate || nc.__sig !== noiseSig
-    if (nc.width !== lsw || nc.height !== lsh) { nc.width = lsw; nc.height = lsh }
+    if (nc.width !== gw || nc.height !== gh) { nc.width = gw; nc.height = gh }
     const ncc = nc.getContext('2d')
     let noiseD
     if (needNoise) {
       nc.__sig = noiseSig
-      const nid = ncc.createImageData(lsw, lsh)
+      const nid = ncc.createImageData(gw, gh)
       noiseD = nid.data
       for (let i = 0; i < noiseD.length; i += 4) {
         if (monochrome) {
@@ -254,30 +263,36 @@ function applyGrain(ctx, w, h, grainAmount, grainVariability, monochrome, animat
       }
       ncc.putImageData(nid, 0, 0)
     } else {
-      noiseD = ncc.getImageData(0, 0, lsw, lsh).data
+      noiseD = ncc.getImageData(0, 0, gw, gh).data
     }
 
+    // Per-grain-pixel luminance weight: map grain coords → lum canvas coords
     if (!cache.wGrain) cache.wGrain = document.createElement('canvas')
     const wc = cache.wGrain
-    if (wc.width !== lsw || wc.height !== lsh) { wc.width = lsw; wc.height = lsh }
+    if (wc.width !== gw || wc.height !== gh) { wc.width = gw; wc.height = gh }
     const wcc = wc.getContext('2d')
-    const wid = wcc.createImageData(lsw, lsh)
+    const wid = wcc.createImageData(gw, gh)
     const wd = wid.data
-    for (let i = 0; i < wd.length; i += 4) {
-      const luma = (0.2126 * lumD[i] + 0.7152 * lumD[i + 1] + 0.0722 * lumD[i + 2]) / 255
-      const curve = Math.exp(-Math.pow((luma - 0.4) / 0.32, 2))
-      const weight = 1 - s + s * curve
-      wd[i]     = Math.round(128 + (noiseD[i]     - 128) * weight)
-      wd[i + 1] = Math.round(128 + (noiseD[i + 1] - 128) * weight)
-      wd[i + 2] = Math.round(128 + (noiseD[i + 2] - 128) * weight)
-      wd[i + 3] = 255
+    for (let gy = 0; gy < gh; gy++) {
+      const ly = Math.min(lsh - 1, Math.floor(gy * lsh / gh))
+      for (let gx = 0; gx < gw; gx++) {
+        const lx = Math.min(lsw - 1, Math.floor(gx * lsw / gw))
+        const li = (ly * lsw + lx) * 4
+        const luma = (0.2126 * lumD[li] + 0.7152 * lumD[li + 1] + 0.0722 * lumD[li + 2]) / 255
+        const curve = Math.exp(-Math.pow((luma - 0.4) / 0.32, 2))
+        const weight = 1 - s + s * curve
+        const gi = (gy * gw + gx) * 4
+        wd[gi]     = Math.round(128 + (noiseD[gi]     - 128) * weight)
+        wd[gi + 1] = Math.round(128 + (noiseD[gi + 1] - 128) * weight)
+        wd[gi + 2] = Math.round(128 + (noiseD[gi + 2] - 128) * weight)
+        wd[gi + 3] = 255
+      }
     }
     wcc.putImageData(wid, 0, 0)
 
     ctx.save()
     ctx.globalCompositeOperation = 'soft-light'
-    ctx.imageSmoothingEnabled = true
-    ctx.imageSmoothingQuality = 'high'
+    ctx.imageSmoothingEnabled = false  // sharp pixels — same as fine layer
     ctx.drawImage(wc, 0, 0, w, h)
     ctx.restore()
     return
