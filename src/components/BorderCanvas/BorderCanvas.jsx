@@ -208,6 +208,7 @@ function applyGrain(ctx, w, h, grainAmount, grainVariability, monochrome, animat
   const sigma = grainAmount * 0.3
   const v = (grainVariability ?? 0) / 100
   const s = (grainSpread ?? 0) / 100
+  const REF = 2000
 
   // Luminance-spread path: grain weighted by Fuji T-grain tonal curve.
   // Grain is generated at w÷4 resolution (same as the fine layer) so it stays
@@ -303,7 +304,6 @@ function applyGrain(ctx, w, h, grainAmount, grainVariability, monochrome, animat
   // random noise, stretching a fixed-size grid to the canvas is invisible — but
   // it lets us cache the field so it doesn't re-randomize ("dance") when an
   // unrelated control (border, crop…) is dragged. Video keeps live grain.
-  const REF = 2000
 
   const drawLayer = (cacheKey, scale, smooth, alpha) => {
     if (!cache[cacheKey]) cache[cacheKey] = document.createElement('canvas')
