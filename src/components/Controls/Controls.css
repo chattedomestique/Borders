@@ -112,8 +112,8 @@
 }
 
 .controls__color-swatch {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--r-sm);
   border: 2px solid var(--border-strong);
   cursor: pointer;
@@ -139,8 +139,8 @@
 }
 
 .controls__eyedropper {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--r-sm);
   border: 1.5px solid var(--border);
   background: var(--surface);
@@ -194,7 +194,8 @@
 
 /* ── Crop ratio chips ── */
 .controls__ratio-chip {
-  padding: 6px 11px;
+  padding: 0 14px;
+  min-height: 44px;
   border-radius: var(--r-pill);
   border: 1.5px solid var(--border);
   background: var(--bg);
@@ -218,7 +219,8 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 6px 12px;
+  padding: 0 14px;
+  min-height: 44px;
   border-radius: var(--r-pill);
   border: 1.5px solid var(--accent);
   background: var(--accent-subtle);
@@ -236,6 +238,7 @@
 .controls__layer-chip {
   display: flex;
   align-items: center;
+  min-height: 44px;
   border-radius: var(--r-pill);
   border: 1.5px solid var(--border);
   background: var(--bg);
@@ -249,7 +252,7 @@
 }
 
 .controls__layer-chip__label {
-  padding: 6px 10px 6px 12px;
+  padding: 0 8px 0 14px;
   font-size: 12px;
   font-weight: 600;
   color: var(--ink-2);
@@ -259,17 +262,23 @@
   white-space: nowrap;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
 }
 .controls__layer-chip--active .controls__layer-chip__label { color: var(--accent); }
 
 .controls__layer-chip__remove {
-  padding: 6px 10px 6px 4px;
-  font-size: 15px;
+  padding: 0 14px 0 6px;
+  font-size: 17px;
   line-height: 1;
   color: var(--ink-3);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: color 0.15s;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
 }
 .controls__layer-chip__remove:active { color: #A8200D; }
 

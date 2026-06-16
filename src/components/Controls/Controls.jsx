@@ -15,9 +15,9 @@ const CROP_RATIOS = [
 ]
 
 const BG_MODES = [
-  { id: 'average',       label: 'Average' },
+  { id: 'average',       label: 'Match' },
   { id: 'contrast',      label: 'Contrast' },
-  { id: 'complementary', label: 'Complement' },
+  { id: 'complementary', label: 'Pop' },
   { id: 'frosted',       label: 'Frosted' },
 ]
 

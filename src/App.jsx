@@ -46,7 +46,7 @@ const TABS = [
     ),
   },
   {
-    id: 'bg', label: 'BG',
+    id: 'bg', label: 'Fill',
     icon: (
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
         <rect x="2" y="2" width="16" height="16" rx="3" stroke="currentColor" strokeWidth="1.75"/>
@@ -71,7 +71,7 @@ const TABS = [
     ),
   },
   {
-    id: 'text', label: 'Type',
+    id: 'text', label: 'Text',
     icon: (
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
         <path d="M4 5h12"  stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
@@ -90,6 +90,7 @@ export default function App() {
   const [pickMode, setPickMode] = useState(false)
   const [selectedLayerId, setSelectedLayerId] = useState(null)
   const [activeTab, setActiveTab] = useState(null)
+  const [showHint, setShowHint] = useState(false)
   const canvasRef = useRef(null)
   const appRef = useRef(null)
   const overlayRef = useRef(null)
@@ -108,12 +109,25 @@ export default function App() {
     return () => ro.disconnect()
   }, [step, media])
 
+  const dismissHint = useCallback(() => {
+    setShowHint(false)
+    sessionStorage.setItem('bs-hint-seen', '1')
+  }, [])
+
+  // Auto-dismiss the gesture hint; the CSS animation handles the visual fade.
+  useEffect(() => {
+    if (!showHint) return
+    const t = setTimeout(dismissHint, 2800)
+    return () => clearTimeout(t)
+  }, [showHint, dismissHint])
+
   const handleMediaLoaded = useCallback((mediaObj) => {
     setMedia(mediaObj)
     resetHistory(DEFAULT_SETTINGS)
     setSelectedLayerId(null)
     setActiveTab(null)
     setStep(STEPS.EDIT)
+    if (!sessionStorage.getItem('bs-hint-seen')) setShowHint(true)
   }, [resetHistory])
 
   const handleReset = useCallback(() => {
@@ -238,6 +252,17 @@ export default function App() {
           </div>
         ) : null}
       </main>
+
+      {/* Gesture hint — shown once per session after first image load */}
+      {showHint && (
+        <div className="app__gesture-hint" aria-hidden="true">
+          <span>Pinch to zoom</span>
+          <span className="app__gesture-sep">·</span>
+          <span>Drag to pan</span>
+          <span className="app__gesture-sep">·</span>
+          <span>Double-tap to reset</span>
+        </div>
+      )}
 
       {/* Frosted glass overlay — direct child of .app so absolute bottom:0 is viewport bottom */}
       {step !== STEPS.UPLOAD && media && (
