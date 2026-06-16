@@ -31,7 +31,7 @@ const DEFAULT_SETTINGS = {
   cropRatio: 'free',
   zoom: 1, panX: 0.5, panY: 0.5,
   showMedia: true,
-  grainAmount: 0, grainVariability: 0, grainMonochrome: true,
+  grainAmount: 0, grainVariability: 0, grainMonochrome: true, grainSpread: 0,
   textLayers: [],
 }
 

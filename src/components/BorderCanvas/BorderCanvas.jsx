@@ -202,11 +202,88 @@ function drawFrostedBg(ctx, source, canvasW, canvasH, blurAmount, frostSettings,
  * shadows and highlights just like real film. Multi-scale layers add
  * variability: a sharp fine base + optional smooth medium/coarse clumps.
  */
-function applyGrain(ctx, w, h, grainAmount, grainVariability, monochrome, animate, cache) {
+function applyGrain(ctx, w, h, grainAmount, grainVariability, monochrome, animate, cache, grainSpread) {
   if (!grainAmount) return
   // σ=30 at 100% matches old 25% feel (old: 25*2.4*0.5=30)
   const sigma = grainAmount * 0.3
   const v = (grainVariability ?? 0) / 100
+  const s = (grainSpread ?? 0) / 100
+
+  // Luminance-spread path: grain weighted by Fuji T-grain tonal curve.
+  // Samples the current canvas at 160 px → per-pixel luminance → scales each
+  // noise deviation from grey by (1-s) + s·bell(L), where bell peaks at L≈0.40
+  // (shadow-midtone) and falls off toward pure blacks and clipped whites.
+  if (s > 0) {
+    const LSAMP = 160
+    const lscale = LSAMP / Math.max(w, h)
+    const lsw = Math.max(2, Math.round(w * lscale))
+    const lsh = Math.max(2, Math.round(h * lscale))
+
+    if (!cache.lumSamp) cache.lumSamp = document.createElement('canvas')
+    const lc = cache.lumSamp
+    if (lc.width !== lsw || lc.height !== lsh) { lc.width = lsw; lc.height = lsh }
+    const lcc = lc.getContext('2d')
+    lcc.drawImage(ctx.canvas, 0, 0, lsw, lsh)
+    const lumD = lcc.getImageData(0, 0, lsw, lsh).data
+
+    if (!cache.sNoise) cache.sNoise = document.createElement('canvas')
+    const nc = cache.sNoise
+    const noiseSig = `${lsw}x${lsh}:${sigma.toFixed(2)}:${monochrome ? 1 : 0}`
+    const needNoise = animate || nc.__sig !== noiseSig
+    if (nc.width !== lsw || nc.height !== lsh) { nc.width = lsw; nc.height = lsh }
+    const ncc = nc.getContext('2d')
+    let noiseD
+    if (needNoise) {
+      nc.__sig = noiseSig
+      const nid = ncc.createImageData(lsw, lsh)
+      noiseD = nid.data
+      for (let i = 0; i < noiseD.length; i += 4) {
+        if (monochrome) {
+          const u = Math.random() || 1e-10
+          const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2832 * Math.random())
+          const val = Math.max(0, Math.min(255, Math.round(128 + n * sigma)))
+          noiseD[i] = noiseD[i + 1] = noiseD[i + 2] = val
+        } else {
+          for (let c = 0; c < 3; c++) {
+            const u = Math.random() || 1e-10
+            const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2832 * Math.random())
+            noiseD[i + c] = Math.max(0, Math.min(255, Math.round(128 + n * sigma)))
+          }
+        }
+        noiseD[i + 3] = 255
+      }
+      ncc.putImageData(nid, 0, 0)
+    } else {
+      noiseD = ncc.getImageData(0, 0, lsw, lsh).data
+    }
+
+    if (!cache.wGrain) cache.wGrain = document.createElement('canvas')
+    const wc = cache.wGrain
+    if (wc.width !== lsw || wc.height !== lsh) { wc.width = lsw; wc.height = lsh }
+    const wcc = wc.getContext('2d')
+    const wid = wcc.createImageData(lsw, lsh)
+    const wd = wid.data
+    for (let i = 0; i < wd.length; i += 4) {
+      const luma = (0.2126 * lumD[i] + 0.7152 * lumD[i + 1] + 0.0722 * lumD[i + 2]) / 255
+      const curve = Math.exp(-Math.pow((luma - 0.4) / 0.32, 2))
+      const weight = 1 - s + s * curve
+      wd[i]     = Math.round(128 + (noiseD[i]     - 128) * weight)
+      wd[i + 1] = Math.round(128 + (noiseD[i + 1] - 128) * weight)
+      wd[i + 2] = Math.round(128 + (noiseD[i + 2] - 128) * weight)
+      wd[i + 3] = 255
+    }
+    wcc.putImageData(wid, 0, 0)
+
+    ctx.save()
+    ctx.globalCompositeOperation = 'soft-light'
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(wc, 0, 0, w, h)
+    ctx.restore()
+    return
+  }
+
+  // Standard multi-layer path (grainSpread = 0)
   // Stable reference grid for static (image) grain. Because the layer is just
   // random noise, stretching a fixed-size grid to the canvas is invisible — but
   // it lets us cache the field so it doesn't re-randomize ("dance") when an
@@ -357,7 +434,7 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
   if (!canvas || !source) return
   const { borderThickness, bgMode, bgColor = '#ffffff', blurAmount = 60, cornerRadius, cropRatio = 'free',
           zoom = 1, panX = 0.5, panY = 0.5,
-          showMedia = true, grainAmount = 0, grainVariability = 0, grainMonochrome = true,
+          showMedia = true, grainAmount = 0, grainVariability = 0, grainMonochrome = true, grainSpread = 0,
           frostBrightness = -15, frostContrast = 0, frostSaturation = 60, frostVibrance = 0,
           textLayers = [] } = settings
 
@@ -430,11 +507,7 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
     ctx.fillRect(0, 0, totalW, totalH)
   }
 
-  // 2. Grain on background (drawn before media so it stays in the border/mat).
-  //    Video animates the grain every frame; images use a frozen, cached field.
-  applyGrain(ctx, totalW, totalH, grainAmount, grainVariability, grainMonochrome, isVideo, cache)
-
-  // 3. Media with zoom/pan and optional corner radius clip
+  // 2. Media with zoom/pan and optional corner radius clip
   if (showMedia) {
     // View box in source image coordinates: mediaW/zoom × mediaH/zoom pixels
     // centered at pan position, clamped to stay within source bounds
@@ -461,6 +534,11 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
     ctx.drawImage(source, srcLeft, srcTop, viewW, viewH, offsetX, offsetY, scaledW, scaledH)
     ctx.restore()
   }
+
+  // 3. Film grain over the full composite — after media so it sits on the photo
+  //    and border together. Spread mode samples canvas luminance to concentrate
+  //    grain in shadow/midtone regions (Fuji T-grain behaviour).
+  applyGrain(ctx, totalW, totalH, grainAmount, grainVariability, grainMonochrome, isVideo, cache, grainSpread)
 
   // 4. Text layers (drawn last, on top of everything)
   if (bboxMap) bboxMap.clear()

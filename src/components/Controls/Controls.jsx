@@ -241,7 +241,7 @@ export default function Controls({
     borderThickness, bgMode, bgColor = '#ffffff', blurAmount,
     frostBrightness = -15, frostContrast = 0, frostSaturation = 60, frostVibrance = 0,
     cornerRadius, cropRatio = 'free', showMedia,
-    grainAmount, grainVariability, grainMonochrome = true,
+    grainAmount, grainVariability, grainMonochrome = true, grainSpread = 0,
     textLayers = [],
   } = settings
 
@@ -404,6 +404,15 @@ export default function Controls({
           </div>
           <input id="variability-slider" type="range" min={0} max={100} step={1}
             value={grainVariability} onChange={e => onUpdate('grainVariability', Number(e.target.value))} />
+
+          <div className="controls__row controls__row--spaced">
+            <label className="controls__label" htmlFor="spread-slider">Spread</label>
+            <span className="controls__value">
+              {grainSpread === 0 ? 'Off' : `${grainSpread}%`}
+            </span>
+          </div>
+          <input id="spread-slider" type="range" min={0} max={100} step={1}
+            value={grainSpread} onChange={e => onUpdate('grainSpread', Number(e.target.value))} />
 
           <div className="controls__divider controls__divider--inset"/>
 
