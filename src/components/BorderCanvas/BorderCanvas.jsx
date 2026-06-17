@@ -210,11 +210,12 @@ function applyGrain(ctx, w, h, grainAmount, grainVariability, monochrome, animat
   const s = (grainSpread ?? 0) / 100
   const REF = 2000
 
-  // Luminance-spread path: grain weighted by Fuji T-grain tonal curve.
+  // Luminance-spread path: grain weighted by a shadow-to-highlight slope.
   // Grain is generated at w÷4 resolution (same as the fine layer) so it stays
   // sharp at full output size. Luminance is sampled separately at 160 px for
   // speed, then mapped into grain-pixel space for the per-pixel weight.
-  // Bell peaks at L≈0.40 (shadow-midtone); highlights approach 0 at s=1.
+  // weight = max(0, 1 - s·L): shadows keep full grain, highlights lose it
+  // linearly — every part of the tonal range responds as the slider moves.
   if (s > 0) {
     // Luminance sample canvas — small is fine, just need tonal distribution
     const LSAMP = 160
@@ -280,8 +281,9 @@ function applyGrain(ctx, w, h, grainAmount, grainVariability, monochrome, animat
         const lx = Math.min(lsw - 1, Math.floor(gx * lsw / gw))
         const li = (ly * lsw + lx) * 4
         const luma = (0.2126 * lumD[li] + 0.7152 * lumD[li + 1] + 0.0722 * lumD[li + 2]) / 255
-        const curve = Math.exp(-Math.pow((luma - 0.4) / 0.32, 2))
-        const weight = 1 - s + s * curve
+        // Spread=100 → full grain in shadows, none in highlights; midtones halfway.
+        // Linear slope is far more perceptible than a narrow bell curve.
+        const weight = Math.max(0, 1 - s * luma)
         const gi = (gy * gw + gx) * 4
         wd[gi]     = Math.round(128 + (noiseD[gi]     - 128) * weight)
         wd[gi + 1] = Math.round(128 + (noiseD[gi + 1] - 128) * weight)
