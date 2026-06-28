@@ -506,30 +506,31 @@ function paintBlock(ctx, layer, geom, px, blockCenterY, opts = {}) {
  * `motionSpeed` shapes the falloff: faster → a longer, wispier streak; slower →
  * a tight, dense smear hugging the subject.
  */
-// Gaussian (Box–Muller) noise tile, centred on mid-grey. Cached by signature for
-// static frames; regenerated every frame for video so the grain shimmers.
-function makeNoiseTile(cache, key, nw, nh, sigma, mono, animate) {
+// Noise tile, cached by signature for static frames and regenerated every frame
+// for video so the grain shimmers. `uniform` gives a flat [0,255] distribution
+// (used as a dissolve threshold field — dot density then tracks coverage
+// linearly); otherwise it's Gaussian (Box–Muller) centred on mid-grey.
+function makeNoiseTile(cache, key, nw, nh, sigma, mono, animate, uniform) {
   if (!cache[key]) cache[key] = document.createElement('canvas')
   const cv = cache[key]
-  const sig = `${nw}x${nh}:${sigma.toFixed(1)}:${mono ? 1 : 0}`
+  const sig = `${nw}x${nh}:${sigma.toFixed(1)}:${mono ? 1 : 0}:${uniform ? 'u' : 'g'}`
   if (!animate && cv.__sig === sig && cv.width === nw && cv.height === nh) return cv
   if (cv.width !== nw || cv.height !== nh) { cv.width = nw; cv.height = nh }
   cv.__sig = sig
   const c = cv.getContext('2d')
   const id = c.createImageData(nw, nh)
   const d = id.data
+  const sample = () => {
+    if (uniform) return Math.floor(Math.random() * 256)
+    const u = Math.random() || 1e-10
+    const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2832 * Math.random())
+    return Math.max(0, Math.min(255, Math.round(128 + n * sigma)))
+  }
   for (let i = 0; i < d.length; i += 4) {
     if (mono) {
-      const u = Math.random() || 1e-10
-      const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2832 * Math.random())
-      const v = Math.max(0, Math.min(255, Math.round(128 + n * sigma)))
-      d[i] = d[i + 1] = d[i + 2] = v
+      d[i] = d[i + 1] = d[i + 2] = sample()
     } else {
-      for (let ch = 0; ch < 3; ch++) {
-        const u = Math.random() || 1e-10
-        const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2832 * Math.random())
-        d[i + ch] = Math.max(0, Math.min(255, Math.round(128 + n * sigma)))
-      }
+      d[i] = sample(); d[i + 1] = sample(); d[i + 2] = sample()
     }
     d[i + 3] = 255
   }
@@ -565,8 +566,9 @@ function applyTrailGrain(tb, cache, opts) {
   const v = Math.max(0, Math.min(100, variability)) / 100
 
   // Build the noise into a buffer-sized canvas (GPU upscales the small tile),
-  // then sample it per pixel below.
-  const fine = makeNoiseTile(cache, 'tgFine', nw, nh, 64, mono, animate)
+  // then sample it per pixel below. Dissolve needs a flat distribution so the
+  // threshold dither's dot density tracks the trail's coverage linearly.
+  const fine = makeNoiseTile(cache, 'tgFine', nw, nh, 64, mono, animate, dissolve)
   if (!cache.tgMask) cache.tgMask = document.createElement('canvas')
   const noise = cache.tgMask
   if (noise.width !== w || noise.height !== h) { noise.width = w; noise.height = h }
@@ -579,7 +581,7 @@ function applyTrailGrain(tb, cache, opts) {
   if (v > 0) {
     const cw = Math.max(2, Math.round(nw / 2.6))
     const ch = Math.max(2, Math.round(nh / 2.6))
-    const coarse = makeNoiseTile(cache, 'tgCoarse', cw, ch, 64, mono, animate)
+    const coarse = makeNoiseTile(cache, 'tgCoarse', cw, ch, 64, mono, animate, dissolve)
     nctx.imageSmoothingEnabled = true
     nctx.imageSmoothingQuality = 'high'
     nctx.globalAlpha = v * 0.7
@@ -615,11 +617,14 @@ function applyTrailGrain(tb, cache, opts) {
       if (g <= 0.001) continue
 
       if (dissolve) {
-        // Erode alpha by noise. Steepen the curve so it reads as specks, not a fade.
-        const n = (0.299 * nd[i] + 0.587 * nd[i + 1] + 0.114 * nd[i + 2]) / 255
-        let m = (n - 0.5) * 1.8 + 0.5
-        m = m < 0 ? 0 : m > 1 ? 1 : m
-        td[i + 3] = a * (1 - g * (1 - m))
+        // True dissolve, like the blend mode: the trail's coverage is a
+        // probability, not a partial opacity. Each pixel is kept fully opaque
+        // when the (uniform) noise falls under the coverage, else dropped — so
+        // the soft alpha gradient becomes a stochastic dither of hard dots,
+        // dense at the head and thinning into the tail. g blends from the
+        // smooth trail (low amount) to a full dither (amount 100).
+        const dith = nd[i] < a ? 255 : 0      // nd is uniform [0,255]; a is coverage*255
+        td[i + 3] = a * (1 - g) + dith * g
       } else {
         // Additive luminance grain: signed noise added to the trail colour.
         // Visible on white (darkens) and black (lightens) alike, unlike
