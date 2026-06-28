@@ -543,8 +543,10 @@ function makeNoiseTile(cache, key, nw, nh, sigma, mono, animate) {
  *
  * A noise field is built at the chosen coarseness (plus an optional coarser
  * octave for Roughness), then combined per pixel in one of two modes:
- *   • soft  — Pegtop soft-light onto the trail colour (mid-grey is a no-op, only
- *             deviations lighten/darken). The trail keeps its colour and texture.
+ *   • soft  — additive luminance grain on the trail colour (noise lightens and
+ *             darkens it). Additive, not soft-light, because soft-light is a
+ *             no-op on near-white/near-black — which is most text — so it would
+ *             show nothing on a white trail.
  *   • dissolve — the noise erodes the trail's alpha, breaking the streak into
  *             grain specks instead of shading it.
  *
@@ -619,11 +621,12 @@ function applyTrailGrain(tb, cache, opts) {
         m = m < 0 ? 0 : m > 1 ? 1 : m
         td[i + 3] = a * (1 - g * (1 - m))
       } else {
+        // Additive luminance grain: signed noise added to the trail colour.
+        // Visible on white (darkens) and black (lightens) alike, unlike
+        // soft-light. Scales with amount; the trail's own alpha then fades it.
+        const k = g * 0.85
         for (let c = 0; c < 3; c++) {
-          const Cb = td[i + c] / 255
-          const Cs = nd[i + c] / 255
-          const soft = (1 - 2 * Cs) * Cb * Cb + 2 * Cs * Cb   // Pegtop soft-light
-          const r = (Cb * (1 - g) + soft * g) * 255
+          const r = td[i + c] + (nd[i + c] - 128) * k
           td[i + c] = r < 0 ? 0 : r > 255 ? 255 : r
         }
       }
