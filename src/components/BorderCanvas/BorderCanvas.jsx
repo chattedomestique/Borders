@@ -559,8 +559,9 @@ function applyTrailGrain(tb, cache, opts) {
   const { amount, size, variability, mono, spread = 0, dissolve = false, axis, animate } = opts
   if (!amount) return
   const w = tb.width, h = tb.height
-  // Grain cell size in buffer px: Size 0 → fine (~2px), Size 100 → coarse (~14px).
-  const cell = 2 + (Math.max(0, Math.min(100, size)) / 100) * 12
+  // Grain cell size in buffer px: Size 0 → per-pixel (~1px, a true 1:1 dither),
+  // Size 100 → coarse (~16px clumps).
+  const cell = 1 + (Math.max(0, Math.min(100, size)) / 100) * 15
   const nw = Math.max(2, Math.round(w / cell))
   const nh = Math.max(2, Math.round(h / cell))
   const v = Math.max(0, Math.min(100, variability)) / 100
@@ -617,14 +618,15 @@ function applyTrailGrain(tb, cache, opts) {
       if (g <= 0.001) continue
 
       if (dissolve) {
-        // True dissolve, like the blend mode: the trail's coverage is a
-        // probability, not a partial opacity. Each pixel is kept fully opaque
-        // when the (uniform) noise falls under the coverage, else dropped — so
-        // the soft alpha gradient becomes a stochastic dither of hard dots,
-        // dense at the head and thinning into the tail. g blends from the
-        // smooth trail (low amount) to a full dither (amount 100).
-        const dith = nd[i] < a ? 255 : 0      // nd is uniform [0,255]; a is coverage*255
-        td[i + 3] = a * (1 - g) + dith * g
+        // True Dissolve blend: opacity is a probability, never a partial
+        // alpha — every pixel is fully kept or fully dropped (no gradation,
+        // no anti-aliasing). Coverage sets the base dot density; Amount raises
+        // the exponent so the denser body also breaks into grain instead of
+        // staying solid. Kept pixels go fully opaque; the streak's own colour
+        // (RGB) is untouched.
+        const c = a / 255
+        const pKeep = Math.pow(c, 1 + g * 2.5)   // g folds in Amount × spread weighting
+        td[i + 3] = nd[i] < pKeep * 255 ? 255 : 0
       } else {
         // Additive luminance grain: signed noise added to the trail colour.
         // Visible on white (darkens) and black (lightens) alike, unlike
