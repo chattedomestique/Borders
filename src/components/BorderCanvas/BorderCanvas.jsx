@@ -918,10 +918,123 @@ function drawTextEcho(ctx, layer, geom, px, blockCenterY, cache) {
   ctx.restore()
 }
 
+function hexToRgbTriple(hex) {
+  const h = (hex || '#000000').replace('#', '')
+  if (h.length === 3) return [parseInt(h[0] + h[0], 16), parseInt(h[1] + h[1], 16), parseInt(h[2] + h[2], 16)]
+  return [parseInt(h.slice(0, 2), 16) || 0, parseInt(h.slice(2, 4), 16) || 0, parseInt(h.slice(4, 6), 16) || 0]
+}
+
+// One separable box-blur pass over a single Float32 channel (src → src via tmp).
+function boxBlur1(src, tmp, w, h, r) {
+  if (r < 1) return
+  for (let y = 0; y < h; y++) {
+    const row = y * w
+    let sum = 0
+    for (let k = 0; k <= Math.min(r, w - 1); k++) sum += src[row + k]
+    for (let x = 0; x < w; x++) {
+      const cnt = Math.min(x + r, w - 1) - Math.max(x - r, 0) + 1
+      tmp[row + x] = sum / cnt
+      if (x - r >= 0) sum -= src[row + x - r]
+      if (x + r + 1 < w) sum += src[row + x + r + 1]
+    }
+  }
+  for (let x = 0; x < w; x++) {
+    let sum = 0
+    for (let k = 0; k <= Math.min(r, h - 1); k++) sum += tmp[k * w + x]
+    for (let y = 0; y < h; y++) {
+      const cnt = Math.min(y + r, h - 1) - Math.max(y - r, 0) + 1
+      src[y * w + x] = sum / cnt
+      if (y - r >= 0) sum -= tmp[(y - r) * w + x]
+      if (y + r + 1 < h) sum += tmp[(y + r + 1) * w + x]
+    }
+  }
+}
+
+/**
+ * Blob stroke — a distance-based gooey outline. Same construction as the SVG
+ * "gooey" filter / metaballs (and luukdv/gooey-react): blur the glyph alpha
+ * into a field, then threshold it back to a hard edge. The blur radius is the
+ * merge distance, so neighbouring letters bridge into organic blobs as Distance
+ * grows; the threshold is lowered with Distance to dilate the silhouette
+ * outward into a stroke. Smooth feathers the edge. Drawn behind the sharp text.
+ *
+ * Done on the alpha channel in JS — no ctx.filter / SVG / WebGL — so it works
+ * on every target including older iOS Safari.
+ */
+function drawTextBlob(ctx, layer, geom, px, blockCenterY, cache) {
+  const {
+    size = 80, opacity = 100, align = 'center',
+    blobDistance = 40, blobSmooth = 20, blobColor = '#000000',
+  } = layer
+  const { maxLineW, blockH, isJustify } = geom
+  if (maxLineW <= 0) return
+
+  const d = Math.max(0, Math.min(100, blobDistance)) / 100
+  const R = Math.round(2 + d * size * 0.55)                 // blur radius = merge distance
+  const P = Math.ceil(size * 0.4 + R + 8)
+  const bw = Math.ceil(maxLineW + P * 2)
+  const bh = Math.ceil(blockH + P * 2)
+  if (bw < 2 || bh < 2 || bw > 4096 || bh > 4096) return
+  const w = bw, h = bh, len = w * h
+
+  // Glyph silhouette (fill only — ignore stroke/bg/shadow; colour is irrelevant,
+  // we only read its alpha).
+  if (!cache.blobGlyph) cache.blobGlyph = document.createElement('canvas')
+  const og = cache.blobGlyph
+  if (og.width !== w || og.height !== h) { og.width = w; og.height = h }
+  const ogc = og.getContext('2d')
+  ogc.clearRect(0, 0, w, h)
+  const localAnchor = (align === 'center' || isJustify) ? P + maxLineW / 2
+                    : align === 'right'                 ? P + maxLineW : P
+  paintBlock(ogc, { ...layer, color: '#ffffff', stroke: false, bg: 'none', shadow: false },
+    geom, localAnchor, P + blockH / 2, { drawBg: false, drawShadow: false, alpha: 1 })
+
+  if (!cache.blobA || cache.blobA.length < len) {
+    cache.blobA = new Float32Array(len)
+    cache.blobTmp = new Float32Array(len)
+  }
+  const a = cache.blobA, tmp = cache.blobTmp
+  const src = ogc.getImageData(0, 0, w, h).data
+  for (let i = 0, j = 3; i < len; i++, j += 4) a[i] = src[j]
+  boxBlur1(a, tmp, w, h, R)               // 3 passes ≈ Gaussian
+  boxBlur1(a, tmp, w, h, R)
+  boxBlur1(a, tmp, w, h, R)
+
+  // Threshold the blurred field back to an edge. Lower centre with Distance to
+  // push the contour outward; Smooth widens the ramp for a softer edge.
+  const t = (0.5 - d * 0.32) * 255
+  const s = (0.03 + Math.max(0, Math.min(100, blobSmooth)) / 100 * 0.4) * 255
+  const e0 = t - s, e1 = t + s
+  const inv = e1 > e0 ? 1 / (e1 - e0) : 1e9
+  const [cr, cg, cb] = hexToRgbTriple(blobColor)
+
+  if (!cache.blobOut) cache.blobOut = document.createElement('canvas')
+  const out = cache.blobOut
+  if (out.width !== w || out.height !== h) { out.width = w; out.height = h }
+  const octx = out.getContext('2d')
+  const oimg = octx.createImageData(w, h)
+  const od = oimg.data
+  for (let i = 0, j = 0; i < len; i++, j += 4) {
+    let u = (a[i] - e0) * inv
+    u = u < 0 ? 0 : u > 1 ? 1 : u
+    od[j] = cr; od[j + 1] = cg; od[j + 2] = cb
+    od[j + 3] = u * u * (3 - 2 * u) * 255           // smoothstep
+  }
+  octx.putImageData(oimg, 0, 0)
+
+  const baseX = blockLeftFor(align, isJustify, px, maxLineW) - P
+  const baseY = (blockCenterY - blockH / 2) - P
+  ctx.save()
+  ctx.globalAlpha = opacity / 100
+  ctx.drawImage(out, baseX, baseY)
+  ctx.restore()
+}
+
 function drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache, animate) {
   const {
     id, content, align = 'center', x = 0.5, y = 0.88, opacity = 100,
     motionBlur = false, motionLength = 0, echo = false, echoCount = 0,
+    blobStroke = false,
   } = layer
 
   if (!content?.trim()) {
@@ -946,12 +1059,16 @@ function drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache, animate) {
     })
   }
 
-  // Echo ghosts furthest back, then the motion trail, then the sharp text on top.
+  // Echo ghosts furthest back, then the motion trail, then the blob stroke
+  // hugging the glyphs, then the sharp text on top.
   if (echo && echoCount > 0 && cache) {
     drawTextEcho(ctx, layer, geom, px, cy, cache)
   }
   if (motionBlur && motionLength > 0 && cache) {
     drawTextTrail(ctx, layer, geom, px, cy, cache, animate)
+  }
+  if (blobStroke && cache) {
+    drawTextBlob(ctx, layer, geom, px, cy, cache)
   }
   paintBlock(ctx, layer, geom, px, cy, { drawBg: true, drawShadow: true, alpha: opacity / 100 })
   ctx.restore()

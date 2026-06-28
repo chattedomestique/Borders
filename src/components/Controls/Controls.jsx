@@ -323,6 +323,42 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
 
             <div className="controls__divider controls__divider--inset"/>
 
+            {/* Blob stroke — gooey distance-based outline that merges nearby letters */}
+            <div className="controls__row controls__row--spaced">
+              <label className="controls__label">Blob stroke</label>
+              <Toggle on={!!selectedLayer.blobStroke} onChange={v => ul('blobStroke', v)} label="Toggle blob stroke"/>
+            </div>
+
+            {selectedLayer.blobStroke && (
+              <>
+                <div className="controls__row">
+                  <label className="controls__label" htmlFor="blob-distance">Distance</label>
+                  <EditableValue value={selectedLayer.blobDistance ?? 40} min={0} max={100} suffix="%"
+                    onChange={v => ul('blobDistance', v)} />
+                </div>
+                <Slider id="blob-distance" min={0} max={100} step={1} def={40}
+                  value={selectedLayer.blobDistance ?? 40} on={v => ul('blobDistance', v)} />
+
+                <div className="controls__row controls__row--spaced">
+                  <label className="controls__label" htmlFor="blob-smooth">Smooth</label>
+                  <EditableValue value={selectedLayer.blobSmooth ?? 20} min={0} max={100} suffix="%"
+                    onChange={v => ul('blobSmooth', v)} />
+                </div>
+                <Slider id="blob-smooth" min={0} max={100} step={1} def={20}
+                  value={selectedLayer.blobSmooth ?? 20} on={v => ul('blobSmooth', v)} />
+
+                <div className="controls__color-row controls__color-row--active">
+                  <label className="controls__color-swatch" style={{ background: selectedLayer.blobColor ?? '#000000' }}>
+                    <input type="color" value={selectedLayer.blobColor ?? '#000000'}
+                      onChange={e => ul('blobColor', e.target.value)} />
+                  </label>
+                  <span className="controls__color-hint">Blob color</span>
+                </div>
+              </>
+            )}
+
+            <div className="controls__divider controls__divider--inset"/>
+
             {/* Rear-curtain-sync motion blur — sharp text with a fading trail behind it */}
             <div className="controls__row controls__row--spaced">
               <label className="controls__label">Motion blur</label>
