@@ -538,15 +538,22 @@ function makeNoiseTile(cache, key, nw, nh, sigma, mono, animate) {
 }
 
 /**
- * Film grain confined to a motion-blur trail. The trail buffer `tb` already
- * holds the streak (colour + a soft alpha gradient). We build a noise field at
- * the chosen coarseness, mask it to the trail's own alpha so it can't spill
- * past the streak, then soft-light it back onto the trail — the same blend the
- * full-frame grain uses, so mid-grey is a no-op and only the deviations
- * lighten/darken. The result is a long-exposure ambient trail that breaks up
- * into grain instead of a clean gradient.
+ * Film grain confined to a motion-blur trail. The trail buffer `tb` holds the
+ * streak (colour + a soft alpha gradient); only its covered pixels are touched.
+ *
+ * A noise field is built at the chosen coarseness (plus an optional coarser
+ * octave for Roughness), then combined per pixel in one of two modes:
+ *   • soft  — Pegtop soft-light onto the trail colour (mid-grey is a no-op, only
+ *             deviations lighten/darken). The trail keeps its colour and texture.
+ *   • dissolve — the noise erodes the trail's alpha, breaking the streak into
+ *             grain specks instead of shading it.
+ *
+ * `spread` weights the grain along the motion axis toward the dim tail (a real
+ * long exposure is noisiest where the ambient light was faintest), using the
+ * head/tail `axis` in buffer coordinates.
  */
-function applyTrailGrain(tb, cache, { amount, size, variability, mono, animate }) {
+function applyTrailGrain(tb, cache, opts) {
+  const { amount, size, variability, mono, spread = 0, dissolve = false, axis, animate } = opts
   if (!amount) return
   const w = tb.width, h = tb.height
   // Grain cell size in buffer px: Size 0 → fine (~2px), Size 100 → coarse (~14px).
@@ -555,44 +562,74 @@ function applyTrailGrain(tb, cache, { amount, size, variability, mono, animate }
   const nh = Math.max(2, Math.round(h / cell))
   const v = Math.max(0, Math.min(100, variability)) / 100
 
+  // Build the noise into a buffer-sized canvas (GPU upscales the small tile),
+  // then sample it per pixel below.
   const fine = makeNoiseTile(cache, 'tgFine', nw, nh, 64, mono, animate)
-
   if (!cache.tgMask) cache.tgMask = document.createElement('canvas')
-  const mask = cache.tgMask
-  if (mask.width !== w || mask.height !== h) { mask.width = w; mask.height = h }
-  const mctx = mask.getContext('2d')
-  mctx.globalCompositeOperation = 'source-over'
-  mctx.globalAlpha = 1
-  mctx.clearRect(0, 0, w, h)
-
-  // Base (sharp) grain layer stretched to the trail buffer.
-  mctx.imageSmoothingEnabled = false
-  mctx.drawImage(fine, 0, 0, w, h)
-
-  // Optional coarser octave for clumpier grain (Variability), smoothly upscaled.
+  const noise = cache.tgMask
+  if (noise.width !== w || noise.height !== h) { noise.width = w; noise.height = h }
+  const nctx = noise.getContext('2d')
+  nctx.globalCompositeOperation = 'source-over'
+  nctx.globalAlpha = 1
+  nctx.clearRect(0, 0, w, h)
+  nctx.imageSmoothingEnabled = false
+  nctx.drawImage(fine, 0, 0, w, h)
   if (v > 0) {
     const cw = Math.max(2, Math.round(nw / 2.6))
     const ch = Math.max(2, Math.round(nh / 2.6))
     const coarse = makeNoiseTile(cache, 'tgCoarse', cw, ch, 64, mono, animate)
-    mctx.imageSmoothingEnabled = true
-    mctx.imageSmoothingQuality = 'high'
-    mctx.globalAlpha = v * 0.7
-    mctx.drawImage(coarse, 0, 0, w, h)
-    mctx.globalAlpha = 1
+    nctx.imageSmoothingEnabled = true
+    nctx.imageSmoothingQuality = 'high'
+    nctx.globalAlpha = v * 0.7
+    nctx.drawImage(coarse, 0, 0, w, h)
+    nctx.globalAlpha = 1
   }
 
-  // Clip the noise to the trail's shape (multiply its alpha by the trail's).
-  mctx.globalCompositeOperation = 'destination-in'
-  mctx.drawImage(tb, 0, 0)
-  mctx.globalCompositeOperation = 'source-over'
-
-  // Soft-light the masked grain onto the trail.
   const tbctx = tb.getContext('2d')
-  tbctx.save()
-  tbctx.globalCompositeOperation = 'soft-light'
-  tbctx.globalAlpha = Math.min(1, amount / 100)
-  tbctx.drawImage(mask, 0, 0)
-  tbctx.restore()
+  const tImg = tbctx.getImageData(0, 0, w, h)
+  const td = tImg.data
+  const nd = nctx.getImageData(0, 0, w, h).data
+
+  const amt = Math.min(1, amount / 100)
+  const sp = Math.max(0, Math.min(100, spread)) / 100
+  // Spread axis (head → tail) in buffer coords; p runs 0 at the head to 1 at the tail.
+  const hx = axis?.hx ?? 0, hy = axis?.hy ?? 0
+  const ax = (axis?.tx ?? 0) - hx, ay = (axis?.ty ?? 0) - hy
+  const len2 = ax * ax + ay * ay
+  const useSpread = sp > 0 && len2 > 0
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4
+      const a = td[i + 3]
+      if (a === 0) continue
+
+      let g = amt
+      if (useSpread) {
+        let p = ((x - hx) * ax + (y - hy) * ay) / len2
+        p = p < 0 ? 0 : p > 1 ? 1 : p
+        g *= 1 - sp * (1 - p)   // full at tail (p=1), reduced toward head
+      }
+      if (g <= 0.001) continue
+
+      if (dissolve) {
+        // Erode alpha by noise. Steepen the curve so it reads as specks, not a fade.
+        const n = (0.299 * nd[i] + 0.587 * nd[i + 1] + 0.114 * nd[i + 2]) / 255
+        let m = (n - 0.5) * 1.8 + 0.5
+        m = m < 0 ? 0 : m > 1 ? 1 : m
+        td[i + 3] = a * (1 - g * (1 - m))
+      } else {
+        for (let c = 0; c < 3; c++) {
+          const Cb = td[i + c] / 255
+          const Cs = nd[i + c] / 255
+          const soft = (1 - 2 * Cs) * Cb * Cb + 2 * Cs * Cb   // Pegtop soft-light
+          const r = (Cb * (1 - g) + soft * g) * 255
+          td[i + c] = r < 0 ? 0 : r > 255 ? 255 : r
+        }
+      }
+    }
+  }
+  tbctx.putImageData(tImg, 0, 0)
 }
 
 // Composite the glyph bitmap `off` along the motion vector into `target`, with
@@ -617,6 +654,7 @@ function drawTextTrail(ctx, layer, geom, px, blockCenterY, cache, animate) {
     size = 80, opacity = 100, align = 'center', stroke = false,
     motionAngle = 0, motionLength = 0, motionSpeed = 60,
     trailGrain = 0, trailGrainSize = 30, trailGrainVariability = 0, trailGrainMono = true,
+    trailGrainSpread = 0, trailGrainDissolve = false,
   } = layer
   const { maxLineW, blockH, isJustify } = geom
   if (maxLineW <= 0 || motionLength <= 0) return
@@ -688,9 +726,15 @@ function drawTextTrail(ctx, layer, geom, px, blockCenterY, cache, animate) {
   tbctx.clearRect(0, 0, tbW, tbH)
 
   paintTrailCopies(tbctx, off, baseX - tbX, baseY - tbY, vx, vy, K, peak, gamma, dens, 1)
+  // Spread axis: head (sharp end) → tail, in trail-buffer coordinates.
+  const headCx = (baseX - tbX) + bw / 2
+  const headCy = (baseY - tbY) + bh / 2
   applyTrailGrain(tb, cache, {
     amount: trailGrain, size: trailGrainSize,
-    variability: trailGrainVariability, mono: trailGrainMono, animate,
+    variability: trailGrainVariability, mono: trailGrainMono,
+    spread: trailGrainSpread, dissolve: trailGrainDissolve,
+    axis: { hx: headCx, hy: headCy, tx: headCx - vx, ty: headCy - vy },
+    animate,
   })
 
   ctx.save()

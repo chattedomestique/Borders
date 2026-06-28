@@ -362,6 +362,22 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                       onChange={e => ul('trailGrainVariability', Number(e.target.value))} />
 
                     <div className="controls__row controls__row--spaced">
+                      <label className="controls__label" htmlFor="trail-grain-spread">Spread</label>
+                      <EditableValue value={selectedLayer.trailGrainSpread ?? 0} min={0} max={100}
+                        format={v => v === 0 ? 'Even' : `${v}%`}
+                        onChange={v => ul('trailGrainSpread', v)} />
+                    </div>
+                    <input id="trail-grain-spread" type="range" min={0} max={100} step={1}
+                      value={selectedLayer.trailGrainSpread ?? 0}
+                      onChange={e => ul('trailGrainSpread', Number(e.target.value))} />
+
+                    <div className="controls__row controls__row--spaced">
+                      <label className="controls__label">Dissolve</label>
+                      <Toggle on={!!selectedLayer.trailGrainDissolve}
+                        onChange={v => ul('trailGrainDissolve', v)} label="Toggle dissolve grain mode"/>
+                    </div>
+
+                    <div className="controls__row controls__row--spaced">
                       <label className="controls__label">Monochrome grain</label>
                       <Toggle on={selectedLayer.trailGrainMono ?? true}
                         onChange={v => ul('trailGrainMono', v)} label="Toggle monochrome trail grain"/>
