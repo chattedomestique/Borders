@@ -24,9 +24,10 @@ const FONTS = [
 ]
 
 const ALIGNS = [
-  { id: 'left',   label: 'L' },
-  { id: 'center', label: 'C' },
-  { id: 'right',  label: 'R' },
+  { id: 'left',    label: 'L' },
+  { id: 'center',  label: 'C' },
+  { id: 'right',   label: 'R' },
+  { id: 'justify', label: 'J' },
 ]
 
 const TEXT_BG_MODES = [
@@ -135,7 +136,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                   style={{ fontStyle: 'italic' }} onClick={() => ul('italic', !selectedLayer.italic)}
                   aria-pressed={selectedLayer.italic}>I</button>
               </div>
-              <div className="controls__seg controls__seg--fill" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+              <div className="controls__seg controls__seg--fill" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
                 {ALIGNS.map(a => (
                   <button key={a.id} role="radio" aria-checked={selectedLayer.align === a.id}
                     className={`controls__seg-btn${selectedLayer.align === a.id ? ' controls__seg-btn--active' : ''}`}
@@ -159,13 +160,22 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
               value={selectedLayer.opacity} onChange={e => ul('opacity', Number(e.target.value))} />
 
             <div className="controls__row">
-              <label className="controls__label" htmlFor="text-spacing-slider">Spacing</label>
+              <label className="controls__label" htmlFor="text-letter-spacing">Letter spacing</label>
               <span className="controls__value">
                 {selectedLayer.letterSpacing === 0 ? 'Normal' : `${selectedLayer.letterSpacing}px`}
               </span>
             </div>
-            <input id="text-spacing-slider" type="range" min={-5} max={40} step={1}
+            <input id="text-letter-spacing" type="range" min={-5} max={40} step={1}
               value={selectedLayer.letterSpacing} onChange={e => ul('letterSpacing', Number(e.target.value))} />
+
+            <div className="controls__row">
+              <label className="controls__label" htmlFor="text-word-spacing">Word spacing</label>
+              <span className="controls__value">
+                {(selectedLayer.wordSpacing ?? 0) === 0 ? 'Normal' : `${selectedLayer.wordSpacing}px`}
+              </span>
+            </div>
+            <input id="text-word-spacing" type="range" min={-10} max={80} step={1}
+              value={selectedLayer.wordSpacing ?? 0} onChange={e => ul('wordSpacing', Number(e.target.value))} />
           </>
         ) : noLayerHint
       )}

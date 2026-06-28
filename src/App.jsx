@@ -18,7 +18,7 @@ const DEFAULT_LAYER = (id, index = 0) => ({
   y: Math.min(0.88, 0.4 + index * 0.18),
   bold: false, italic: false, opacity: 100,
   shadow: false, stroke: false, strokeColor: '#000000',
-  letterSpacing: 0, bg: 'none', bgColor: '#000000', bgOpacity: 50,
+  letterSpacing: 0, wordSpacing: 0, bg: 'none', bgColor: '#000000', bgOpacity: 50,
 })
 
 const DEFAULT_SETTINGS = {

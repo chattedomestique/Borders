@@ -364,7 +364,7 @@ function drawTextLayer(ctx, totalW, totalH, layer, bboxMap) {
     color = '#ffffff', align = 'center', x = 0.5, y = 0.88,
     bold = false, italic = false, opacity = 100,
     shadow = false, stroke = false, strokeColor = '#000000',
-    letterSpacing = 0, bg = 'none', bgColor = '#000000', bgOpacity = 50,
+    letterSpacing = 0, wordSpacing = 0, bg = 'none', bgColor = '#000000', bgOpacity = 50,
   } = layer
 
   if (!content?.trim()) {
@@ -380,15 +380,39 @@ function drawTextLayer(ctx, totalW, totalH, layer, bboxMap) {
 
   ctx.save()
   ctx.font = `${italic ? 'italic ' : ''}${bold ? 'bold ' : ''}${size}px ${font}`
-  if ('letterSpacing' in ctx) ctx.letterSpacing = `${letterSpacing}px`
-  ctx.textAlign = align
+  const canLetterSpace = 'letterSpacing' in ctx
+  const canWordSpace   = 'wordSpacing' in ctx
+  if (canLetterSpace) ctx.letterSpacing = `${letterSpacing}px`
+  if (canWordSpace)   ctx.wordSpacing = `${wordSpacing}px`
   ctx.textBaseline = 'middle'
   ctx.globalAlpha = opacity / 100
 
-  const maxLineW = Math.max(...lines.map(l => ctx.measureText(l).width))
-  const boxLeft = align === 'center' ? px - maxLineW / 2
+  // Justify ("equal spacing") stretches every line except the last to the
+  // width of the widest line — the paragraph's natural width — by widening the
+  // gaps between words. Lines are drawn left-anchored from the block's left
+  // edge; everything else keeps the simple center/left/right anchor.
+  const isJustify = align === 'justify' && canWordSpace
+  const lineWidths = lines.map(l => ctx.measureText(l).width)  // at base spacing
+  const maxLineW = Math.max(...lineWidths, 0)
+
+  // Per-line word spacing (px) when justified; null = draw at base spacing.
+  const justifySpacing = lines.map((line, i) => {
+    if (!isJustify || i === lines.length - 1) return null
+    const gaps = (line.match(/ /g) || []).length
+    if (gaps === 0 || lineWidths[i] >= maxLineW) return null
+    return wordSpacing + (maxLineW - lineWidths[i]) / gaps
+  })
+
+  ctx.textAlign = isJustify ? 'left' : align
+  const boxLeft = (align === 'center' || isJustify) ? px - maxLineW / 2
                 : align === 'right'  ? px - maxLineW
                 : px
+  // Where each line's pen starts. Justified lines render from the block's
+  // left edge; otherwise the existing center/right/left anchor at px is used.
+  const textX = isJustify ? boxLeft : px
+
+  const lineSpacing = i => (justifySpacing[i] != null ? justifySpacing[i] : wordSpacing)
+  const lineRendered = i => (justifySpacing[i] != null ? maxLineW : lineWidths[i])
 
   // Store bbox for hit-testing
   if (bboxMap) {
@@ -406,8 +430,9 @@ function drawTextLayer(ctx, totalW, totalH, layer, bboxMap) {
     ctx.globalAlpha = (bgOpacity / 100) * (opacity / 100)
     ctx.fillStyle = bgColor
     lines.forEach((line, i) => {
-      const lw = ctx.measureText(line).width
-      const lx = align === 'center' ? px - lw / 2 - pad
+      const lw = lineRendered(i)
+      const lx = isJustify          ? boxLeft - pad
+               : align === 'center' ? px - lw / 2 - pad
                : align === 'right'  ? px - lw - pad
                : px - pad
       const ly = startY + i * lineHeight - lineHeight / 2
@@ -435,11 +460,17 @@ function drawTextLayer(ctx, totalW, totalH, layer, bboxMap) {
     ctx.strokeStyle = strokeColor
     ctx.lineWidth = Math.max(2, size * 0.07)
     ctx.lineJoin = 'round'
-    lines.forEach((line, i) => ctx.strokeText(line, px, startY + i * lineHeight))
+    lines.forEach((line, i) => {
+      if (canWordSpace) ctx.wordSpacing = `${lineSpacing(i)}px`
+      ctx.strokeText(line, textX, startY + i * lineHeight)
+    })
   }
 
   ctx.fillStyle = color
-  lines.forEach((line, i) => ctx.fillText(line, px, startY + i * lineHeight))
+  lines.forEach((line, i) => {
+    if (canWordSpace) ctx.wordSpacing = `${lineSpacing(i)}px`
+    ctx.fillText(line, textX, startY + i * lineHeight)
+  })
   ctx.restore()
 }
 
