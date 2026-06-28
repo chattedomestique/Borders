@@ -19,6 +19,7 @@ const DEFAULT_LAYER = (id, index = 0) => ({
   bold: false, italic: false, opacity: 100,
   shadow: false, stroke: false, strokeColor: '#000000',
   letterSpacing: 0, wordSpacing: 0, bg: 'none', bgColor: '#000000', bgOpacity: 50,
+  motionBlur: false, motionAngle: 0, motionLength: 60, motionSpeed: 60,
 })
 
 const DEFAULT_SETTINGS = {

@@ -234,6 +234,41 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                   onChange={e => ul('bgOpacity', Number(e.target.value))} aria-label="Background opacity"/>
               </>
             )}
+
+            <div className="controls__divider controls__divider--inset"/>
+
+            {/* Rear-curtain-sync motion blur — sharp text with a fading trail behind it */}
+            <div className="controls__row controls__row--spaced">
+              <label className="controls__label">Motion blur</label>
+              <Toggle on={!!selectedLayer.motionBlur} onChange={v => ul('motionBlur', v)} label="Toggle motion blur"/>
+            </div>
+
+            {selectedLayer.motionBlur && (
+              <>
+                <div className="controls__row">
+                  <label className="controls__label" htmlFor="motion-direction">Direction</label>
+                  <span className="controls__value">{selectedLayer.motionAngle ?? 0}°</span>
+                </div>
+                <input id="motion-direction" type="range" min={0} max={360} step={1}
+                  value={selectedLayer.motionAngle ?? 0} onChange={e => ul('motionAngle', Number(e.target.value))} />
+
+                <div className="controls__row">
+                  <label className="controls__label" htmlFor="motion-distance">Distance</label>
+                  <span className="controls__value">
+                    {(selectedLayer.motionLength ?? 0) === 0 ? 'Off' : `${selectedLayer.motionLength}px`}
+                  </span>
+                </div>
+                <input id="motion-distance" type="range" min={0} max={400} step={2}
+                  value={selectedLayer.motionLength ?? 0} onChange={e => ul('motionLength', Number(e.target.value))} />
+
+                <div className="controls__row">
+                  <label className="controls__label" htmlFor="motion-speed">Speed</label>
+                  <span className="controls__value">{selectedLayer.motionSpeed ?? 60}%</span>
+                </div>
+                <input id="motion-speed" type="range" min={0} max={100} step={1}
+                  value={selectedLayer.motionSpeed ?? 60} onChange={e => ul('motionSpeed', Number(e.target.value))} />
+              </>
+            )}
           </>
         ) : noLayerHint
       )}

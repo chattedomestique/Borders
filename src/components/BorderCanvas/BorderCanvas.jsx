@@ -358,39 +358,27 @@ function applyGrain(ctx, w, h, grainAmount, grainVariability, monochrome, animat
   if (v > 0.4) drawLayer('grain22', 22, true, (v - 0.4) / 0.6 * 0.45) // coarse, smooth
 }
 
-function drawTextLayer(ctx, totalW, totalH, layer, bboxMap) {
+/**
+ * Measure a text layer's block geometry without drawing. Sets font + spacing on
+ * the passed context (so measureText is accurate) and returns everything the
+ * painter needs. Shared by the normal draw, the motion-blur offscreen pass, and
+ * hit-testing so all three stay perfectly aligned.
+ */
+function measureBlock(ctx, layer) {
   const {
-    id, content, font = 'system-ui, sans-serif', size = 80,
-    color = '#ffffff', align = 'center', x = 0.5, y = 0.88,
-    bold = false, italic = false, opacity = 100,
-    shadow = false, stroke = false, strokeColor = '#000000',
-    letterSpacing = 0, wordSpacing = 0, bg = 'none', bgColor = '#000000', bgOpacity = 50,
+    content, font = 'system-ui, sans-serif', size = 80,
+    align = 'center', bold = false, italic = false,
+    letterSpacing = 0, wordSpacing = 0,
   } = layer
 
-  if (!content?.trim()) {
-    bboxMap?.delete(id)
-    return
-  }
+  ctx.font = `${italic ? 'italic ' : ''}${bold ? 'bold ' : ''}${size}px ${font}`
+  const canWordSpace = 'wordSpacing' in ctx
+  if ('letterSpacing' in ctx) ctx.letterSpacing = `${letterSpacing}px`
+  if (canWordSpace)           ctx.wordSpacing = `${wordSpacing}px`
 
   const lines = content.split('\n')
   const lineHeight = size * 1.3
   const blockH = lines.length * lineHeight
-  const px = x * totalW
-  const startY = y * totalH - blockH / 2 + lineHeight / 2
-
-  ctx.save()
-  ctx.font = `${italic ? 'italic ' : ''}${bold ? 'bold ' : ''}${size}px ${font}`
-  const canLetterSpace = 'letterSpacing' in ctx
-  const canWordSpace   = 'wordSpacing' in ctx
-  if (canLetterSpace) ctx.letterSpacing = `${letterSpacing}px`
-  if (canWordSpace)   ctx.wordSpacing = `${wordSpacing}px`
-  ctx.textBaseline = 'middle'
-  ctx.globalAlpha = opacity / 100
-
-  // Justify ("equal spacing") stretches every line to the width of the widest
-  // line — the paragraph's natural width — by widening the gaps between words,
-  // so all lines fill evenly (including the last). Lines are drawn left-anchored
-  // from the block's left edge; everything else keeps the center/left/right anchor.
   const isJustify = align === 'justify' && canWordSpace
   const lineWidths = lines.map(l => ctx.measureText(l).width)  // at base spacing
   const maxLineW = Math.max(...lineWidths, 0)
@@ -405,31 +393,50 @@ function drawTextLayer(ctx, totalW, totalH, layer, bboxMap) {
     return wordSpacing + (maxLineW - lineWidths[i]) / gaps
   })
 
-  ctx.textAlign = isJustify ? 'left' : align
-  const boxLeft = (align === 'center' || isJustify) ? px - maxLineW / 2
-                : align === 'right'  ? px - maxLineW
-                : px
-  // Where each line's pen starts. Justified lines render from the block's
-  // left edge; otherwise the existing center/right/left anchor at px is used.
-  const textX = isJustify ? boxLeft : px
+  return { lines, lineHeight, blockH, isJustify, lineWidths, maxLineW, justifySpacing, canWordSpace }
+}
 
-  const lineSpacing = i => (justifySpacing[i] != null ? justifySpacing[i] : wordSpacing)
+// Left edge of the text block in canvas coords, given the per-align anchor px.
+function blockLeftFor(align, isJustify, px, maxLineW) {
+  return (align === 'center' || isJustify) ? px - maxLineW / 2
+       : align === 'right'                 ? px - maxLineW
+       : px
+}
+
+/**
+ * Paint a measured text block with its horizontal anchor at px and its vertical
+ * centre at blockCenterY. Self-contained (re-applies font + spacing) so it works
+ * on an offscreen canvas too. opts.alpha scales the whole block; opts.drawBg /
+ * opts.drawShadow let the motion-trail pass omit the background and drop shadow.
+ */
+function paintBlock(ctx, layer, geom, px, blockCenterY, opts = {}) {
+  const { drawBg = false, drawShadow = false, alpha = 1 } = opts
+  const {
+    font = 'system-ui, sans-serif', size = 80, color = '#ffffff', align = 'center',
+    bold = false, italic = false, letterSpacing = 0, wordSpacing = 0,
+    shadow = false, stroke = false, strokeColor = '#000000',
+    bg = 'none', bgColor = '#000000', bgOpacity = 50,
+  } = layer
+  const { lines, lineHeight, blockH, isJustify, lineWidths, maxLineW, justifySpacing, canWordSpace } = geom
+
+  ctx.save()
+  ctx.font = `${italic ? 'italic ' : ''}${bold ? 'bold ' : ''}${size}px ${font}`
+  if ('letterSpacing' in ctx) ctx.letterSpacing = `${letterSpacing}px`
+  if (canWordSpace)           ctx.wordSpacing = `${wordSpacing}px`
+  ctx.textBaseline = 'middle'
+  ctx.textAlign = isJustify ? 'left' : align
+
+  const startY = blockCenterY - blockH / 2 + lineHeight / 2
+  const boxLeft = blockLeftFor(align, isJustify, px, maxLineW)
+  const textX = isJustify ? boxLeft : px
+  const lineSpacing  = i => (justifySpacing[i] != null ? justifySpacing[i] : wordSpacing)
   const lineRendered = i => (justifySpacing[i] != null ? maxLineW : lineWidths[i])
 
-  // Store bbox for hit-testing
-  if (bboxMap) {
-    const pad = 24
-    bboxMap.set(id, {
-      x: boxLeft - pad, y: startY - lineHeight / 2 - pad,
-      w: maxLineW + pad * 2, h: blockH + pad * 2,
-    })
-  }
-
   // Per-line background
-  if (bg !== 'none') {
+  if (drawBg && bg !== 'none') {
     const pad = size * 0.28
     ctx.save()
-    ctx.globalAlpha = (bgOpacity / 100) * (opacity / 100)
+    ctx.globalAlpha = (bgOpacity / 100) * alpha
     ctx.fillStyle = bgColor
     lines.forEach((line, i) => {
       const lw = lineRendered(i)
@@ -451,7 +458,8 @@ function drawTextLayer(ctx, totalW, totalH, layer, bboxMap) {
     ctx.restore()
   }
 
-  if (shadow) {
+  ctx.globalAlpha = alpha
+  if (drawShadow && shadow) {
     ctx.shadowColor = 'rgba(0,0,0,0.55)'
     ctx.shadowBlur = size * 0.45
     ctx.shadowOffsetX = size * 0.05
@@ -473,6 +481,129 @@ function drawTextLayer(ctx, totalW, totalH, layer, bboxMap) {
     if (canWordSpace) ctx.wordSpacing = `${lineSpacing(i)}px`
     ctx.fillText(line, textX, startY + i * lineHeight)
   })
+  ctx.restore()
+}
+
+/**
+ * Rear-curtain-sync motion blur for a text layer.
+ *
+ * Real rear-curtain (second-curtain) flash fires the strobe at the END of a
+ * long exposure: the ambient light records the subject smearing along its path,
+ * then the flash freezes a sharp frame at the final position. The result is a
+ * blur trail that follows the motion and fades out behind a crisp subject.
+ *
+ * We reproduce that honestly rather than faking a shadow:
+ *   1. Render the glyphs once into an offscreen bitmap (font shaping is the
+ *      expensive part — do it a single time).
+ *   2. Composite that bitmap many times along the motion vector with sub-pixel
+ *      offsets, source-over, alpha rising toward the head (so the near-head
+ *      smear is dense and the tail dissolves). This is a genuine directional
+ *      integral of the glyph shapes — every letter streaks, not just a copy.
+ *   3. The sharp "flash" frame is drawn afterwards by the caller, on top.
+ *
+ * `motionAngle` is the direction of travel; the trail extends opposite it (the
+ * path the subject came from). `motionLength` is the trail length in px.
+ * `motionSpeed` shapes the falloff: faster → a longer, wispier streak; slower →
+ * a tight, dense smear hugging the subject.
+ */
+function drawTextTrail(ctx, layer, geom, px, blockCenterY, cache) {
+  const {
+    size = 80, opacity = 100, align = 'center', stroke = false,
+    motionAngle = 0, motionLength = 0, motionSpeed = 60,
+  } = layer
+  const { maxLineW, blockH, isJustify } = geom
+  if (maxLineW <= 0 || motionLength <= 0) return
+
+  const angle = motionAngle * Math.PI / 180
+  const vx = Math.cos(angle) * motionLength
+  const vy = Math.sin(angle) * motionLength
+
+  // Offscreen bitmap of the glyphs, padded for stroke + minor glyph overhang.
+  const P = Math.ceil(size * 0.4 + (stroke ? size * 0.07 : 0) + 8)
+  const bw = Math.ceil(maxLineW + P * 2)
+  const bh = Math.ceil(blockH + P * 2)
+  if (bw < 2 || bh < 2 || bw > 4096 || bh > 4096) return
+
+  if (!cache.textTrail) cache.textTrail = document.createElement('canvas')
+  const off = cache.textTrail
+  if (off.width !== bw || off.height !== bh) { off.width = bw; off.height = bh }
+  const octx = off.getContext('2d')
+  octx.clearRect(0, 0, bw, bh)
+
+  // Local anchor px chosen so the block's left edge sits at P (and top at P)
+  // inside the bitmap, whatever the alignment.
+  const localAnchor = (align === 'center' || isJustify) ? P + maxLineW / 2
+                    : align === 'right'                 ? P + maxLineW
+                    : P
+  paintBlock(octx, layer, geom, localAnchor, P + blockH / 2, { drawBg: false, drawShadow: false, alpha: 1 })
+
+  // Where the sharp block's top-left lands on the main canvas → bitmap origin.
+  const boxLeftMain = blockLeftFor(align, isJustify, px, maxLineW)
+  const baseX = boxLeftMain - P
+  const baseY = (blockCenterY - blockH / 2) - P
+
+  const speed = Math.max(0, Math.min(100, motionSpeed)) / 100
+  // Per-copy opacity at the head, calibrated at SAMPLE-px spacing. Kept low: the
+  // ambient trail is dimmer than the flash-lit sharp frame, and many overlapping
+  // copies still build a dense near-head smear without blowing out to solid.
+  const peak = 0.09 + speed * 0.07
+  // Falloff: slow → trail hugs the subject (tight, dense); fast → longer, wispier streak.
+  const gamma = 2.6 - speed * 1.4
+  const SAMPLE = 2                                                      // target px between copies
+  const K = Math.max(12, Math.min(128, Math.round(motionLength / SAMPLE)))
+  const spacing = motionLength / (K - 1)
+  // Density normalisation: per-copy alpha scales with actual spacing so the
+  // trail's overall density is the same whether or not K hits the cap.
+  const dens = spacing / SAMPLE
+
+  ctx.save()
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  // Draw tail → head so the brighter near-head copies composite last (on top).
+  for (let i = 0; i < K; i++) {
+    const t = i / (K - 1)                     // 0 = tail, 1 = head
+    const a = peak * dens * Math.pow(t, gamma) * (opacity / 100)
+    if (a <= 0.002) continue
+    ctx.globalAlpha = a > 1 ? 1 : a
+    // Trail extends opposite the travel direction (the path the subject came from).
+    ctx.drawImage(off, baseX - vx * (1 - t), baseY - vy * (1 - t))
+  }
+  ctx.restore()
+}
+
+function drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache) {
+  const {
+    id, content, align = 'center', x = 0.5, y = 0.88, opacity = 100,
+    motionBlur = false, motionLength = 0,
+  } = layer
+
+  if (!content?.trim()) {
+    bboxMap?.delete(id)
+    return
+  }
+
+  ctx.save()
+  const geom = measureBlock(ctx, layer)
+  const { maxLineW, blockH } = geom
+  const px = x * totalW
+  const cy = y * totalH
+
+  // Hit-test bbox tracks the sharp text (not the trail) so dragging always grabs
+  // the readable glyphs.
+  if (bboxMap) {
+    const pad = 24
+    const boxLeft = blockLeftFor(align, geom.isJustify, px, maxLineW)
+    bboxMap.set(id, {
+      x: boxLeft - pad, y: cy - blockH / 2 - pad,
+      w: maxLineW + pad * 2, h: blockH + pad * 2,
+    })
+  }
+
+  // Trail underneath, then the sharp "flash" frame on top.
+  if (motionBlur && motionLength > 0 && cache) {
+    drawTextTrail(ctx, layer, geom, px, cy, cache)
+  }
+  paintBlock(ctx, layer, geom, px, cy, { drawBg: true, drawShadow: true, alpha: opacity / 100 })
   ctx.restore()
 }
 
@@ -592,7 +723,7 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
 
   // 4. Text layers (drawn last, on top of everything)
   if (bboxMap) bboxMap.clear()
-  textLayers.forEach(layer => drawTextLayer(ctx, totalW, totalH, layer, bboxMap))
+  textLayers.forEach(layer => drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache))
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
