@@ -23,7 +23,7 @@ const DEFAULT_LAYER = (id, index = 0) => ({
   trailGrain: 0, trailGrainSize: 30, trailGrainVariability: 0, trailGrainMono: true,
   trailGrainSpread: 0, trailGrainDissolve: false,
   echo: false, echoCount: 5, echoAngle: 0, echoSpacing: 40, echoGhosting: 60,
-  echoBlur: 0, echoZoom: 0, echoSpin: 0, echoHue: 0, echoBlend: 'stack',
+  echoBlur: 0, echoZoom: 0, echoSpin: 0, echoHue: 0, echoBlend: 'stack', echoEase: 50,
 })
 
 const DEFAULT_SETTINGS = {

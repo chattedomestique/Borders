@@ -753,10 +753,64 @@ function drawTextTrail(ctx, layer, geom, px, blockCenterY, cache, animate) {
   ctx.restore()
 }
 
+// One separable box-blur pass over RGBA (all four channels), so transparency
+// blurs too. Same running-sum technique as boxBlurPass but alpha-aware.
+function boxBlurPass4(d, w, h, r) {
+  const tmp = new Uint8ClampedArray(d.length)
+  for (let y = 0; y < h; y++) {                       // horizontal: d → tmp
+    const row = y * w
+    let R = 0, G = 0, B = 0, A = 0
+    for (let k = 0; k <= Math.min(r, w - 1); k++) {
+      const i = (row + k) * 4; R += d[i]; G += d[i + 1]; B += d[i + 2]; A += d[i + 3]
+    }
+    for (let x = 0; x < w; x++) {
+      const cnt = Math.min(x + r, w - 1) - Math.max(x - r, 0) + 1
+      const o = (row + x) * 4
+      tmp[o] = R / cnt; tmp[o + 1] = G / cnt; tmp[o + 2] = B / cnt; tmp[o + 3] = A / cnt
+      if (x - r >= 0)    { const i = (row + x - r) * 4;     R -= d[i]; G -= d[i+1]; B -= d[i+2]; A -= d[i+3] }
+      if (x + r + 1 < w) { const i = (row + x + r + 1) * 4; R += d[i]; G += d[i+1]; B += d[i+2]; A += d[i+3] }
+    }
+  }
+  for (let x = 0; x < w; x++) {                        // vertical: tmp → d
+    let R = 0, G = 0, B = 0, A = 0
+    for (let k = 0; k <= Math.min(r, h - 1); k++) {
+      const i = (k * w + x) * 4; R += tmp[i]; G += tmp[i + 1]; B += tmp[i + 2]; A += tmp[i + 3]
+    }
+    for (let y = 0; y < h; y++) {
+      const cnt = Math.min(y + r, h - 1) - Math.max(y - r, 0) + 1
+      const o = (y * w + x) * 4
+      d[o] = R / cnt; d[o + 1] = G / cnt; d[o + 2] = B / cnt; d[o + 3] = A / cnt
+      if (y - r >= 0)    { const i = ((y - r) * w + x) * 4;     R -= tmp[i]; G -= tmp[i+1]; B -= tmp[i+2]; A -= tmp[i+3] }
+      if (y + r + 1 < h) { const i = ((y + r + 1) * w + x) * 4; R += tmp[i]; G += tmp[i+1]; B += tmp[i+2]; A += tmp[i+3] }
+    }
+  }
+}
+
+// Gaussian-ish blur of an RGBA buffer with transparency. Premultiplies so soft
+// glyph edges don't pick up dark halos, runs two box passes, then unpremultiplies.
+function blurRGBA(d, w, h, r) {
+  if (r < 1) return
+  for (let i = 0; i < d.length; i += 4) {
+    const a = d[i + 3] / 255
+    d[i] *= a; d[i + 1] *= a; d[i + 2] *= a
+  }
+  boxBlurPass4(d, w, h, r)
+  boxBlurPass4(d, w, h, r)
+  for (let i = 0; i < d.length; i += 4) {
+    const a = d[i + 3] / 255
+    if (a > 0) {
+      d[i] = Math.min(255, d[i] / a)
+      d[i + 1] = Math.min(255, d[i + 1] / a)
+      d[i + 2] = Math.min(255, d[i + 2] / a)
+    }
+  }
+}
+
 // Build a blurred and/or hue-tinted variant of the glyph bitmap for one echo.
-// Returns `off` untouched when no blur or tint is needed. Blur is a shrink →
-// grow bilinear pass (ctx.filter 'blur' is ignored on older iOS Safari, so we
-// avoid it); tint recolours the glyphs via source-atop for chromatic echoes.
+// Returns `off` untouched when no blur or tint is needed. Blur uses the same
+// box-blur stack as the frosted background (ctx.filter 'blur' is ignored on
+// older iOS Safari); tint recolours the glyphs via source-atop for chromatic
+// echoes.
 function prepareEchoBitmap(off, bw, bh, blurR, tint, cache) {
   if (blurR < 0.5 && !tint) return off
   if (!cache.echoScratch) cache.echoScratch = document.createElement('canvas')
@@ -766,22 +820,12 @@ function prepareEchoBitmap(off, bw, bh, blurR, tint, cache) {
   c.globalCompositeOperation = 'source-over'
   c.globalAlpha = 1
   c.clearRect(0, 0, bw, bh)
+  c.drawImage(off, 0, 0)
 
   if (blurR >= 0.5) {
-    const f = 1 / (1 + blurR * 0.4)
-    const dw = Math.max(1, Math.round(bw * f))
-    const dh = Math.max(1, Math.round(bh * f))
-    if (!cache.echoTmp) cache.echoTmp = document.createElement('canvas')
-    const tmp = cache.echoTmp
-    if (tmp.width !== dw || tmp.height !== dh) { tmp.width = dw; tmp.height = dh }
-    const tc = tmp.getContext('2d')
-    tc.clearRect(0, 0, dw, dh)
-    tc.imageSmoothingEnabled = true; tc.imageSmoothingQuality = 'high'
-    tc.drawImage(off, 0, 0, dw, dh)
-    c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high'
-    c.drawImage(tmp, 0, 0, bw, bh)
-  } else {
-    c.drawImage(off, 0, 0)
+    const img = c.getImageData(0, 0, bw, bh)
+    blurRGBA(img.data, bw, bh, Math.round(blurR))
+    c.putImageData(img, 0, 0)
   }
 
   if (tint) {
@@ -809,6 +853,7 @@ function drawTextEcho(ctx, layer, geom, px, blockCenterY, cache) {
     size = 80, opacity = 100, align = 'center', stroke = false,
     echoCount = 0, echoAngle = 0, echoSpacing = 40, echoGhosting = 60,
     echoBlur = 0, echoZoom = 0, echoSpin = 0, echoHue = 0, echoBlend = 'stack',
+    echoEase = 50,
   } = layer
   const { maxLineW, blockH, isJustify } = geom
   const n = Math.max(0, Math.min(16, Math.round(echoCount)))
@@ -835,8 +880,15 @@ function drawTextEcho(ctx, layer, geom, px, blockCenterY, cache) {
   const cyMain = blockCenterY
 
   const ang = echoAngle * Math.PI / 180
-  const sx = Math.cos(ang) * echoSpacing
-  const sy = Math.sin(ang) * echoSpacing
+  const ux = Math.cos(ang), uy = Math.sin(ang)
+  // Spacing follows an easing curve along the run. Linear keeps even gaps;
+  // positive (default) eases out — ghosts start tight and spread apart as they
+  // go; negative does the reverse (start spread, bunch up at the end). The full
+  // run reaches the same span (echoSpacing × count) at either extreme.
+  const span = echoSpacing * n
+  const k = Math.max(-100, Math.min(100, echoEase)) / 100 * 3
+  const denom = Math.abs(k) < 0.01 ? 0 : Math.exp(k) - 1
+  const ease = t => denom === 0 ? t : (Math.exp(k * t) - 1) / denom
   const decay = 0.2 + Math.max(0, Math.min(100, echoGhosting)) / 100 * 0.78
   const scaleStep = 1 + echoZoom / 100 * 0.18
   const spinRad = echoSpin * Math.PI / 180
@@ -854,9 +906,10 @@ function drawTextEcho(ctx, layer, geom, px, blockCenterY, cache) {
     const blurR = echoBlur > 0 ? echoBlur * (i / n) : 0
     const tint = echoHue > 0 ? `hsl(${((i * echoHue) % 360 + 360) % 360}, 85%, 60%)` : null
     const src = prepareEchoBitmap(off, bw, bh, blurR, tint, cache)
+    const di = span * ease(i / n)
     ctx.save()
     ctx.globalAlpha = fade
-    ctx.translate(cxMain + sx * i, cyMain + sy * i)
+    ctx.translate(cxMain + ux * di, cyMain + uy * di)
     if (spinRad) ctx.rotate(spinRad * i)
     if (echoZoom) { const s = Math.pow(scaleStep, i); ctx.scale(s, s) }
     ctx.drawImage(src, -bcx, -bcy)

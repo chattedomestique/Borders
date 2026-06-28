@@ -55,6 +55,28 @@ function Toggle({ on, onChange, label }) {
 }
 
 /**
+ * Range slider that resets to its default on double-tap / double-click of the
+ * handle. `def` is the default value; `on(value)` receives the numeric value
+ * (from drags and from the reset). All other props pass through to the input.
+ */
+function Slider({ def, on, ...rest }) {
+  const lastTap = useRef(0)
+  const reset = () => { if (def != null) on(def) }
+  return (
+    <input
+      type="range" {...rest}
+      onChange={e => on(Number(e.target.value))}
+      onDoubleClick={reset}
+      onPointerDown={() => {
+        const now = Date.now()
+        if (now - lastTap.current < 320) { reset(); lastTap.current = 0 }
+        else lastTap.current = now
+      }}
+    />
+  )
+}
+
+/**
  * The value pill next to every slider. Tap it to type an exact amount; on
  * commit the entry is clamped to [min, max] and snapped to `step`. `format`
  * keeps the pretty display labels (e.g. "Normal", "Square", "+20%") while the
@@ -211,16 +233,16 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
               <EditableValue value={selectedLayer.size} min={20} max={300} step={2}
                 onChange={v => ul('size', v)} />
             </div>
-            <input id="text-size-slider" type="range" min={20} max={300} step={2}
-              value={selectedLayer.size} onChange={e => ul('size', Number(e.target.value))} />
+            <Slider id="text-size-slider" min={20} max={300} step={2} def={80}
+              value={selectedLayer.size} on={v => ul('size', v)} />
 
             <div className="controls__row">
               <label className="controls__label" htmlFor="text-opacity-slider">Opacity</label>
               <EditableValue value={selectedLayer.opacity} min={10} max={100} suffix="%"
                 onChange={v => ul('opacity', v)} />
             </div>
-            <input id="text-opacity-slider" type="range" min={10} max={100} step={1}
-              value={selectedLayer.opacity} onChange={e => ul('opacity', Number(e.target.value))} />
+            <Slider id="text-opacity-slider" min={10} max={100} step={1} def={100}
+              value={selectedLayer.opacity} on={v => ul('opacity', v)} />
 
             <div className="controls__row">
               <label className="controls__label" htmlFor="text-letter-spacing">Letter spacing</label>
@@ -228,8 +250,8 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                 format={v => v === 0 ? 'Normal' : `${v}px`}
                 onChange={v => ul('letterSpacing', v)} />
             </div>
-            <input id="text-letter-spacing" type="range" min={-5} max={40} step={1}
-              value={selectedLayer.letterSpacing} onChange={e => ul('letterSpacing', Number(e.target.value))} />
+            <Slider id="text-letter-spacing" min={-5} max={40} step={1} def={0}
+              value={selectedLayer.letterSpacing} on={v => ul('letterSpacing', v)} />
 
             <div className="controls__row">
               <label className="controls__label" htmlFor="text-word-spacing">Word spacing</label>
@@ -237,8 +259,8 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                 format={v => v === 0 ? 'Normal' : `${v}px`}
                 onChange={v => ul('wordSpacing', v)} />
             </div>
-            <input id="text-word-spacing" type="range" min={-10} max={80} step={1}
-              value={selectedLayer.wordSpacing ?? 0} onChange={e => ul('wordSpacing', Number(e.target.value))} />
+            <Slider id="text-word-spacing" min={-10} max={80} step={1} def={0}
+              value={selectedLayer.wordSpacing ?? 0} on={v => ul('wordSpacing', v)} />
           </>
         ) : noLayerHint
       )}
@@ -294,8 +316,8 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                   <EditableValue value={selectedLayer.bgOpacity} min={10} max={100} suffix="%"
                     style={{ fontSize: 11 }} onChange={v => ul('bgOpacity', v)} />
                 </div>
-                <input type="range" min={10} max={100} step={1} value={selectedLayer.bgOpacity}
-                  onChange={e => ul('bgOpacity', Number(e.target.value))} aria-label="Background opacity"/>
+                <Slider min={10} max={100} step={1} value={selectedLayer.bgOpacity} def={50}
+                  on={v => ul('bgOpacity', v)} aria-label="Background opacity"/>
               </>
             )}
 
@@ -315,8 +337,8 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                     onChange={v => ul('motionAngle', v)} />
                 </div>
                 {/* Snap to 5° so the streak angle stays put when you lift your thumb */}
-                <input id="motion-direction" type="range" min={0} max={360} step={5}
-                  value={selectedLayer.motionAngle ?? 0} onChange={e => ul('motionAngle', Number(e.target.value))} />
+                <Slider id="motion-direction" min={0} max={360} step={5} def={0}
+                  value={selectedLayer.motionAngle ?? 0} on={v => ul('motionAngle', v)} />
 
                 <div className="controls__row">
                   <label className="controls__label" htmlFor="motion-distance">Distance</label>
@@ -324,16 +346,16 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                     format={v => v === 0 ? 'Off' : `${v}px`}
                     onChange={v => ul('motionLength', v)} />
                 </div>
-                <input id="motion-distance" type="range" min={0} max={400} step={2}
-                  value={selectedLayer.motionLength ?? 0} onChange={e => ul('motionLength', Number(e.target.value))} />
+                <Slider id="motion-distance" min={0} max={400} step={2} def={60}
+                  value={selectedLayer.motionLength ?? 0} on={v => ul('motionLength', v)} />
 
                 <div className="controls__row">
                   <label className="controls__label" htmlFor="motion-speed">Speed</label>
                   <EditableValue value={selectedLayer.motionSpeed ?? 60} min={0} max={100} suffix="%"
                     onChange={v => ul('motionSpeed', v)} />
                 </div>
-                <input id="motion-speed" type="range" min={0} max={100} step={1}
-                  value={selectedLayer.motionSpeed ?? 60} onChange={e => ul('motionSpeed', Number(e.target.value))} />
+                <Slider id="motion-speed" min={0} max={100} step={1} def={60}
+                  value={selectedLayer.motionSpeed ?? 60} on={v => ul('motionSpeed', v)} />
 
                 {/* Grain adjustment on the trail — long-exposure ambient noise */}
                 <div className="controls__divider controls__divider--inset"/>
@@ -343,8 +365,8 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                     format={v => v === 0 ? 'Off' : `${v}%`}
                     onChange={v => ul('trailGrain', v)} />
                 </div>
-                <input id="trail-grain" type="range" min={0} max={100} step={1}
-                  value={selectedLayer.trailGrain ?? 0} onChange={e => ul('trailGrain', Number(e.target.value))} />
+                <Slider id="trail-grain" min={0} max={100} step={1} def={0}
+                  value={selectedLayer.trailGrain ?? 0} on={v => ul('trailGrain', v)} />
 
                 {(selectedLayer.trailGrain ?? 0) > 0 && (
                   <>
@@ -353,9 +375,9 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                       <EditableValue value={selectedLayer.trailGrainSize ?? 30} min={0} max={100} suffix="%"
                         onChange={v => ul('trailGrainSize', v)} />
                     </div>
-                    <input id="trail-grain-size" type="range" min={0} max={100} step={1}
+                    <Slider id="trail-grain-size" min={0} max={100} step={1} def={30}
                       value={selectedLayer.trailGrainSize ?? 30}
-                      onChange={e => ul('trailGrainSize', Number(e.target.value))} />
+                      on={v => ul('trailGrainSize', v)} />
 
                     <div className="controls__row controls__row--spaced">
                       <label className="controls__label" htmlFor="trail-grain-var">Roughness</label>
@@ -363,9 +385,9 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                         format={v => v === 0 ? 'Smooth' : `${v}%`}
                         onChange={v => ul('trailGrainVariability', v)} />
                     </div>
-                    <input id="trail-grain-var" type="range" min={0} max={100} step={1}
+                    <Slider id="trail-grain-var" min={0} max={100} step={1} def={0}
                       value={selectedLayer.trailGrainVariability ?? 0}
-                      onChange={e => ul('trailGrainVariability', Number(e.target.value))} />
+                      on={v => ul('trailGrainVariability', v)} />
 
                     <div className="controls__row controls__row--spaced">
                       <label className="controls__label" htmlFor="trail-grain-spread">Spread</label>
@@ -373,9 +395,9 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                         format={v => v === 0 ? 'Even' : `${v}%`}
                         onChange={v => ul('trailGrainSpread', v)} />
                     </div>
-                    <input id="trail-grain-spread" type="range" min={0} max={100} step={1}
+                    <Slider id="trail-grain-spread" min={0} max={100} step={1} def={0}
                       value={selectedLayer.trailGrainSpread ?? 0}
-                      onChange={e => ul('trailGrainSpread', Number(e.target.value))} />
+                      on={v => ul('trailGrainSpread', v)} />
 
                     <div className="controls__row controls__row--spaced">
                       <label className="controls__label">Dissolve</label>
@@ -408,40 +430,49 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                   <EditableValue value={selectedLayer.echoCount ?? 5} min={1} max={16}
                     format={v => `${v}×`} onChange={v => ul('echoCount', v)} />
                 </div>
-                <input id="echo-count" type="range" min={1} max={16} step={1}
-                  value={selectedLayer.echoCount ?? 5} onChange={e => ul('echoCount', Number(e.target.value))} />
+                <Slider id="echo-count" min={1} max={16} step={1} def={5}
+                  value={selectedLayer.echoCount ?? 5} on={v => ul('echoCount', v)} />
 
                 <div className="controls__row controls__row--spaced">
                   <label className="controls__label" htmlFor="echo-direction">Direction</label>
                   <EditableValue value={selectedLayer.echoAngle ?? 0} min={0} max={360} step={5} suffix="°"
                     onChange={v => ul('echoAngle', v)} />
                 </div>
-                <input id="echo-direction" type="range" min={0} max={360} step={5}
-                  value={selectedLayer.echoAngle ?? 0} onChange={e => ul('echoAngle', Number(e.target.value))} />
+                <Slider id="echo-direction" min={0} max={360} step={5} def={0}
+                  value={selectedLayer.echoAngle ?? 0} on={v => ul('echoAngle', v)} />
 
                 <div className="controls__row controls__row--spaced">
                   <label className="controls__label" htmlFor="echo-spacing">Spacing</label>
                   <EditableValue value={selectedLayer.echoSpacing ?? 40} min={0} max={200} suffix="px"
                     onChange={v => ul('echoSpacing', v)} />
                 </div>
-                <input id="echo-spacing" type="range" min={0} max={200} step={1}
-                  value={selectedLayer.echoSpacing ?? 40} onChange={e => ul('echoSpacing', Number(e.target.value))} />
+                <Slider id="echo-spacing" min={0} max={200} step={1} def={40}
+                  value={selectedLayer.echoSpacing ?? 40} on={v => ul('echoSpacing', v)} />
+
+                <div className="controls__row controls__row--spaced">
+                  <label className="controls__label" htmlFor="echo-ease">Curve</label>
+                  <EditableValue value={selectedLayer.echoEase ?? 50} min={-100} max={100} step={1}
+                    format={v => v === 0 ? 'Linear' : `${v > 0 ? '+' : ''}${v}`}
+                    onChange={v => ul('echoEase', v)} />
+                </div>
+                <Slider id="echo-ease" min={-100} max={100} step={1} def={50}
+                  value={selectedLayer.echoEase ?? 50} on={v => ul('echoEase', v)} />
 
                 <div className="controls__row controls__row--spaced">
                   <label className="controls__label" htmlFor="echo-ghosting">Ghosting</label>
                   <EditableValue value={selectedLayer.echoGhosting ?? 60} min={0} max={100} suffix="%"
                     onChange={v => ul('echoGhosting', v)} />
                 </div>
-                <input id="echo-ghosting" type="range" min={0} max={100} step={1}
-                  value={selectedLayer.echoGhosting ?? 60} onChange={e => ul('echoGhosting', Number(e.target.value))} />
+                <Slider id="echo-ghosting" min={0} max={100} step={1} def={60}
+                  value={selectedLayer.echoGhosting ?? 60} on={v => ul('echoGhosting', v)} />
 
                 <div className="controls__row controls__row--spaced">
                   <label className="controls__label" htmlFor="echo-blur">Blur</label>
                   <EditableValue value={selectedLayer.echoBlur ?? 0} min={0} max={60}
                     format={v => v === 0 ? 'Off' : `${v}`} onChange={v => ul('echoBlur', v)} />
                 </div>
-                <input id="echo-blur" type="range" min={0} max={60} step={1}
-                  value={selectedLayer.echoBlur ?? 0} onChange={e => ul('echoBlur', Number(e.target.value))} />
+                <Slider id="echo-blur" min={0} max={60} step={1} def={0}
+                  value={selectedLayer.echoBlur ?? 0} on={v => ul('echoBlur', v)} />
 
                 <div className="controls__seg" role="radiogroup" aria-label="Echo blend"
                   style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginTop: 8 }}>
@@ -458,24 +489,24 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                   <EditableValue value={selectedLayer.echoZoom ?? 0} min={-50} max={100} step={1}
                     format={v => v === 0 ? 'Off' : `${v > 0 ? '+' : ''}${v}%`} onChange={v => ul('echoZoom', v)} />
                 </div>
-                <input id="echo-zoom" type="range" min={-50} max={100} step={1}
-                  value={selectedLayer.echoZoom ?? 0} onChange={e => ul('echoZoom', Number(e.target.value))} />
+                <Slider id="echo-zoom" min={-50} max={100} step={1} def={0}
+                  value={selectedLayer.echoZoom ?? 0} on={v => ul('echoZoom', v)} />
 
                 <div className="controls__row controls__row--spaced">
                   <label className="controls__label" htmlFor="echo-spin">Spin</label>
                   <EditableValue value={selectedLayer.echoSpin ?? 0} min={-30} max={30} step={1}
                     format={v => v === 0 ? 'Off' : `${v > 0 ? '+' : ''}${v}°`} onChange={v => ul('echoSpin', v)} />
                 </div>
-                <input id="echo-spin" type="range" min={-30} max={30} step={1}
-                  value={selectedLayer.echoSpin ?? 0} onChange={e => ul('echoSpin', Number(e.target.value))} />
+                <Slider id="echo-spin" min={-30} max={30} step={1} def={0}
+                  value={selectedLayer.echoSpin ?? 0} on={v => ul('echoSpin', v)} />
 
                 <div className="controls__row controls__row--spaced">
                   <label className="controls__label" htmlFor="echo-hue">Chromatic</label>
                   <EditableValue value={selectedLayer.echoHue ?? 0} min={0} max={90} step={1}
                     format={v => v === 0 ? 'Off' : `${v}°`} onChange={v => ul('echoHue', v)} />
                 </div>
-                <input id="echo-hue" type="range" min={0} max={90} step={1}
-                  value={selectedLayer.echoHue ?? 0} onChange={e => ul('echoHue', Number(e.target.value))} />
+                <Slider id="echo-hue" min={0} max={90} step={1} def={0}
+                  value={selectedLayer.echoHue ?? 0} on={v => ul('echoHue', v)} />
               </>
             )}
           </>
@@ -513,8 +544,8 @@ export default function Controls({
             <EditableValue value={borderThickness} min={0} max={400} suffix="px"
               onChange={v => onUpdate('borderThickness', v)} />
           </div>
-          <input id="border-slider" type="range" min={0} max={400} step={1}
-            value={borderThickness} onChange={e => onUpdate('borderThickness', Number(e.target.value))} />
+          <Slider id="border-slider" min={0} max={400} step={1} def={40}
+            value={borderThickness} on={v => onUpdate('borderThickness', v)} />
 
           <div className="controls__row controls__row--spaced">
             <label className="controls__label" htmlFor="radius-slider">Corners</label>
@@ -522,8 +553,8 @@ export default function Controls({
               format={v => v === 0 ? 'Square' : v === 100 ? 'Round' : `${v}%`}
               onChange={v => onUpdate('cornerRadius', v)} />
           </div>
-          <input id="radius-slider" type="range" min={0} max={100} step={1}
-            value={cornerRadius} onChange={e => onUpdate('cornerRadius', Number(e.target.value))} />
+          <Slider id="radius-slider" min={0} max={100} step={1} def={0}
+            value={cornerRadius} on={v => onUpdate('cornerRadius', v)} />
 
           <div className="controls__divider controls__divider--inset"/>
 
@@ -605,8 +636,8 @@ export default function Controls({
                 <EditableValue value={blurAmount} min={10} max={240} step={2} suffix="px"
                   onChange={v => onUpdate('blurAmount', v)} />
               </div>
-              <input id="blur-slider" type="range" min={10} max={240} step={2}
-                value={blurAmount} onChange={e => onUpdate('blurAmount', Number(e.target.value))} />
+              <Slider id="blur-slider" min={10} max={240} step={2} def={60}
+                value={blurAmount} on={v => onUpdate('blurAmount', v)} />
 
               <div className="controls__divider controls__divider--inset"/>
 
@@ -616,8 +647,8 @@ export default function Controls({
                   format={v => `${v > 0 ? `+${v}` : v}%`}
                   onChange={v => onUpdate('frostBrightness', v)} />
               </div>
-              <input id="frost-brightness" type="range" min={-100} max={200} step={1}
-                value={frostBrightness} onChange={e => onUpdate('frostBrightness', Number(e.target.value))} />
+              <Slider id="frost-brightness" min={-100} max={200} step={1} def={-15}
+                value={frostBrightness} on={v => onUpdate('frostBrightness', v)} />
 
               <div className="controls__row">
                 <label className="controls__label" htmlFor="frost-contrast">Contrast</label>
@@ -625,8 +656,8 @@ export default function Controls({
                   format={v => `${v > 0 ? `+${v}` : v}%`}
                   onChange={v => onUpdate('frostContrast', v)} />
               </div>
-              <input id="frost-contrast" type="range" min={-100} max={200} step={1}
-                value={frostContrast} onChange={e => onUpdate('frostContrast', Number(e.target.value))} />
+              <Slider id="frost-contrast" min={-100} max={200} step={1} def={0}
+                value={frostContrast} on={v => onUpdate('frostContrast', v)} />
 
               <div className="controls__row">
                 <label className="controls__label" htmlFor="frost-saturation">Saturation</label>
@@ -634,8 +665,8 @@ export default function Controls({
                   format={v => `${v > 0 ? `+${v}` : v}%`}
                   onChange={v => onUpdate('frostSaturation', v)} />
               </div>
-              <input id="frost-saturation" type="range" min={-100} max={300} step={1}
-                value={frostSaturation} onChange={e => onUpdate('frostSaturation', Number(e.target.value))} />
+              <Slider id="frost-saturation" min={-100} max={300} step={1} def={60}
+                value={frostSaturation} on={v => onUpdate('frostSaturation', v)} />
 
               <div className="controls__row">
                 <label className="controls__label" htmlFor="frost-vibrance">Vibrance</label>
@@ -643,8 +674,8 @@ export default function Controls({
                   format={v => v === 0 ? 'Off' : `+${v}%`}
                   onChange={v => onUpdate('frostVibrance', v)} />
               </div>
-              <input id="frost-vibrance" type="range" min={0} max={200} step={1}
-                value={frostVibrance} onChange={e => onUpdate('frostVibrance', Number(e.target.value))} />
+              <Slider id="frost-vibrance" min={0} max={200} step={1} def={0}
+                value={frostVibrance} on={v => onUpdate('frostVibrance', v)} />
             </>
           )}
         </section>
@@ -659,8 +690,8 @@ export default function Controls({
               format={v => v === 0 ? 'Off' : `${v}%`}
               onChange={v => onUpdate('grainAmount', v)} />
           </div>
-          <input id="grain-slider" type="range" min={0} max={100} step={1}
-            value={grainAmount} onChange={e => onUpdate('grainAmount', Number(e.target.value))} />
+          <Slider id="grain-slider" min={0} max={100} step={1} def={0}
+            value={grainAmount} on={v => onUpdate('grainAmount', v)} />
 
           <div className="controls__row controls__row--spaced">
             <label className="controls__label" htmlFor="variability-slider">Variability</label>
@@ -668,8 +699,8 @@ export default function Controls({
               format={v => v === 0 ? 'Uniform' : `${v}%`}
               onChange={v => onUpdate('grainVariability', v)} />
           </div>
-          <input id="variability-slider" type="range" min={0} max={100} step={1}
-            value={grainVariability} onChange={e => onUpdate('grainVariability', Number(e.target.value))} />
+          <Slider id="variability-slider" min={0} max={100} step={1} def={0}
+            value={grainVariability} on={v => onUpdate('grainVariability', v)} />
 
           <div className="controls__row controls__row--spaced">
             <label className="controls__label" htmlFor="spread-slider">Spread</label>
@@ -677,8 +708,8 @@ export default function Controls({
               format={v => v === 0 ? 'Off' : `${v}%`}
               onChange={v => onUpdate('grainSpread', v)} />
           </div>
-          <input id="spread-slider" type="range" min={0} max={100} step={1}
-            value={grainSpread} onChange={e => onUpdate('grainSpread', Number(e.target.value))} />
+          <Slider id="spread-slider" min={0} max={100} step={1} def={0}
+            value={grainSpread} on={v => onUpdate('grainSpread', v)} />
 
           <div className="controls__divider controls__divider--inset"/>
 
