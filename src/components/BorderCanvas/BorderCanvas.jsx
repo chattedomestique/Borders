@@ -387,17 +387,19 @@ function drawTextLayer(ctx, totalW, totalH, layer, bboxMap) {
   ctx.textBaseline = 'middle'
   ctx.globalAlpha = opacity / 100
 
-  // Justify ("equal spacing") stretches every line except the last to the
-  // width of the widest line — the paragraph's natural width — by widening the
-  // gaps between words. Lines are drawn left-anchored from the block's left
-  // edge; everything else keeps the simple center/left/right anchor.
+  // Justify ("equal spacing") stretches every line to the width of the widest
+  // line — the paragraph's natural width — by widening the gaps between words,
+  // so all lines fill evenly (including the last). Lines are drawn left-anchored
+  // from the block's left edge; everything else keeps the center/left/right anchor.
   const isJustify = align === 'justify' && canWordSpace
   const lineWidths = lines.map(l => ctx.measureText(l).width)  // at base spacing
   const maxLineW = Math.max(...lineWidths, 0)
 
   // Per-line word spacing (px) when justified; null = draw at base spacing.
+  // A line needs at least one inter-word gap to stretch — single-word lines
+  // (and the widest line, which is already at target) keep their base spacing.
   const justifySpacing = lines.map((line, i) => {
-    if (!isJustify || i === lines.length - 1) return null
+    if (!isJustify) return null
     const gaps = (line.match(/ /g) || []).length
     if (gaps === 0 || lineWidths[i] >= maxLineW) return null
     return wordSpacing + (maxLineW - lineWidths[i]) / gaps
