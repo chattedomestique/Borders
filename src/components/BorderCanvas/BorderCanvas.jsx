@@ -753,10 +753,122 @@ function drawTextTrail(ctx, layer, geom, px, blockCenterY, cache, animate) {
   ctx.restore()
 }
 
+// Build a blurred and/or hue-tinted variant of the glyph bitmap for one echo.
+// Returns `off` untouched when no blur or tint is needed. Blur is a shrink →
+// grow bilinear pass (ctx.filter 'blur' is ignored on older iOS Safari, so we
+// avoid it); tint recolours the glyphs via source-atop for chromatic echoes.
+function prepareEchoBitmap(off, bw, bh, blurR, tint, cache) {
+  if (blurR < 0.5 && !tint) return off
+  if (!cache.echoScratch) cache.echoScratch = document.createElement('canvas')
+  const sc = cache.echoScratch
+  if (sc.width !== bw || sc.height !== bh) { sc.width = bw; sc.height = bh }
+  const c = sc.getContext('2d')
+  c.globalCompositeOperation = 'source-over'
+  c.globalAlpha = 1
+  c.clearRect(0, 0, bw, bh)
+
+  if (blurR >= 0.5) {
+    const f = 1 / (1 + blurR * 0.4)
+    const dw = Math.max(1, Math.round(bw * f))
+    const dh = Math.max(1, Math.round(bh * f))
+    if (!cache.echoTmp) cache.echoTmp = document.createElement('canvas')
+    const tmp = cache.echoTmp
+    if (tmp.width !== dw || tmp.height !== dh) { tmp.width = dw; tmp.height = dh }
+    const tc = tmp.getContext('2d')
+    tc.clearRect(0, 0, dw, dh)
+    tc.imageSmoothingEnabled = true; tc.imageSmoothingQuality = 'high'
+    tc.drawImage(off, 0, 0, dw, dh)
+    c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high'
+    c.drawImage(tmp, 0, 0, bw, bh)
+  } else {
+    c.drawImage(off, 0, 0)
+  }
+
+  if (tint) {
+    c.globalCompositeOperation = 'source-atop'
+    c.fillStyle = tint
+    c.fillRect(0, 0, bw, bh)
+    c.globalCompositeOperation = 'source-over'
+  }
+  return sc
+}
+
+/**
+ * Echo effect — the discrete cousin of the motion trail. Instead of a
+ * continuous smear it stamps N decaying ghost copies of the text, spaced along
+ * a direction (the After Effects Echo model: count, spacing, decay, operator).
+ *
+ * On top of that core it layers 2026-flavoured, mobile-safe extras: each
+ * successive ghost can grow/shrink (Zoom), rotate (Spin), and hue-shift
+ * (chromatic/prismatic ghosts), and the operator can be Stack (normal),
+ * Screen, or Lighten for additive glow. The sharp text is drawn over the top
+ * by the caller. Ghosts farther out fade (decay^i), and optionally blur more.
+ */
+function drawTextEcho(ctx, layer, geom, px, blockCenterY, cache) {
+  const {
+    size = 80, opacity = 100, align = 'center', stroke = false,
+    echoCount = 0, echoAngle = 0, echoSpacing = 40, echoGhosting = 60,
+    echoBlur = 0, echoZoom = 0, echoSpin = 0, echoHue = 0, echoBlend = 'stack',
+  } = layer
+  const { maxLineW, blockH, isJustify } = geom
+  const n = Math.max(0, Math.min(16, Math.round(echoCount)))
+  if (maxLineW <= 0 || n <= 0) return
+
+  const P = Math.ceil(size * 0.4 + (stroke ? size * 0.07 : 0) + 8)
+  const bw = Math.ceil(maxLineW + P * 2)
+  const bh = Math.ceil(blockH + P * 2)
+  if (bw < 2 || bh < 2 || bw > 4096 || bh > 4096) return
+
+  if (!cache.textEcho) cache.textEcho = document.createElement('canvas')
+  const off = cache.textEcho
+  if (off.width !== bw || off.height !== bh) { off.width = bw; off.height = bh }
+  const octx = off.getContext('2d')
+  octx.clearRect(0, 0, bw, bh)
+  const localAnchor = (align === 'center' || isJustify) ? P + maxLineW / 2
+                    : align === 'right'                 ? P + maxLineW : P
+  paintBlock(octx, layer, geom, localAnchor, P + blockH / 2, { drawBg: false, drawShadow: false, alpha: 1 })
+
+  // Bitmap block centre (transform pivot) and where it lands on the canvas.
+  const bcx = P + maxLineW / 2
+  const bcy = P + blockH / 2
+  const cxMain = blockLeftFor(align, isJustify, px, maxLineW) + maxLineW / 2
+  const cyMain = blockCenterY
+
+  const ang = echoAngle * Math.PI / 180
+  const sx = Math.cos(ang) * echoSpacing
+  const sy = Math.sin(ang) * echoSpacing
+  const decay = 0.2 + Math.max(0, Math.min(100, echoGhosting)) / 100 * 0.78
+  const scaleStep = 1 + echoZoom / 100 * 0.18
+  const spinRad = echoSpin * Math.PI / 180
+  const op0 = opacity / 100
+
+  ctx.save()
+  if (echoBlend === 'screen') ctx.globalCompositeOperation = 'screen'
+  else if (echoBlend === 'lighten') ctx.globalCompositeOperation = 'lighten'
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  // Far ghosts first so nearer ones composite on top of them.
+  for (let i = n; i >= 1; i--) {
+    const fade = Math.pow(decay, i) * op0
+    if (fade <= 0.004) continue
+    const blurR = echoBlur > 0 ? echoBlur * (i / n) : 0
+    const tint = echoHue > 0 ? `hsl(${((i * echoHue) % 360 + 360) % 360}, 85%, 60%)` : null
+    const src = prepareEchoBitmap(off, bw, bh, blurR, tint, cache)
+    ctx.save()
+    ctx.globalAlpha = fade
+    ctx.translate(cxMain + sx * i, cyMain + sy * i)
+    if (spinRad) ctx.rotate(spinRad * i)
+    if (echoZoom) { const s = Math.pow(scaleStep, i); ctx.scale(s, s) }
+    ctx.drawImage(src, -bcx, -bcy)
+    ctx.restore()
+  }
+  ctx.restore()
+}
+
 function drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache, animate) {
   const {
     id, content, align = 'center', x = 0.5, y = 0.88, opacity = 100,
-    motionBlur = false, motionLength = 0,
+    motionBlur = false, motionLength = 0, echo = false, echoCount = 0,
   } = layer
 
   if (!content?.trim()) {
@@ -781,7 +893,10 @@ function drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache, animate) {
     })
   }
 
-  // Trail underneath, then the sharp "flash" frame on top.
+  // Echo ghosts furthest back, then the motion trail, then the sharp text on top.
+  if (echo && echoCount > 0 && cache) {
+    drawTextEcho(ctx, layer, geom, px, cy, cache)
+  }
   if (motionBlur && motionLength > 0 && cache) {
     drawTextTrail(ctx, layer, geom, px, cy, cache, animate)
   }

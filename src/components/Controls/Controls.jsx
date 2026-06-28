@@ -36,6 +36,12 @@ const TEXT_BG_MODES = [
   { id: 'rect', label: 'Box'  },
 ]
 
+const ECHO_BLENDS = [
+  { id: 'stack',   label: 'Stack'   },
+  { id: 'screen',  label: 'Screen'  },
+  { id: 'lighten', label: 'Lighten' },
+]
+
 function Toggle({ on, onChange, label }) {
   return (
     <button
@@ -384,6 +390,92 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                     </div>
                   </>
                 )}
+              </>
+            )}
+
+            <div className="controls__divider controls__divider--inset"/>
+
+            {/* Echo — discrete decaying ghost copies (After Effects-style) */}
+            <div className="controls__row controls__row--spaced">
+              <label className="controls__label">Echo</label>
+              <Toggle on={!!selectedLayer.echo} onChange={v => ul('echo', v)} label="Toggle echo"/>
+            </div>
+
+            {selectedLayer.echo && (
+              <>
+                <div className="controls__row">
+                  <label className="controls__label" htmlFor="echo-count">Amount</label>
+                  <EditableValue value={selectedLayer.echoCount ?? 5} min={1} max={16}
+                    format={v => `${v}×`} onChange={v => ul('echoCount', v)} />
+                </div>
+                <input id="echo-count" type="range" min={1} max={16} step={1}
+                  value={selectedLayer.echoCount ?? 5} onChange={e => ul('echoCount', Number(e.target.value))} />
+
+                <div className="controls__row controls__row--spaced">
+                  <label className="controls__label" htmlFor="echo-direction">Direction</label>
+                  <EditableValue value={selectedLayer.echoAngle ?? 0} min={0} max={360} step={5} suffix="°"
+                    onChange={v => ul('echoAngle', v)} />
+                </div>
+                <input id="echo-direction" type="range" min={0} max={360} step={5}
+                  value={selectedLayer.echoAngle ?? 0} onChange={e => ul('echoAngle', Number(e.target.value))} />
+
+                <div className="controls__row controls__row--spaced">
+                  <label className="controls__label" htmlFor="echo-spacing">Spacing</label>
+                  <EditableValue value={selectedLayer.echoSpacing ?? 40} min={0} max={200} suffix="px"
+                    onChange={v => ul('echoSpacing', v)} />
+                </div>
+                <input id="echo-spacing" type="range" min={0} max={200} step={1}
+                  value={selectedLayer.echoSpacing ?? 40} onChange={e => ul('echoSpacing', Number(e.target.value))} />
+
+                <div className="controls__row controls__row--spaced">
+                  <label className="controls__label" htmlFor="echo-ghosting">Ghosting</label>
+                  <EditableValue value={selectedLayer.echoGhosting ?? 60} min={0} max={100} suffix="%"
+                    onChange={v => ul('echoGhosting', v)} />
+                </div>
+                <input id="echo-ghosting" type="range" min={0} max={100} step={1}
+                  value={selectedLayer.echoGhosting ?? 60} onChange={e => ul('echoGhosting', Number(e.target.value))} />
+
+                <div className="controls__row controls__row--spaced">
+                  <label className="controls__label" htmlFor="echo-blur">Blur</label>
+                  <EditableValue value={selectedLayer.echoBlur ?? 0} min={0} max={60}
+                    format={v => v === 0 ? 'Off' : `${v}`} onChange={v => ul('echoBlur', v)} />
+                </div>
+                <input id="echo-blur" type="range" min={0} max={60} step={1}
+                  value={selectedLayer.echoBlur ?? 0} onChange={e => ul('echoBlur', Number(e.target.value))} />
+
+                <div className="controls__seg" role="radiogroup" aria-label="Echo blend"
+                  style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginTop: 8 }}>
+                  {ECHO_BLENDS.map(m => (
+                    <button key={m.id} role="radio" aria-checked={(selectedLayer.echoBlend ?? 'stack') === m.id}
+                      className={`controls__seg-btn${(selectedLayer.echoBlend ?? 'stack') === m.id ? ' controls__seg-btn--active' : ''}`}
+                      onClick={() => ul('echoBlend', m.id)}>{m.label}</button>
+                  ))}
+                </div>
+
+                {/* Experimental per-echo transforms */}
+                <div className="controls__row controls__row--spaced">
+                  <label className="controls__label" htmlFor="echo-zoom">Zoom</label>
+                  <EditableValue value={selectedLayer.echoZoom ?? 0} min={-50} max={100} step={1}
+                    format={v => v === 0 ? 'Off' : `${v > 0 ? '+' : ''}${v}%`} onChange={v => ul('echoZoom', v)} />
+                </div>
+                <input id="echo-zoom" type="range" min={-50} max={100} step={1}
+                  value={selectedLayer.echoZoom ?? 0} onChange={e => ul('echoZoom', Number(e.target.value))} />
+
+                <div className="controls__row controls__row--spaced">
+                  <label className="controls__label" htmlFor="echo-spin">Spin</label>
+                  <EditableValue value={selectedLayer.echoSpin ?? 0} min={-30} max={30} step={1}
+                    format={v => v === 0 ? 'Off' : `${v > 0 ? '+' : ''}${v}°`} onChange={v => ul('echoSpin', v)} />
+                </div>
+                <input id="echo-spin" type="range" min={-30} max={30} step={1}
+                  value={selectedLayer.echoSpin ?? 0} onChange={e => ul('echoSpin', Number(e.target.value))} />
+
+                <div className="controls__row controls__row--spaced">
+                  <label className="controls__label" htmlFor="echo-hue">Chromatic</label>
+                  <EditableValue value={selectedLayer.echoHue ?? 0} min={0} max={90} step={1}
+                    format={v => v === 0 ? 'Off' : `${v}°`} onChange={v => ul('echoHue', v)} />
+                </div>
+                <input id="echo-hue" type="range" min={0} max={90} step={1}
+                  value={selectedLayer.echoHue ?? 0} onChange={e => ul('echoHue', Number(e.target.value))} />
               </>
             )}
           </>
