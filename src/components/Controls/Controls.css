@@ -53,6 +53,33 @@
   letter-spacing: 0.02em;
 }
 
+/* The value pill is tap-to-type: rendered as a button until focused, then an
+   input. Reset native chrome so both look identical to the old static pill. */
+.controls__value--btn {
+  border: none;
+  font-family: inherit;
+  cursor: text;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: background 0.12s ease;
+}
+.controls__value--btn:hover { background: var(--accent-subtle-2, var(--accent-subtle)); }
+.controls__value--btn:active { transform: scale(0.96); }
+
+.controls__value--input {
+  width: 60px;
+  border: 1px solid var(--accent);
+  font-family: inherit;
+  outline: none;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.controls__value--input::-webkit-outer-spin-button,
+.controls__value--input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 .controls__hint {
   font-size: 12px;
   color: var(--ink-3);
