@@ -20,6 +20,7 @@ const DEFAULT_LAYER = (id, index = 0) => ({
   shadow: false, stroke: false, strokeColor: '#000000',
   letterSpacing: 0, wordSpacing: 0, bg: 'none', bgColor: '#000000', bgOpacity: 50,
   motionBlur: false, motionAngle: 0, motionLength: 60, motionSpeed: 60,
+  trailGrain: 0, trailGrainSize: 30, trailGrainVariability: 0, trailGrainMono: true,
 })
 
 const DEFAULT_SETTINGS = {

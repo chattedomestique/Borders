@@ -506,10 +506,117 @@ function paintBlock(ctx, layer, geom, px, blockCenterY, opts = {}) {
  * `motionSpeed` shapes the falloff: faster → a longer, wispier streak; slower →
  * a tight, dense smear hugging the subject.
  */
-function drawTextTrail(ctx, layer, geom, px, blockCenterY, cache) {
+// Gaussian (Box–Muller) noise tile, centred on mid-grey. Cached by signature for
+// static frames; regenerated every frame for video so the grain shimmers.
+function makeNoiseTile(cache, key, nw, nh, sigma, mono, animate) {
+  if (!cache[key]) cache[key] = document.createElement('canvas')
+  const cv = cache[key]
+  const sig = `${nw}x${nh}:${sigma.toFixed(1)}:${mono ? 1 : 0}`
+  if (!animate && cv.__sig === sig && cv.width === nw && cv.height === nh) return cv
+  if (cv.width !== nw || cv.height !== nh) { cv.width = nw; cv.height = nh }
+  cv.__sig = sig
+  const c = cv.getContext('2d')
+  const id = c.createImageData(nw, nh)
+  const d = id.data
+  for (let i = 0; i < d.length; i += 4) {
+    if (mono) {
+      const u = Math.random() || 1e-10
+      const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2832 * Math.random())
+      const v = Math.max(0, Math.min(255, Math.round(128 + n * sigma)))
+      d[i] = d[i + 1] = d[i + 2] = v
+    } else {
+      for (let ch = 0; ch < 3; ch++) {
+        const u = Math.random() || 1e-10
+        const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2832 * Math.random())
+        d[i + ch] = Math.max(0, Math.min(255, Math.round(128 + n * sigma)))
+      }
+    }
+    d[i + 3] = 255
+  }
+  c.putImageData(id, 0, 0)
+  return cv
+}
+
+/**
+ * Film grain confined to a motion-blur trail. The trail buffer `tb` already
+ * holds the streak (colour + a soft alpha gradient). We build a noise field at
+ * the chosen coarseness, mask it to the trail's own alpha so it can't spill
+ * past the streak, then soft-light it back onto the trail — the same blend the
+ * full-frame grain uses, so mid-grey is a no-op and only the deviations
+ * lighten/darken. The result is a long-exposure ambient trail that breaks up
+ * into grain instead of a clean gradient.
+ */
+function applyTrailGrain(tb, cache, { amount, size, variability, mono, animate }) {
+  if (!amount) return
+  const w = tb.width, h = tb.height
+  // Grain cell size in buffer px: Size 0 → fine (~2px), Size 100 → coarse (~14px).
+  const cell = 2 + (Math.max(0, Math.min(100, size)) / 100) * 12
+  const nw = Math.max(2, Math.round(w / cell))
+  const nh = Math.max(2, Math.round(h / cell))
+  const v = Math.max(0, Math.min(100, variability)) / 100
+
+  const fine = makeNoiseTile(cache, 'tgFine', nw, nh, 64, mono, animate)
+
+  if (!cache.tgMask) cache.tgMask = document.createElement('canvas')
+  const mask = cache.tgMask
+  if (mask.width !== w || mask.height !== h) { mask.width = w; mask.height = h }
+  const mctx = mask.getContext('2d')
+  mctx.globalCompositeOperation = 'source-over'
+  mctx.globalAlpha = 1
+  mctx.clearRect(0, 0, w, h)
+
+  // Base (sharp) grain layer stretched to the trail buffer.
+  mctx.imageSmoothingEnabled = false
+  mctx.drawImage(fine, 0, 0, w, h)
+
+  // Optional coarser octave for clumpier grain (Variability), smoothly upscaled.
+  if (v > 0) {
+    const cw = Math.max(2, Math.round(nw / 2.6))
+    const ch = Math.max(2, Math.round(nh / 2.6))
+    const coarse = makeNoiseTile(cache, 'tgCoarse', cw, ch, 64, mono, animate)
+    mctx.imageSmoothingEnabled = true
+    mctx.imageSmoothingQuality = 'high'
+    mctx.globalAlpha = v * 0.7
+    mctx.drawImage(coarse, 0, 0, w, h)
+    mctx.globalAlpha = 1
+  }
+
+  // Clip the noise to the trail's shape (multiply its alpha by the trail's).
+  mctx.globalCompositeOperation = 'destination-in'
+  mctx.drawImage(tb, 0, 0)
+  mctx.globalCompositeOperation = 'source-over'
+
+  // Soft-light the masked grain onto the trail.
+  const tbctx = tb.getContext('2d')
+  tbctx.save()
+  tbctx.globalCompositeOperation = 'soft-light'
+  tbctx.globalAlpha = Math.min(1, amount / 100)
+  tbctx.drawImage(mask, 0, 0)
+  tbctx.restore()
+}
+
+// Composite the glyph bitmap `off` along the motion vector into `target`, with
+// the head copy landing at (ox0, oy0). Alpha rises toward the head (rear-sync).
+function paintTrailCopies(target, off, ox0, oy0, vx, vy, K, peak, gamma, dens, opacityFactor) {
+  target.save()
+  target.imageSmoothingEnabled = true
+  target.imageSmoothingQuality = 'high'
+  for (let i = 0; i < K; i++) {
+    const t = i / (K - 1)                      // 0 = tail, 1 = head
+    const a = peak * dens * Math.pow(t, gamma) * opacityFactor
+    if (a <= 0.002) continue
+    target.globalAlpha = a > 1 ? 1 : a
+    // Trail extends opposite the travel direction (the path the subject came from).
+    target.drawImage(off, ox0 - vx * (1 - t), oy0 - vy * (1 - t))
+  }
+  target.restore()
+}
+
+function drawTextTrail(ctx, layer, geom, px, blockCenterY, cache, animate) {
   const {
     size = 80, opacity = 100, align = 'center', stroke = false,
     motionAngle = 0, motionLength = 0, motionSpeed = 60,
+    trailGrain = 0, trailGrainSize = 30, trailGrainVariability = 0, trailGrainMono = true,
   } = layer
   const { maxLineW, blockH, isJustify } = geom
   if (maxLineW <= 0 || motionLength <= 0) return
@@ -555,23 +662,44 @@ function drawTextTrail(ctx, layer, geom, px, blockCenterY, cache) {
   // Density normalisation: per-copy alpha scales with actual spacing so the
   // trail's overall density is the same whether or not K hits the cap.
   const dens = spacing / SAMPLE
+  const opacityFactor = opacity / 100
+
+  // No grain → composite straight onto the canvas (the validated fast path).
+  if (!trailGrain) {
+    paintTrailCopies(ctx, off, baseX, baseY, vx, vy, K, peak, gamma, dens, opacityFactor)
+    return
+  }
+
+  // Grain → render the trail into its own buffer first so the grain can be
+  // masked to the streak, then blit the grained trail onto the canvas once.
+  const tbX = Math.floor(baseX + Math.min(0, -vx))
+  const tbY = Math.floor(baseY + Math.min(0, -vy))
+  const tbW = Math.ceil(bw + Math.abs(vx)) + 2
+  const tbH = Math.ceil(bh + Math.abs(vy)) + 2
+  if (tbW > 8192 || tbH > 8192) {   // pathological: fall back to the direct path
+    paintTrailCopies(ctx, off, baseX, baseY, vx, vy, K, peak, gamma, dens, opacityFactor)
+    return
+  }
+
+  if (!cache.trailBuf) cache.trailBuf = document.createElement('canvas')
+  const tb = cache.trailBuf
+  if (tb.width !== tbW || tb.height !== tbH) { tb.width = tbW; tb.height = tbH }
+  const tbctx = tb.getContext('2d')
+  tbctx.clearRect(0, 0, tbW, tbH)
+
+  paintTrailCopies(tbctx, off, baseX - tbX, baseY - tbY, vx, vy, K, peak, gamma, dens, 1)
+  applyTrailGrain(tb, cache, {
+    amount: trailGrain, size: trailGrainSize,
+    variability: trailGrainVariability, mono: trailGrainMono, animate,
+  })
 
   ctx.save()
-  ctx.imageSmoothingEnabled = true
-  ctx.imageSmoothingQuality = 'high'
-  // Draw tail → head so the brighter near-head copies composite last (on top).
-  for (let i = 0; i < K; i++) {
-    const t = i / (K - 1)                     // 0 = tail, 1 = head
-    const a = peak * dens * Math.pow(t, gamma) * (opacity / 100)
-    if (a <= 0.002) continue
-    ctx.globalAlpha = a > 1 ? 1 : a
-    // Trail extends opposite the travel direction (the path the subject came from).
-    ctx.drawImage(off, baseX - vx * (1 - t), baseY - vy * (1 - t))
-  }
+  ctx.globalAlpha = opacityFactor
+  ctx.drawImage(tb, tbX, tbY)
   ctx.restore()
 }
 
-function drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache) {
+function drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache, animate) {
   const {
     id, content, align = 'center', x = 0.5, y = 0.88, opacity = 100,
     motionBlur = false, motionLength = 0,
@@ -601,7 +729,7 @@ function drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache) {
 
   // Trail underneath, then the sharp "flash" frame on top.
   if (motionBlur && motionLength > 0 && cache) {
-    drawTextTrail(ctx, layer, geom, px, cy, cache)
+    drawTextTrail(ctx, layer, geom, px, cy, cache, animate)
   }
   paintBlock(ctx, layer, geom, px, cy, { drawBg: true, drawShadow: true, alpha: opacity / 100 })
   ctx.restore()
@@ -723,7 +851,7 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
 
   // 4. Text layers (drawn last, on top of everything)
   if (bboxMap) bboxMap.clear()
-  textLayers.forEach(layer => drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache))
+  textLayers.forEach(layer => drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache, isVideo))
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────

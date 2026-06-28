@@ -328,6 +328,46 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                 </div>
                 <input id="motion-speed" type="range" min={0} max={100} step={1}
                   value={selectedLayer.motionSpeed ?? 60} onChange={e => ul('motionSpeed', Number(e.target.value))} />
+
+                {/* Grain adjustment on the trail — long-exposure ambient noise */}
+                <div className="controls__divider controls__divider--inset"/>
+                <div className="controls__row">
+                  <label className="controls__label" htmlFor="trail-grain">Trail grain</label>
+                  <EditableValue value={selectedLayer.trailGrain ?? 0} min={0} max={100}
+                    format={v => v === 0 ? 'Off' : `${v}%`}
+                    onChange={v => ul('trailGrain', v)} />
+                </div>
+                <input id="trail-grain" type="range" min={0} max={100} step={1}
+                  value={selectedLayer.trailGrain ?? 0} onChange={e => ul('trailGrain', Number(e.target.value))} />
+
+                {(selectedLayer.trailGrain ?? 0) > 0 && (
+                  <>
+                    <div className="controls__row controls__row--spaced">
+                      <label className="controls__label" htmlFor="trail-grain-size">Grain size</label>
+                      <EditableValue value={selectedLayer.trailGrainSize ?? 30} min={0} max={100} suffix="%"
+                        onChange={v => ul('trailGrainSize', v)} />
+                    </div>
+                    <input id="trail-grain-size" type="range" min={0} max={100} step={1}
+                      value={selectedLayer.trailGrainSize ?? 30}
+                      onChange={e => ul('trailGrainSize', Number(e.target.value))} />
+
+                    <div className="controls__row controls__row--spaced">
+                      <label className="controls__label" htmlFor="trail-grain-var">Roughness</label>
+                      <EditableValue value={selectedLayer.trailGrainVariability ?? 0} min={0} max={100}
+                        format={v => v === 0 ? 'Smooth' : `${v}%`}
+                        onChange={v => ul('trailGrainVariability', v)} />
+                    </div>
+                    <input id="trail-grain-var" type="range" min={0} max={100} step={1}
+                      value={selectedLayer.trailGrainVariability ?? 0}
+                      onChange={e => ul('trailGrainVariability', Number(e.target.value))} />
+
+                    <div className="controls__row controls__row--spaced">
+                      <label className="controls__label">Monochrome grain</label>
+                      <Toggle on={selectedLayer.trailGrainMono ?? true}
+                        onChange={v => ul('trailGrainMono', v)} label="Toggle monochrome trail grain"/>
+                    </div>
+                  </>
+                )}
               </>
             )}
           </>
