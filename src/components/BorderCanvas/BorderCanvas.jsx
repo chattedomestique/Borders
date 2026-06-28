@@ -414,7 +414,7 @@ function paintBlock(ctx, layer, geom, px, blockCenterY, opts = {}) {
   const {
     font = 'system-ui, sans-serif', size = 80, color = '#ffffff', align = 'center',
     bold = false, italic = false, letterSpacing = 0, wordSpacing = 0,
-    shadow = false, stroke = false, strokeColor = '#000000',
+    shadow = false, stroke = false, strokeColor = '#000000', strokeWidth = 35,
     bg = 'none', bgColor = '#000000', bgOpacity = 50,
   } = layer
   const { lines, lineHeight, blockH, isJustify, lineWidths, maxLineW, justifySpacing, canWordSpace } = geom
@@ -468,7 +468,7 @@ function paintBlock(ctx, layer, geom, px, blockCenterY, opts = {}) {
 
   if (stroke) {
     ctx.strokeStyle = strokeColor
-    ctx.lineWidth = Math.max(2, size * 0.07)
+    ctx.lineWidth = Math.max(2, size * 0.002 * strokeWidth)   // 35 ≈ the previous fixed size×0.07
     ctx.lineJoin = 'round'
     lines.forEach((line, i) => {
       if (canWordSpace) ctx.wordSpacing = `${lineSpacing(i)}px`
@@ -661,7 +661,7 @@ function paintTrailCopies(target, off, ox0, oy0, vx, vy, K, peak, gamma, dens, o
 
 function drawTextTrail(ctx, layer, geom, px, blockCenterY, cache, animate) {
   const {
-    size = 80, opacity = 100, align = 'center', stroke = false,
+    size = 80, opacity = 100, align = 'center', stroke = false, strokeWidth = 35,
     motionAngle = 0, motionLength = 0, motionSpeed = 60,
     trailGrain = 0, trailGrainSize = 30, trailGrainVariability = 0, trailGrainMono = true,
     trailGrainSpread = 0, trailGrainDissolve = false,
@@ -674,7 +674,7 @@ function drawTextTrail(ctx, layer, geom, px, blockCenterY, cache, animate) {
   const vy = Math.sin(angle) * motionLength
 
   // Offscreen bitmap of the glyphs, padded for stroke + minor glyph overhang.
-  const P = Math.ceil(size * 0.4 + (stroke ? size * 0.07 : 0) + 8)
+  const P = Math.ceil(size * 0.4 + (stroke ? size * 0.001 * strokeWidth : 0) + 8)
   const bw = Math.ceil(maxLineW + P * 2)
   const bh = Math.ceil(blockH + P * 2)
   if (bw < 2 || bh < 2 || bw > 4096 || bh > 4096) return
@@ -850,7 +850,7 @@ function prepareEchoBitmap(off, bw, bh, blurR, tint, cache) {
  */
 function drawTextEcho(ctx, layer, geom, px, blockCenterY, cache) {
   const {
-    size = 80, opacity = 100, align = 'center', stroke = false,
+    size = 80, opacity = 100, align = 'center', stroke = false, strokeWidth = 35,
     echoCount = 0, echoAngle = 0, echoSpacing = 40, echoGhosting = 60,
     echoBlur = 0, echoZoom = 0, echoSpin = 0, echoHue = 0, echoBlend = 'stack',
     echoEase = 50,
@@ -859,7 +859,7 @@ function drawTextEcho(ctx, layer, geom, px, blockCenterY, cache) {
   const n = Math.max(0, Math.min(16, Math.round(echoCount)))
   if (maxLineW <= 0 || n <= 0) return
 
-  const P = Math.ceil(size * 0.4 + (stroke ? size * 0.07 : 0) + 8)
+  const P = Math.ceil(size * 0.4 + (stroke ? size * 0.001 * strokeWidth : 0) + 8)
   const bw = Math.ceil(maxLineW + P * 2)
   const bh = Math.ceil(blockH + P * 2)
   if (bw < 2 || bh < 2 || bw > 4096 || bh > 4096) return
@@ -1001,11 +1001,16 @@ function drawTextBlob(ctx, layer, geom, px, blockCenterY, cache) {
   boxBlur1(a, tmp, w, h, R)
 
   // Threshold the blurred field back to an edge. Lower centre with Distance to
-  // push the contour outward; Smooth widens the ramp for a softer edge.
-  const t = (0.5 - d * 0.32) * 255
-  const s = (0.03 + Math.max(0, Math.min(100, blobSmooth)) / 100 * 0.4) * 255
+  // push the contour outward. Edge softness is specified in PIXELS and converted
+  // to an alpha band via the blurred field's slope (≈ 255 / blur extent) — so
+  // the edge stays equally crisp at any Distance instead of feathering as the
+  // blur grows. Smooth then adds an intentional feather in pixels.
+  const t = (0.5 - d * 0.34) * 255
+  const edgePx = 1.5 + Math.max(0, Math.min(100, blobSmooth)) / 100 * size * 0.28
+  const slopePerPx = 255 / (R * 2.2 + 1)
+  const s = Math.max(1.5, edgePx * 0.5 * slopePerPx)
   const e0 = t - s, e1 = t + s
-  const inv = e1 > e0 ? 1 / (e1 - e0) : 1e9
+  const inv = 1 / (e1 - e0)
   const [cr, cg, cb] = hexToRgbTriple(blobColor)
 
   if (!cache.blobOut) cache.blobOut = document.createElement('canvas')

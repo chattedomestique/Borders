@@ -17,7 +17,7 @@ const DEFAULT_LAYER = (id, index = 0) => ({
   x: 0.5,
   y: Math.min(0.88, 0.4 + index * 0.18),
   bold: false, italic: false, opacity: 100,
-  shadow: false, stroke: false, strokeColor: '#000000',
+  shadow: false, stroke: false, strokeColor: '#000000', strokeWidth: 35,
   letterSpacing: 0, wordSpacing: 0, bg: 'none', bgColor: '#000000', bgOpacity: 50,
   motionBlur: false, motionAngle: 0, motionLength: 60, motionSpeed: 60,
   trailGrain: 0, trailGrainSize: 30, trailGrainVariability: 0, trailGrainMono: true,

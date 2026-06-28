@@ -287,12 +287,21 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
             </div>
 
             {selectedLayer.stroke && (
-              <div className="controls__color-row controls__color-row--active">
-                <label className="controls__color-swatch" style={{ background: selectedLayer.strokeColor }}>
-                  <input type="color" value={selectedLayer.strokeColor} onChange={e => ul('strokeColor', e.target.value)} />
-                </label>
-                <span className="controls__color-hint">Outline color</span>
-              </div>
+              <>
+                <div className="controls__color-row controls__color-row--active">
+                  <label className="controls__color-swatch" style={{ background: selectedLayer.strokeColor }}>
+                    <input type="color" value={selectedLayer.strokeColor} onChange={e => ul('strokeColor', e.target.value)} />
+                  </label>
+                  <span className="controls__color-hint">Outline color</span>
+                </div>
+                <div className="controls__row controls__row--spaced">
+                  <label className="controls__label" htmlFor="stroke-width">Outline width</label>
+                  <EditableValue value={selectedLayer.strokeWidth ?? 35} min={0} max={100} suffix="%"
+                    onChange={v => ul('strokeWidth', v)} />
+                </div>
+                <Slider id="stroke-width" min={0} max={100} step={1} def={35}
+                  value={selectedLayer.strokeWidth ?? 35} on={v => ul('strokeWidth', v)} />
+              </>
             )}
 
             <div className="controls__divider controls__divider--inset"/>
