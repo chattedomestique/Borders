@@ -9,11 +9,47 @@ import { drawTextLayer } from './text.js'
 // on all four sides regardless of the media's aspect ratio.
 export const OUT_SIZE = 1800
 
+// Snap grid resolution. 1/12 conveniently lands on center (6/12), the
+// rule-of-thirds (4/12, 8/12) and the quarters (3/12, 9/12).
+export const GRID_DIVISIONS = 12
+
+/**
+ * Transient alignment grid drawn on top of the composite while a text layer is
+ * being dragged. It is NOT part of `settings`, so it never lands in history and
+ * never bakes into an exported frame (export renders with overlay = null).
+ */
+function drawGridOverlay(ctx, w, h, divisions = GRID_DIVISIONS) {
+  const unit = Math.max(1, Math.round(Math.min(w, h) / 1000))
+  const stroke = (x1, y1, x2, y2, lw, color) => {
+    ctx.lineWidth = lw; ctx.strokeStyle = color
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke()
+  }
+  ctx.save()
+  ctx.lineCap = 'butt'
+  // Interior grid lines — a dark underlay + light line keeps them visible on
+  // any background (light photo, dark photo, or the bright border).
+  for (let i = 1; i < divisions; i++) {
+    const x = Math.round(w * i / divisions) + 0.5
+    const y = Math.round(h * i / divisions) + 0.5
+    stroke(x, 0, x, h, unit * 2, 'rgba(0, 0, 0, 0.22)')
+    stroke(0, y, w, y, unit * 2, 'rgba(0, 0, 0, 0.22)')
+    stroke(x, 0, x, h, unit, 'rgba(255, 255, 255, 0.5)')
+    stroke(0, y, w, y, unit, 'rgba(255, 255, 255, 0.5)')
+  }
+  // Emphasised centre cross — accent over a dark halo
+  const cx = Math.round(w / 2) + 0.5, cy = Math.round(h / 2) + 0.5
+  stroke(cx, 0, cx, h, unit * 3, 'rgba(0, 0, 0, 0.3)')
+  stroke(0, cy, w, cy, unit * 3, 'rgba(0, 0, 0, 0.3)')
+  stroke(cx, 0, cx, h, unit * 2, 'rgba(232, 120, 60, 0.95)')
+  stroke(0, cy, w, cy, unit * 2, 'rgba(232, 120, 60, 0.95)')
+  ctx.restore()
+}
+
 /**
  * Core render. The border is added AROUND the scaled media so it is
  * always uniform on all four sides, regardless of aspect ratio.
  */
-export function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
+export function renderFrame(canvas, source, settings, cache, geoRef, bboxMap, overlay = null) {
   if (!canvas || !source) return
   const { borderThickness, bgMode, bgColor = '#ffffff', blurAmount = 60, cornerRadius, cropRatio = 'free',
           zoom = 1, panX = 0.5, panY = 0.5,
@@ -126,4 +162,7 @@ export function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
   // 4. Text layers (drawn last, on top of everything)
   if (bboxMap) bboxMap.clear()
   textLayers.forEach(layer => drawTextLayer(ctx, totalW, totalH, layer, bboxMap))
+
+  // 5. Transient drag-time grid overlay (never persisted, never exported)
+  if (overlay?.grid) drawGridOverlay(ctx, totalW, totalH)
 }

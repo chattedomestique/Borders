@@ -1,13 +1,12 @@
-/* Chip — horizontally-scrollable pill row of selectable chips. */
+/* Chip — wrapping pill row of selectable chips. Chips flow onto new rows
+   instead of scrolling sideways, so a panel never scrolls horizontally
+   (the only horizontal scroll the editor used to expose). */
 .controls__layer-strip {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
-  overflow-x: auto;
   padding-bottom: 2px;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
 }
-.controls__layer-strip::-webkit-scrollbar { display: none; }
 
 /* Selectable pill (crop ratios). */
 .controls__ratio-chip {

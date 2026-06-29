@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle } from 'react'
+import { forwardRef, useImperativeHandle, useEffect } from 'react'
 import { useSettings } from '../../state/settingsStore.js'
 import { useCanvasRenderer } from './useCanvasRenderer.js'
 import { useCanvasGestures } from './useCanvasGestures.js'
@@ -16,8 +16,8 @@ const Canvas = forwardRef(function Canvas(
   const { settings, update, updateLayer } = useSettings()
 
   const {
-    canvasRef, sourceRef, settingsRef, mediaRef, cacheRef, geoRef, textBBoxesRef,
-    ready, startLoop, stopLoop,
+    canvasRef, sourceRef, settingsRef, mediaRef, cacheRef, geoRef, textBBoxesRef, overlayRef,
+    ready, redraw, startLoop, stopLoop,
   } = useCanvasRenderer(media, settings)
 
   const { handlers, isDragging, isDraggingText } = useCanvasGestures({
@@ -28,6 +28,13 @@ const Canvas = forwardRef(function Canvas(
     onSelectLayer,
     pickMode,
   })
+
+  // Show the alignment grid only while a text layer is being dragged (and snap
+  // is on). The overlay is transient — not in settings — so it never exports.
+  useEffect(() => {
+    overlayRef.current = (isDraggingText && settingsRef.current.snapToGrid !== false) ? { grid: true } : null
+    redraw()
+  }, [isDraggingText, overlayRef, settingsRef, redraw])
 
   useImperativeHandle(ref, () => ({
     save(onProgress) {

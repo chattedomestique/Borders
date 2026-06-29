@@ -113,10 +113,12 @@
 
 html {
   overscroll-behavior: none;
+  overflow-x: hidden;
 }
 
 body {
   overscroll-behavior: none;
+  overflow-x: hidden;
   background: var(--bg);
   color: var(--ink);
 }
