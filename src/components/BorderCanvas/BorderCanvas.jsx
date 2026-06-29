@@ -381,14 +381,39 @@ function drawTextLayer(ctx, totalW, totalH, layer, bboxMap) {
   ctx.save()
   ctx.font = `${italic ? 'italic ' : ''}${bold ? 'bold ' : ''}${size}px ${font}`
   if ('letterSpacing' in ctx) ctx.letterSpacing = `${letterSpacing}px`
-  ctx.textAlign = align
   ctx.textBaseline = 'middle'
   ctx.globalAlpha = opacity / 100
 
+  const justify = align === 'justify'
+  // Width every justified line stretches to fill (the widest natural line).
   const maxLineW = Math.max(...lines.map(l => ctx.measureText(l).width))
-  const boxLeft = align === 'center' ? px - maxLineW / 2
-                : align === 'right'  ? px - maxLineW
+  // Justified text reads as a centered block; L/C/R keep their own anchoring.
+  const effAlign = justify ? 'center' : align
+  const boxLeft = effAlign === 'center' ? px - maxLineW / 2
+                : effAlign === 'right'  ? px - maxLineW
                 : px
+
+  // For justify we place every glyph by hand with letterSpacing off, then split
+  // the leftover space evenly across the gaps so each line fills maxLineW — an
+  // even rectangular paragraph with equal spacing between every character.
+  ctx.textAlign = justify ? 'left' : align
+  if (justify && 'letterSpacing' in ctx) ctx.letterSpacing = '0px'
+
+  const layoutJustified = (line) => {
+    const chars = Array.from(line)
+    const widths = chars.map(c => ctx.measureText(c).width)
+    const natural = widths.reduce((a, b) => a + b, 0)
+    const gaps = chars.length - 1
+    const extra = gaps > 0 ? (maxLineW - natural) / gaps : 0
+    const xs = []
+    let cx = 0
+    for (let k = 0; k < chars.length; k++) { xs.push(cx); cx += widths[k] + extra }
+    return { chars, xs }
+  }
+  const drawJustified = (drawFn, line, yPos) => {
+    const { chars, xs } = layoutJustified(line)
+    for (let k = 0; k < chars.length; k++) drawFn(chars[k], boxLeft + xs[k], yPos)
+  }
 
   // Store bbox for hit-testing
   if (bboxMap) {
@@ -406,9 +431,10 @@ function drawTextLayer(ctx, totalW, totalH, layer, bboxMap) {
     ctx.globalAlpha = (bgOpacity / 100) * (opacity / 100)
     ctx.fillStyle = bgColor
     lines.forEach((line, i) => {
-      const lw = ctx.measureText(line).width
-      const lx = align === 'center' ? px - lw / 2 - pad
-               : align === 'right'  ? px - lw - pad
+      const lw = justify ? maxLineW : ctx.measureText(line).width
+      const lx = justify             ? boxLeft - pad
+               : align === 'center'  ? px - lw / 2 - pad
+               : align === 'right'   ? px - lw - pad
                : px - pad
       const ly = startY + i * lineHeight - lineHeight / 2
       const rw = lw + pad * 2
@@ -435,11 +461,19 @@ function drawTextLayer(ctx, totalW, totalH, layer, bboxMap) {
     ctx.strokeStyle = strokeColor
     ctx.lineWidth = Math.max(2, size * 0.07)
     ctx.lineJoin = 'round'
-    lines.forEach((line, i) => ctx.strokeText(line, px, startY + i * lineHeight))
+    if (justify) {
+      lines.forEach((line, i) => drawJustified((c, cx, cy) => ctx.strokeText(c, cx, cy), line, startY + i * lineHeight))
+    } else {
+      lines.forEach((line, i) => ctx.strokeText(line, px, startY + i * lineHeight))
+    }
   }
 
   ctx.fillStyle = color
-  lines.forEach((line, i) => ctx.fillText(line, px, startY + i * lineHeight))
+  if (justify) {
+    lines.forEach((line, i) => drawJustified((c, cx, cy) => ctx.fillText(c, cx, cy), line, startY + i * lineHeight))
+  } else {
+    lines.forEach((line, i) => ctx.fillText(line, px, startY + i * lineHeight))
+  }
   ctx.restore()
 }
 

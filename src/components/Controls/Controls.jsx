@@ -24,9 +24,10 @@ const FONTS = [
 ]
 
 const ALIGNS = [
-  { id: 'left',   label: 'L' },
-  { id: 'center', label: 'C' },
-  { id: 'right',  label: 'R' },
+  { id: 'left',    label: 'L' },
+  { id: 'center',  label: 'C' },
+  { id: 'right',   label: 'R' },
+  { id: 'justify', label: 'J' },
 ]
 
 const TEXT_BG_MODES = [
@@ -135,7 +136,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                   style={{ fontStyle: 'italic' }} onClick={() => ul('italic', !selectedLayer.italic)}
                   aria-pressed={selectedLayer.italic}>I</button>
               </div>
-              <div className="controls__seg controls__seg--fill" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+              <div className="controls__seg controls__seg--fill" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
                 {ALIGNS.map(a => (
                   <button key={a.id} role="radio" aria-checked={selectedLayer.align === a.id}
                     className={`controls__seg-btn${selectedLayer.align === a.id ? ' controls__seg-btn--active' : ''}`}
