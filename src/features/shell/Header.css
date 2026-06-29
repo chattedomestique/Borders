@@ -1,0 +1,58 @@
+/* ── Header ── */
+.app__header {
+  flex-shrink: 0;
+  z-index: 10;
+  width: 100%;
+  background: var(--glass-strong);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.app__header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 0 20px;
+  height: 52px;
+}
+
+.app__logo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.app__logo-icon { flex-shrink: 0; color: var(--accent); }
+
+.app__logo-text {
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  color: var(--ink);
+}
+
+.app__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.app__reset-btn {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  padding: 8px 14px;
+  border-radius: var(--r-pill);
+  border: 1.5px solid var(--accent-dim);
+  transition: background var(--dur-fast), border-color var(--dur-fast),
+              transform 0.2s var(--ease-spring);
+}
+.app__reset-btn:active {
+  background: var(--accent-dim);
+  transform: scale(0.95);
+}

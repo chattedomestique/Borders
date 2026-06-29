@@ -1,0 +1,26 @@
+/* Panel — the grid-rows 0fr→1fr sliding container for the controls drawer. */
+.app__panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--dur-slow) var(--ease-out);
+  background: var(--glass);
+  backdrop-filter: saturate(160%) blur(36px);
+  -webkit-backdrop-filter: saturate(160%) blur(36px);
+  border-top: 0.5px solid var(--glass-border);
+}
+
+.app__panel--open {
+  grid-template-rows: 1fr;
+}
+
+/* Inner wrapper allows grid row to collapse to 0 and provides scroll container */
+.app__panel-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.app__panel--open .app__panel-inner {
+  overflow-y: auto;
+  max-height: 55vh;
+  overscroll-behavior: contain;
+}

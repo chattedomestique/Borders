@@ -1,0 +1,39 @@
+/* Segmented — a radiogroup of pill-segments on a track. */
+.controls__seg {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+  padding: 3px;
+  background: var(--seg-track);
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+}
+
+.controls__seg-btn {
+  padding: 8px 4px;
+  border-radius: calc(var(--r-md) - 3px);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink-2);
+  letter-spacing: -0.1px;
+  transition: background var(--dur-fast), color var(--dur-fast), box-shadow var(--dur-fast),
+              transform 0.2s var(--ease-spring);
+  -webkit-tap-highlight-color: transparent;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.controls__seg-btn:active {
+  transform: scale(0.94);
+}
+
+.controls__seg-btn--active {
+  background: var(--surface-raised);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+
+.controls__seg--fill {
+  flex: 1;
+  min-width: 0;
+}
