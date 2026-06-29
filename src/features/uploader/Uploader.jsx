@@ -5,6 +5,8 @@ import './Uploader.css'
 const ACCEPT = 'image/*,video/*'
 const MAX_SIZE_MB = 200
 
+const FEATURES = ['Borders & grain', 'Custom type', 'Pinch to zoom', 'Save to Photos']
+
 export default function Uploader({ onMediaLoaded }) {
   const inputRef = useRef(null)
   const [dragging, setDragging] = useState(false)
@@ -48,6 +50,12 @@ export default function Uploader({ onMediaLoaded }) {
 
   return (
     <div className="uploader">
+      <header className="uploader__hero">
+        <span className="uploader__eyebrow">Border Studio</span>
+        <h1 className="uploader__title">Frame your<br />photos &amp; video.</h1>
+        <p className="uploader__lede">Borders, grain and type — then save straight to your camera roll.</p>
+      </header>
+
       <div
         className={`uploader__drop${dragging ? ' uploader__drop--active' : ''}`}
         onClick={() => inputRef.current?.click()}
@@ -56,12 +64,14 @@ export default function Uploader({ onMediaLoaded }) {
         onDragLeave={handleDragLeave}
         role="button"
         tabIndex={0}
-        aria-label="Tap to choose a photo or video"
-        onKeyDown={(e) => e.key === 'Enter' && inputRef.current?.click()}
+        aria-label="Choose a photo or video"
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && inputRef.current?.click()}
       >
-        <Icon name="frameLarge" className="uploader__frame-icon" />
-        <p className="uploader__title">Frame your photos.</p>
-        <p className="uploader__subtitle">Tap to choose · photos &amp; video</p>
+        <span className="uploader__glow" aria-hidden="true" />
+        <Icon name="frameLarge" size={56} className="uploader__frame-icon" />
+        <p className="uploader__drop-title">Drop a photo or video</p>
+        <p className="uploader__drop-sub">or tap to browse your library</p>
+        <span className="uploader__cta">Choose file</span>
       </div>
 
       {error && (
@@ -79,7 +89,7 @@ export default function Uploader({ onMediaLoaded }) {
       />
 
       <div className="uploader__features">
-        {['Border & grain', 'Custom text', 'Pinch to zoom', 'Save to Photos'].map(f => (
+        {FEATURES.map(f => (
           <span key={f} className="uploader__feature-chip">{f}</span>
         ))}
       </div>

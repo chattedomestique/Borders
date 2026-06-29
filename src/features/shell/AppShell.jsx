@@ -25,7 +25,7 @@ const TABS = [
  * through the SettingsContext, so there is no settings prop-drilling here.
  */
 export default function AppShell() {
-  const { reset, addLayer, removeLayer, pickColor, undo, redo } = useSettings()
+  const { reset, addLayer, removeLayer, pickColor, undo, redo, textLayers = [] } = useSettings()
 
   const [step, setStep] = useState(STEPS.UPLOAD)
   const [media, setMedia] = useState(null)
@@ -94,8 +94,10 @@ export default function AppShell() {
   }, [])
 
   const handleAddLayer = useCallback(() => {
-    setSelectedLayerId(addLayer())
-  }, [addLayer])
+    // Reuse an existing blank layer instead of stacking up "Empty" chips.
+    const blank = textLayers.find(l => !l.content.trim())
+    setSelectedLayerId(blank ? blank.id : addLayer())
+  }, [addLayer, textLayers])
 
   const handleRemoveLayer = useCallback((id) => {
     removeLayer(id)
