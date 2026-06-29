@@ -349,12 +349,12 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                   value={selectedLayer.blobDistance ?? 40} on={v => ul('blobDistance', v)} />
 
                 <div className="controls__row controls__row--spaced">
-                  <label className="controls__label" htmlFor="blob-smooth">Smooth</label>
-                  <EditableValue value={selectedLayer.blobSmooth ?? 20} min={0} max={100} suffix="%"
-                    onChange={v => ul('blobSmooth', v)} />
+                  <label className="controls__label" htmlFor="blob-curve">Curviness</label>
+                  <EditableValue value={selectedLayer.blobCurve ?? 30} min={0} max={100} suffix="%"
+                    onChange={v => ul('blobCurve', v)} />
                 </div>
-                <Slider id="blob-smooth" min={0} max={100} step={1} def={20}
-                  value={selectedLayer.blobSmooth ?? 20} on={v => ul('blobSmooth', v)} />
+                <Slider id="blob-curve" min={0} max={100} step={1} def={30}
+                  value={selectedLayer.blobCurve ?? 30} on={v => ul('blobCurve', v)} />
 
                 <div className="controls__color-row controls__color-row--active">
                   <label className="controls__color-swatch" style={{ background: selectedLayer.blobColor ?? '#000000' }}>
@@ -363,6 +363,46 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                   </label>
                   <span className="controls__color-hint">Blob color</span>
                 </div>
+
+                {/* Grain on the blob — shared engine with the motion trail */}
+                <div className="controls__row controls__row--spaced">
+                  <label className="controls__label" htmlFor="blob-grain">Grain</label>
+                  <EditableValue value={selectedLayer.blobGrain ?? 0} min={0} max={100}
+                    format={v => v === 0 ? 'Off' : `${v}%`} onChange={v => ul('blobGrain', v)} />
+                </div>
+                <Slider id="blob-grain" min={0} max={100} step={1} def={0}
+                  value={selectedLayer.blobGrain ?? 0} on={v => ul('blobGrain', v)} />
+
+                {(selectedLayer.blobGrain ?? 0) > 0 && (
+                  <>
+                    <div className="controls__row controls__row--spaced">
+                      <label className="controls__label" htmlFor="blob-grain-size">Grain size</label>
+                      <EditableValue value={selectedLayer.blobGrainSize ?? 30} min={0} max={100} suffix="%"
+                        onChange={v => ul('blobGrainSize', v)} />
+                    </div>
+                    <Slider id="blob-grain-size" min={0} max={100} step={1} def={30}
+                      value={selectedLayer.blobGrainSize ?? 30} on={v => ul('blobGrainSize', v)} />
+
+                    <div className="controls__row controls__row--spaced">
+                      <label className="controls__label" htmlFor="blob-grain-rough">Roughness</label>
+                      <EditableValue value={selectedLayer.blobGrainRough ?? 0} min={0} max={100}
+                        format={v => v === 0 ? 'Smooth' : `${v}%`} onChange={v => ul('blobGrainRough', v)} />
+                    </div>
+                    <Slider id="blob-grain-rough" min={0} max={100} step={1} def={0}
+                      value={selectedLayer.blobGrainRough ?? 0} on={v => ul('blobGrainRough', v)} />
+
+                    <div className="controls__row controls__row--spaced">
+                      <label className="controls__label">Dissolve</label>
+                      <Toggle on={!!selectedLayer.blobGrainDissolve}
+                        onChange={v => ul('blobGrainDissolve', v)} label="Toggle blob grain dissolve"/>
+                    </div>
+                    <div className="controls__row controls__row--spaced">
+                      <label className="controls__label">Monochrome grain</label>
+                      <Toggle on={selectedLayer.blobGrainMono ?? true}
+                        onChange={v => ul('blobGrainMono', v)} label="Toggle blob monochrome grain"/>
+                    </div>
+                  </>
+                )}
               </>
             )}
 

@@ -950,35 +950,98 @@ function boxBlur1(src, tmp, w, h, r) {
   }
 }
 
+// 1D squared-distance transform (Felzenszwalb & Huttenlocher) — the lower
+// envelope of parabolas. Exact and O(n). Scratch arrays d/v/z are reused.
+function edt1d(f, d, v, z, n) {
+  let k = 0
+  v[0] = 0
+  z[0] = -Infinity
+  z[1] = Infinity
+  for (let q = 1; q < n; q++) {
+    let s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k])
+    while (s <= z[k]) {
+      k--
+      s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k])
+    }
+    k++
+    v[k] = q
+    z[k] = s
+    z[k + 1] = Infinity
+  }
+  k = 0
+  for (let q = 0; q < n; q++) {
+    while (z[k + 1] < q) k++
+    const dx = q - v[k]
+    d[q] = dx * dx + f[v[k]]
+  }
+}
+
+// Exact Euclidean distance (in px) from every pixel to the nearest "inside"
+// pixel of `mask` (alpha ≥ 128). Separable: columns then rows. Cached scratch.
+function distanceField(mask, w, h, cache) {
+  const N = w * h
+  if (!cache.edtG || cache.edtG.length < N) cache.edtG = new Float64Array(N)
+  const g = cache.edtG
+  for (let i = 0; i < N; i++) g[i] = mask[i] ? 0 : 1e20
+  const m = Math.max(w, h)
+  if (!cache.edtF || cache.edtF.length < m) {
+    cache.edtF = new Float64Array(m)
+    cache.edtD = new Float64Array(m)
+    cache.edtV = new Int32Array(m)
+    cache.edtZ = new Float64Array(m + 1)
+  }
+  const f = cache.edtF, d = cache.edtD, v = cache.edtV, z = cache.edtZ
+  for (let x = 0; x < w; x++) {
+    for (let y = 0; y < h; y++) f[y] = g[y * w + x]
+    edt1d(f, d, v, z, h)
+    for (let y = 0; y < h; y++) g[y * w + x] = d[y]
+  }
+  for (let y = 0; y < h; y++) {
+    const row = y * w
+    for (let x = 0; x < w; x++) f[x] = g[row + x]
+    edt1d(f, d, v, z, w)
+    for (let x = 0; x < w; x++) g[row + x] = d[x]
+  }
+  if (!cache.edtDist || cache.edtDist.length < N) cache.edtDist = new Float32Array(N)
+  const dist = cache.edtDist
+  for (let i = 0; i < N; i++) dist[i] = Math.sqrt(g[i])
+  return dist
+}
+
 /**
- * Blob stroke — a distance-based gooey outline. Same construction as the SVG
- * "gooey" filter / metaballs (and luukdv/gooey-react): blur the glyph alpha
- * into a field, then threshold it back to a hard edge. The blur radius is the
- * merge distance, so neighbouring letters bridge into organic blobs as Distance
- * grows; the threshold is lowered with Distance to dilate the silhouette
- * outward into a stroke. Smooth feathers the edge. Drawn behind the sharp text.
+ * Blob stroke — a distance-field outline that merges nearby letters into curvy
+ * blobs. Built the way crisp SDF/sticker outlines are done (Red Blob Games,
+ * MSDF text): compute the exact distance from each pixel to the glyph edge, then
+ * keep pixels within Distance. Thresholding the *distance* (not a blurred alpha)
+ * gives a HARD edge at full opacity that stays hard at any size — no feathering.
  *
- * Done on the alpha channel in JS — no ctx.filter / SVG / WebGL — so it works
- * on every target including older iOS Safari.
+ * Curviness rounds the junctions: the dilated mask is blurred then re-thresholded
+ * at its steep midpoint (still crisp) to fillet the concave joins into gooey
+ * curves. An optional grain layer (shared with the motion trail) sits on top,
+ * with a true dissolve mode for hard grain holes.
+ *
+ * Pure JS on the alpha channel — no ctx.filter / SVG / WebGL.
  */
-function drawTextBlob(ctx, layer, geom, px, blockCenterY, cache) {
+function drawTextBlob(ctx, layer, geom, px, blockCenterY, cache, animate) {
   const {
     size = 80, opacity = 100, align = 'center',
-    blobDistance = 40, blobSmooth = 20, blobColor = '#000000',
+    blobDistance = 40, blobCurve = 30, blobColor = '#000000',
+    blobGrain = 0, blobGrainSize = 30, blobGrainRough = 0,
+    blobGrainMono = true, blobGrainDissolve = false,
   } = layer
   const { maxLineW, blockH, isJustify } = geom
   if (maxLineW <= 0) return
 
-  const d = Math.max(0, Math.min(100, blobDistance)) / 100
-  const R = Math.round(2 + d * size * 0.55)                 // blur radius = merge distance
-  const P = Math.ceil(size * 0.4 + R + 8)
+  const dd = Math.max(0, Math.min(100, blobDistance)) / 100
+  const D = dd * size * 0.5                                       // outward stroke distance (px)
+  const B = Math.round(Math.max(0, Math.min(100, blobCurve)) / 100 * size * 0.35)  // junction rounding
+  const P = Math.ceil(size * 0.4 + D + B + 10)
   const bw = Math.ceil(maxLineW + P * 2)
   const bh = Math.ceil(blockH + P * 2)
   if (bw < 2 || bh < 2 || bw > 4096 || bh > 4096) return
   const w = bw, h = bh, len = w * h
 
-  // Glyph silhouette (fill only — ignore stroke/bg/shadow; colour is irrelevant,
-  // we only read its alpha).
+  // Glyph silhouette (fill only — we read its alpha as the mask).
   if (!cache.blobGlyph) cache.blobGlyph = document.createElement('canvas')
   const og = cache.blobGlyph
   if (og.width !== w || og.height !== h) { og.width = w; og.height = h }
@@ -989,27 +1052,36 @@ function drawTextBlob(ctx, layer, geom, px, blockCenterY, cache) {
   paintBlock(ogc, { ...layer, color: '#ffffff', stroke: false, bg: 'none', shadow: false },
     geom, localAnchor, P + blockH / 2, { drawBg: false, drawShadow: false, alpha: 1 })
 
+  // Binary mask → distance field → dilated mask with a 1px hard edge.
+  if (!cache.blobMask || cache.blobMask.length < len) cache.blobMask = new Uint8Array(len)
+  const mask = cache.blobMask
+  const sd = ogc.getImageData(0, 0, w, h).data
+  for (let i = 0, j = 3; i < len; i++, j += 4) mask[i] = sd[j] >= 128 ? 1 : 0
+  const dist = distanceField(mask, w, h, cache)
+
   if (!cache.blobA || cache.blobA.length < len) {
     cache.blobA = new Float32Array(len)
     cache.blobTmp = new Float32Array(len)
   }
   const a = cache.blobA, tmp = cache.blobTmp
-  const src = ogc.getImageData(0, 0, w, h).data
-  for (let i = 0, j = 3; i < len; i++, j += 4) a[i] = src[j]
-  boxBlur1(a, tmp, w, h, R)               // 3 passes ≈ Gaussian
-  boxBlur1(a, tmp, w, h, R)
-  boxBlur1(a, tmp, w, h, R)
+  // a = 255 inside the dilated shape, 0 outside, 1px AA exactly at distance D.
+  for (let i = 0; i < len; i++) {
+    let u = D - dist[i] + 0.5
+    a[i] = (u < 0 ? 0 : u > 1 ? 1 : u) * 255
+  }
 
-  // Threshold the blurred field back to an edge. Lower centre with Distance to
-  // push the contour outward. Edge softness is specified in PIXELS and converted
-  // to an alpha band via the blurred field's slope (≈ 255 / blur extent) — so
-  // the edge stays equally crisp at any Distance instead of feathering as the
-  // blur grows. Smooth then adds an intentional feather in pixels.
-  const t = (0.5 - d * 0.34) * 255
-  const edgePx = 1.5 + Math.max(0, Math.min(100, blobSmooth)) / 100 * size * 0.28
-  const slopePerPx = 255 / (R * 2.2 + 1)
-  const s = Math.max(1.5, edgePx * 0.5 * slopePerPx)
-  const e0 = t - s, e1 = t + s
+  let e0, e1
+  if (B >= 1) {
+    // Round the junctions: blur the dilated mask, then re-threshold at its steep
+    // midpoint so the edge stays ~1px crisp while concave joins fillet into curves.
+    boxBlur1(a, tmp, w, h, B)
+    boxBlur1(a, tmp, w, h, B)
+    boxBlur1(a, tmp, w, h, B)
+    const s = Math.max(1.2, 255 / (2.5 * B) * 0.6)
+    e0 = 127.5 - s; e1 = 127.5 + s
+  } else {
+    e0 = 0; e1 = 255          // a is already a 1px hard edge
+  }
   const inv = 1 / (e1 - e0)
   const [cr, cg, cb] = hexToRgbTriple(blobColor)
 
@@ -1023,9 +1095,17 @@ function drawTextBlob(ctx, layer, geom, px, blockCenterY, cache) {
     let u = (a[i] - e0) * inv
     u = u < 0 ? 0 : u > 1 ? 1 : u
     od[j] = cr; od[j + 1] = cg; od[j + 2] = cb
-    od[j + 3] = u * u * (3 - 2 * u) * 255           // smoothstep
+    od[j + 3] = u * u * (3 - 2 * u) * 255           // smoothstep — full opacity fill, hard edge
   }
   octx.putImageData(oimg, 0, 0)
+
+  // Optional grain on the blob (same engine as the trail grain).
+  if (blobGrain > 0) {
+    applyTrailGrain(out, cache, {
+      amount: blobGrain, size: blobGrainSize, variability: blobGrainRough,
+      mono: blobGrainMono, spread: 0, dissolve: blobGrainDissolve, animate,
+    })
+  }
 
   const baseX = blockLeftFor(align, isJustify, px, maxLineW) - P
   const baseY = (blockCenterY - blockH / 2) - P
@@ -1073,7 +1153,7 @@ function drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache, animate) {
     drawTextTrail(ctx, layer, geom, px, cy, cache, animate)
   }
   if (blobStroke && cache) {
-    drawTextBlob(ctx, layer, geom, px, cy, cache)
+    drawTextBlob(ctx, layer, geom, px, cy, cache, animate)
   }
   paintBlock(ctx, layer, geom, px, cy, { drawBg: true, drawShadow: true, alpha: opacity / 100 })
   ctx.restore()
