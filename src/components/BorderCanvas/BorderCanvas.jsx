@@ -358,56 +358,90 @@ function applyGrain(ctx, w, h, grainAmount, grainVariability, monochrome, animat
   if (v > 0.4) drawLayer('grain22', 22, true, (v - 0.4) / 0.6 * 0.45) // coarse, smooth
 }
 
-function drawTextLayer(ctx, totalW, totalH, layer, bboxMap) {
+/**
+ * Measure a text layer's block geometry without drawing. Sets font + spacing on
+ * the passed context (so measureText is accurate) and returns everything the
+ * painter needs. Shared by the normal draw, the motion-blur offscreen pass, and
+ * hit-testing so all three stay perfectly aligned.
+ */
+function measureBlock(ctx, layer) {
   const {
-    id, content, font = 'system-ui, sans-serif', size = 80,
-    color = '#ffffff', align = 'center', x = 0.5, y = 0.88,
-    bold = false, italic = false, opacity = 100,
-    shadow = false, stroke = false, strokeColor = '#000000',
-    letterSpacing = 0, bg = 'none', bgColor = '#000000', bgOpacity = 50,
+    content, font = 'system-ui, sans-serif', size = 80,
+    align = 'center', bold = false, italic = false,
+    letterSpacing = 0, wordSpacing = 0,
   } = layer
 
-  if (!content?.trim()) {
-    bboxMap?.delete(id)
-    return
-  }
+  ctx.font = `${italic ? 'italic ' : ''}${bold ? 'bold ' : ''}${size}px ${font}`
+  const canWordSpace = 'wordSpacing' in ctx
+  if ('letterSpacing' in ctx) ctx.letterSpacing = `${letterSpacing}px`
+  if (canWordSpace)           ctx.wordSpacing = `${wordSpacing}px`
 
   const lines = content.split('\n')
   const lineHeight = size * 1.3
   const blockH = lines.length * lineHeight
-  const px = x * totalW
-  const startY = y * totalH - blockH / 2 + lineHeight / 2
+  const isJustify = align === 'justify' && canWordSpace
+  const lineWidths = lines.map(l => ctx.measureText(l).width)  // at base spacing
+  const maxLineW = Math.max(...lineWidths, 0)
+
+  // Per-line word spacing (px) when justified; null = draw at base spacing.
+  // A line needs at least one inter-word gap to stretch — single-word lines
+  // (and the widest line, which is already at target) keep their base spacing.
+  const justifySpacing = lines.map((line, i) => {
+    if (!isJustify) return null
+    const gaps = (line.match(/ /g) || []).length
+    if (gaps === 0 || lineWidths[i] >= maxLineW) return null
+    return wordSpacing + (maxLineW - lineWidths[i]) / gaps
+  })
+
+  return { lines, lineHeight, blockH, isJustify, lineWidths, maxLineW, justifySpacing, canWordSpace }
+}
+
+// Left edge of the text block in canvas coords, given the per-align anchor px.
+function blockLeftFor(align, isJustify, px, maxLineW) {
+  return (align === 'center' || isJustify) ? px - maxLineW / 2
+       : align === 'right'                 ? px - maxLineW
+       : px
+}
+
+/**
+ * Paint a measured text block with its horizontal anchor at px and its vertical
+ * centre at blockCenterY. Self-contained (re-applies font + spacing) so it works
+ * on an offscreen canvas too. opts.alpha scales the whole block; opts.drawBg /
+ * opts.drawShadow let the motion-trail pass omit the background and drop shadow.
+ */
+function paintBlock(ctx, layer, geom, px, blockCenterY, opts = {}) {
+  const { drawBg = false, drawShadow = false, alpha = 1 } = opts
+  const {
+    font = 'system-ui, sans-serif', size = 80, color = '#ffffff', align = 'center',
+    bold = false, italic = false, letterSpacing = 0, wordSpacing = 0,
+    shadow = false, stroke = false, strokeColor = '#000000', strokeWidth = 35,
+    bg = 'none', bgColor = '#000000', bgOpacity = 50,
+  } = layer
+  const { lines, lineHeight, blockH, isJustify, lineWidths, maxLineW, justifySpacing, canWordSpace } = geom
 
   ctx.save()
   ctx.font = `${italic ? 'italic ' : ''}${bold ? 'bold ' : ''}${size}px ${font}`
   if ('letterSpacing' in ctx) ctx.letterSpacing = `${letterSpacing}px`
-  ctx.textAlign = align
+  if (canWordSpace)           ctx.wordSpacing = `${wordSpacing}px`
   ctx.textBaseline = 'middle'
-  ctx.globalAlpha = opacity / 100
+  ctx.textAlign = isJustify ? 'left' : align
 
-  const maxLineW = Math.max(...lines.map(l => ctx.measureText(l).width))
-  const boxLeft = align === 'center' ? px - maxLineW / 2
-                : align === 'right'  ? px - maxLineW
-                : px
-
-  // Store bbox for hit-testing
-  if (bboxMap) {
-    const pad = 24
-    bboxMap.set(id, {
-      x: boxLeft - pad, y: startY - lineHeight / 2 - pad,
-      w: maxLineW + pad * 2, h: blockH + pad * 2,
-    })
-  }
+  const startY = blockCenterY - blockH / 2 + lineHeight / 2
+  const boxLeft = blockLeftFor(align, isJustify, px, maxLineW)
+  const textX = isJustify ? boxLeft : px
+  const lineSpacing  = i => (justifySpacing[i] != null ? justifySpacing[i] : wordSpacing)
+  const lineRendered = i => (justifySpacing[i] != null ? maxLineW : lineWidths[i])
 
   // Per-line background
-  if (bg !== 'none') {
+  if (drawBg && bg !== 'none') {
     const pad = size * 0.28
     ctx.save()
-    ctx.globalAlpha = (bgOpacity / 100) * (opacity / 100)
+    ctx.globalAlpha = (bgOpacity / 100) * alpha
     ctx.fillStyle = bgColor
     lines.forEach((line, i) => {
-      const lw = ctx.measureText(line).width
-      const lx = align === 'center' ? px - lw / 2 - pad
+      const lw = lineRendered(i)
+      const lx = isJustify          ? boxLeft - pad
+               : align === 'center' ? px - lw / 2 - pad
                : align === 'right'  ? px - lw - pad
                : px - pad
       const ly = startY + i * lineHeight - lineHeight / 2
@@ -424,7 +458,8 @@ function drawTextLayer(ctx, totalW, totalH, layer, bboxMap) {
     ctx.restore()
   }
 
-  if (shadow) {
+  ctx.globalAlpha = alpha
+  if (drawShadow && shadow) {
     ctx.shadowColor = 'rgba(0,0,0,0.55)'
     ctx.shadowBlur = size * 0.45
     ctx.shadowOffsetX = size * 0.05
@@ -433,13 +468,694 @@ function drawTextLayer(ctx, totalW, totalH, layer, bboxMap) {
 
   if (stroke) {
     ctx.strokeStyle = strokeColor
-    ctx.lineWidth = Math.max(2, size * 0.07)
+    ctx.lineWidth = Math.max(2, size * 0.002 * strokeWidth)   // 35 ≈ the previous fixed size×0.07
     ctx.lineJoin = 'round'
-    lines.forEach((line, i) => ctx.strokeText(line, px, startY + i * lineHeight))
+    lines.forEach((line, i) => {
+      if (canWordSpace) ctx.wordSpacing = `${lineSpacing(i)}px`
+      ctx.strokeText(line, textX, startY + i * lineHeight)
+    })
   }
 
   ctx.fillStyle = color
-  lines.forEach((line, i) => ctx.fillText(line, px, startY + i * lineHeight))
+  lines.forEach((line, i) => {
+    if (canWordSpace) ctx.wordSpacing = `${lineSpacing(i)}px`
+    ctx.fillText(line, textX, startY + i * lineHeight)
+  })
+  ctx.restore()
+}
+
+/**
+ * Rear-curtain-sync motion blur for a text layer.
+ *
+ * Real rear-curtain (second-curtain) flash fires the strobe at the END of a
+ * long exposure: the ambient light records the subject smearing along its path,
+ * then the flash freezes a sharp frame at the final position. The result is a
+ * blur trail that follows the motion and fades out behind a crisp subject.
+ *
+ * We reproduce that honestly rather than faking a shadow:
+ *   1. Render the glyphs once into an offscreen bitmap (font shaping is the
+ *      expensive part — do it a single time).
+ *   2. Composite that bitmap many times along the motion vector with sub-pixel
+ *      offsets, source-over, alpha rising toward the head (so the near-head
+ *      smear is dense and the tail dissolves). This is a genuine directional
+ *      integral of the glyph shapes — every letter streaks, not just a copy.
+ *   3. The sharp "flash" frame is drawn afterwards by the caller, on top.
+ *
+ * `motionAngle` is the direction of travel; the trail extends opposite it (the
+ * path the subject came from). `motionLength` is the trail length in px.
+ * `motionSpeed` shapes the falloff: faster → a longer, wispier streak; slower →
+ * a tight, dense smear hugging the subject.
+ */
+// Noise tile, cached by signature for static frames and regenerated every frame
+// for video so the grain shimmers. `uniform` gives a flat [0,255] distribution
+// (used as a dissolve threshold field — dot density then tracks coverage
+// linearly); otherwise it's Gaussian (Box–Muller) centred on mid-grey.
+function makeNoiseTile(cache, key, nw, nh, sigma, mono, animate, uniform) {
+  if (!cache[key]) cache[key] = document.createElement('canvas')
+  const cv = cache[key]
+  const sig = `${nw}x${nh}:${sigma.toFixed(1)}:${mono ? 1 : 0}:${uniform ? 'u' : 'g'}`
+  if (!animate && cv.__sig === sig && cv.width === nw && cv.height === nh) return cv
+  if (cv.width !== nw || cv.height !== nh) { cv.width = nw; cv.height = nh }
+  cv.__sig = sig
+  const c = cv.getContext('2d')
+  const id = c.createImageData(nw, nh)
+  const d = id.data
+  const sample = () => {
+    if (uniform) return Math.floor(Math.random() * 256)
+    const u = Math.random() || 1e-10
+    const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2832 * Math.random())
+    return Math.max(0, Math.min(255, Math.round(128 + n * sigma)))
+  }
+  for (let i = 0; i < d.length; i += 4) {
+    if (mono) {
+      d[i] = d[i + 1] = d[i + 2] = sample()
+    } else {
+      d[i] = sample(); d[i + 1] = sample(); d[i + 2] = sample()
+    }
+    d[i + 3] = 255
+  }
+  c.putImageData(id, 0, 0)
+  return cv
+}
+
+/**
+ * Film grain confined to a motion-blur trail. The trail buffer `tb` holds the
+ * streak (colour + a soft alpha gradient); only its covered pixels are touched.
+ *
+ * A noise field is built at the chosen coarseness (plus an optional coarser
+ * octave for Roughness), then combined per pixel in one of two modes:
+ *   • soft  — additive luminance grain on the trail colour (noise lightens and
+ *             darkens it). Additive, not soft-light, because soft-light is a
+ *             no-op on near-white/near-black — which is most text — so it would
+ *             show nothing on a white trail.
+ *   • dissolve — the noise erodes the trail's alpha, breaking the streak into
+ *             grain specks instead of shading it.
+ *
+ * `spread` weights the grain along the motion axis toward the dim tail (a real
+ * long exposure is noisiest where the ambient light was faintest), using the
+ * head/tail `axis` in buffer coordinates.
+ */
+function applyTrailGrain(tb, cache, opts) {
+  const { amount, size, variability, mono, spread = 0, dissolve = false, axis, animate } = opts
+  if (!amount) return
+  const w = tb.width, h = tb.height
+  // Grain cell size in buffer px: Size 0 → per-pixel (~1px, a true 1:1 dither),
+  // Size 100 → coarse (~16px clumps).
+  const cell = 1 + (Math.max(0, Math.min(100, size)) / 100) * 15
+  const nw = Math.max(2, Math.round(w / cell))
+  const nh = Math.max(2, Math.round(h / cell))
+  const v = Math.max(0, Math.min(100, variability)) / 100
+
+  // Build the noise into a buffer-sized canvas (GPU upscales the small tile),
+  // then sample it per pixel below. Dissolve needs a flat distribution so the
+  // threshold dither's dot density tracks the trail's coverage linearly.
+  const fine = makeNoiseTile(cache, 'tgFine', nw, nh, 64, mono, animate, dissolve)
+  if (!cache.tgMask) cache.tgMask = document.createElement('canvas')
+  const noise = cache.tgMask
+  if (noise.width !== w || noise.height !== h) { noise.width = w; noise.height = h }
+  const nctx = noise.getContext('2d')
+  nctx.globalCompositeOperation = 'source-over'
+  nctx.globalAlpha = 1
+  nctx.clearRect(0, 0, w, h)
+  nctx.imageSmoothingEnabled = false
+  nctx.drawImage(fine, 0, 0, w, h)
+  if (v > 0) {
+    const cw = Math.max(2, Math.round(nw / 2.6))
+    const ch = Math.max(2, Math.round(nh / 2.6))
+    const coarse = makeNoiseTile(cache, 'tgCoarse', cw, ch, 64, mono, animate, dissolve)
+    nctx.imageSmoothingEnabled = true
+    nctx.imageSmoothingQuality = 'high'
+    nctx.globalAlpha = v * 0.7
+    nctx.drawImage(coarse, 0, 0, w, h)
+    nctx.globalAlpha = 1
+  }
+
+  const tbctx = tb.getContext('2d')
+  const tImg = tbctx.getImageData(0, 0, w, h)
+  const td = tImg.data
+  const nd = nctx.getImageData(0, 0, w, h).data
+
+  const amt = Math.min(1, amount / 100)
+  const sp = Math.max(0, Math.min(100, spread)) / 100
+  // Spread axis (head → tail) in buffer coords; p runs 0 at the head to 1 at the tail.
+  const hx = axis?.hx ?? 0, hy = axis?.hy ?? 0
+  const ax = (axis?.tx ?? 0) - hx, ay = (axis?.ty ?? 0) - hy
+  const len2 = ax * ax + ay * ay
+  const useSpread = sp > 0 && len2 > 0
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4
+      const a = td[i + 3]
+      if (a === 0) continue
+
+      let g = amt
+      if (useSpread) {
+        let p = ((x - hx) * ax + (y - hy) * ay) / len2
+        p = p < 0 ? 0 : p > 1 ? 1 : p
+        g *= 1 - sp * (1 - p)   // full at tail (p=1), reduced toward head
+      }
+      if (g <= 0.001) continue
+
+      if (dissolve) {
+        // True Dissolve blend: opacity is a probability, never a partial
+        // alpha — every pixel is fully kept or fully dropped (no gradation,
+        // no anti-aliasing). Coverage sets the base dot density; Amount raises
+        // the exponent so the denser body also breaks into grain instead of
+        // staying solid. Kept pixels go fully opaque; the streak's own colour
+        // (RGB) is untouched.
+        const c = a / 255
+        const pKeep = Math.pow(c, 1 + g * 2.5)   // g folds in Amount × spread weighting
+        td[i + 3] = nd[i] < pKeep * 255 ? 255 : 0
+      } else {
+        // Additive luminance grain: signed noise added to the trail colour.
+        // Visible on white (darkens) and black (lightens) alike, unlike
+        // soft-light. Scales with amount; the trail's own alpha then fades it.
+        const k = g * 0.85
+        for (let c = 0; c < 3; c++) {
+          const r = td[i + c] + (nd[i + c] - 128) * k
+          td[i + c] = r < 0 ? 0 : r > 255 ? 255 : r
+        }
+      }
+    }
+  }
+  tbctx.putImageData(tImg, 0, 0)
+}
+
+// Composite the glyph bitmap `off` along the motion vector into `target`, with
+// the head copy landing at (ox0, oy0). Alpha rises toward the head (rear-sync).
+function paintTrailCopies(target, off, ox0, oy0, vx, vy, K, peak, gamma, dens, opacityFactor) {
+  target.save()
+  target.imageSmoothingEnabled = true
+  target.imageSmoothingQuality = 'high'
+  for (let i = 0; i < K; i++) {
+    const t = i / (K - 1)                      // 0 = tail, 1 = head
+    const a = peak * dens * Math.pow(t, gamma) * opacityFactor
+    if (a <= 0.002) continue
+    target.globalAlpha = a > 1 ? 1 : a
+    // Trail extends opposite the travel direction (the path the subject came from).
+    target.drawImage(off, ox0 - vx * (1 - t), oy0 - vy * (1 - t))
+  }
+  target.restore()
+}
+
+function drawTextTrail(ctx, layer, geom, px, blockCenterY, cache, animate) {
+  const {
+    size = 80, opacity = 100, align = 'center', stroke = false, strokeWidth = 35,
+    motionAngle = 0, motionLength = 0, motionSpeed = 60,
+    trailGrain = 0, trailGrainSize = 30, trailGrainVariability = 0, trailGrainMono = true,
+    trailGrainSpread = 0, trailGrainDissolve = false,
+  } = layer
+  const { maxLineW, blockH, isJustify } = geom
+  if (maxLineW <= 0 || motionLength <= 0) return
+
+  const angle = motionAngle * Math.PI / 180
+  const vx = Math.cos(angle) * motionLength
+  const vy = Math.sin(angle) * motionLength
+
+  // Offscreen bitmap of the glyphs, padded for stroke + minor glyph overhang.
+  const P = Math.ceil(size * 0.4 + (stroke ? size * 0.001 * strokeWidth : 0) + 8)
+  const bw = Math.ceil(maxLineW + P * 2)
+  const bh = Math.ceil(blockH + P * 2)
+  if (bw < 2 || bh < 2 || bw > 4096 || bh > 4096) return
+
+  if (!cache.textTrail) cache.textTrail = document.createElement('canvas')
+  const off = cache.textTrail
+  if (off.width !== bw || off.height !== bh) { off.width = bw; off.height = bh }
+  const octx = off.getContext('2d')
+  octx.clearRect(0, 0, bw, bh)
+
+  // Local anchor px chosen so the block's left edge sits at P (and top at P)
+  // inside the bitmap, whatever the alignment.
+  const localAnchor = (align === 'center' || isJustify) ? P + maxLineW / 2
+                    : align === 'right'                 ? P + maxLineW
+                    : P
+  paintBlock(octx, layer, geom, localAnchor, P + blockH / 2, { drawBg: false, drawShadow: false, alpha: 1 })
+
+  // Where the sharp block's top-left lands on the main canvas → bitmap origin.
+  const boxLeftMain = blockLeftFor(align, isJustify, px, maxLineW)
+  const baseX = boxLeftMain - P
+  const baseY = (blockCenterY - blockH / 2) - P
+
+  const speed = Math.max(0, Math.min(100, motionSpeed)) / 100
+  // Per-copy opacity at the head, calibrated at SAMPLE-px spacing. Kept low: the
+  // ambient trail is dimmer than the flash-lit sharp frame, and many overlapping
+  // copies still build a dense near-head smear without blowing out to solid.
+  const peak = 0.09 + speed * 0.07
+  // Falloff: slow → trail hugs the subject (tight, dense); fast → longer, wispier streak.
+  const gamma = 2.6 - speed * 1.4
+  const SAMPLE = 2                                                      // target px between copies
+  const K = Math.max(12, Math.min(128, Math.round(motionLength / SAMPLE)))
+  const spacing = motionLength / (K - 1)
+  // Density normalisation: per-copy alpha scales with actual spacing so the
+  // trail's overall density is the same whether or not K hits the cap.
+  const dens = spacing / SAMPLE
+  const opacityFactor = opacity / 100
+
+  // No grain → composite straight onto the canvas (the validated fast path).
+  if (!trailGrain) {
+    paintTrailCopies(ctx, off, baseX, baseY, vx, vy, K, peak, gamma, dens, opacityFactor)
+    return
+  }
+
+  // Grain → render the trail into its own buffer first so the grain can be
+  // masked to the streak, then blit the grained trail onto the canvas once.
+  const tbX = Math.floor(baseX + Math.min(0, -vx))
+  const tbY = Math.floor(baseY + Math.min(0, -vy))
+  const tbW = Math.ceil(bw + Math.abs(vx)) + 2
+  const tbH = Math.ceil(bh + Math.abs(vy)) + 2
+  if (tbW > 8192 || tbH > 8192) {   // pathological: fall back to the direct path
+    paintTrailCopies(ctx, off, baseX, baseY, vx, vy, K, peak, gamma, dens, opacityFactor)
+    return
+  }
+
+  if (!cache.trailBuf) cache.trailBuf = document.createElement('canvas')
+  const tb = cache.trailBuf
+  if (tb.width !== tbW || tb.height !== tbH) { tb.width = tbW; tb.height = tbH }
+  const tbctx = tb.getContext('2d')
+  tbctx.clearRect(0, 0, tbW, tbH)
+
+  paintTrailCopies(tbctx, off, baseX - tbX, baseY - tbY, vx, vy, K, peak, gamma, dens, 1)
+  // Spread axis: head (sharp end) → tail, in trail-buffer coordinates.
+  const headCx = (baseX - tbX) + bw / 2
+  const headCy = (baseY - tbY) + bh / 2
+  applyTrailGrain(tb, cache, {
+    amount: trailGrain, size: trailGrainSize,
+    variability: trailGrainVariability, mono: trailGrainMono,
+    spread: trailGrainSpread, dissolve: trailGrainDissolve,
+    axis: { hx: headCx, hy: headCy, tx: headCx - vx, ty: headCy - vy },
+    animate,
+  })
+
+  ctx.save()
+  ctx.globalAlpha = opacityFactor
+  ctx.drawImage(tb, tbX, tbY)
+  ctx.restore()
+}
+
+// One separable box-blur pass over RGBA (all four channels), so transparency
+// blurs too. Same running-sum technique as boxBlurPass but alpha-aware.
+function boxBlurPass4(d, w, h, r) {
+  const tmp = new Uint8ClampedArray(d.length)
+  for (let y = 0; y < h; y++) {                       // horizontal: d → tmp
+    const row = y * w
+    let R = 0, G = 0, B = 0, A = 0
+    for (let k = 0; k <= Math.min(r, w - 1); k++) {
+      const i = (row + k) * 4; R += d[i]; G += d[i + 1]; B += d[i + 2]; A += d[i + 3]
+    }
+    for (let x = 0; x < w; x++) {
+      const cnt = Math.min(x + r, w - 1) - Math.max(x - r, 0) + 1
+      const o = (row + x) * 4
+      tmp[o] = R / cnt; tmp[o + 1] = G / cnt; tmp[o + 2] = B / cnt; tmp[o + 3] = A / cnt
+      if (x - r >= 0)    { const i = (row + x - r) * 4;     R -= d[i]; G -= d[i+1]; B -= d[i+2]; A -= d[i+3] }
+      if (x + r + 1 < w) { const i = (row + x + r + 1) * 4; R += d[i]; G += d[i+1]; B += d[i+2]; A += d[i+3] }
+    }
+  }
+  for (let x = 0; x < w; x++) {                        // vertical: tmp → d
+    let R = 0, G = 0, B = 0, A = 0
+    for (let k = 0; k <= Math.min(r, h - 1); k++) {
+      const i = (k * w + x) * 4; R += tmp[i]; G += tmp[i + 1]; B += tmp[i + 2]; A += tmp[i + 3]
+    }
+    for (let y = 0; y < h; y++) {
+      const cnt = Math.min(y + r, h - 1) - Math.max(y - r, 0) + 1
+      const o = (y * w + x) * 4
+      d[o] = R / cnt; d[o + 1] = G / cnt; d[o + 2] = B / cnt; d[o + 3] = A / cnt
+      if (y - r >= 0)    { const i = ((y - r) * w + x) * 4;     R -= tmp[i]; G -= tmp[i+1]; B -= tmp[i+2]; A -= tmp[i+3] }
+      if (y + r + 1 < h) { const i = ((y + r + 1) * w + x) * 4; R += tmp[i]; G += tmp[i+1]; B += tmp[i+2]; A += tmp[i+3] }
+    }
+  }
+}
+
+// Gaussian-ish blur of an RGBA buffer with transparency. Premultiplies so soft
+// glyph edges don't pick up dark halos, runs two box passes, then unpremultiplies.
+function blurRGBA(d, w, h, r) {
+  if (r < 1) return
+  for (let i = 0; i < d.length; i += 4) {
+    const a = d[i + 3] / 255
+    d[i] *= a; d[i + 1] *= a; d[i + 2] *= a
+  }
+  boxBlurPass4(d, w, h, r)
+  boxBlurPass4(d, w, h, r)
+  for (let i = 0; i < d.length; i += 4) {
+    const a = d[i + 3] / 255
+    if (a > 0) {
+      d[i] = Math.min(255, d[i] / a)
+      d[i + 1] = Math.min(255, d[i + 1] / a)
+      d[i + 2] = Math.min(255, d[i + 2] / a)
+    }
+  }
+}
+
+// Build a blurred and/or hue-tinted variant of the glyph bitmap for one echo.
+// Returns `off` untouched when no blur or tint is needed. Blur uses the same
+// box-blur stack as the frosted background (ctx.filter 'blur' is ignored on
+// older iOS Safari); tint recolours the glyphs via source-atop for chromatic
+// echoes.
+function prepareEchoBitmap(off, bw, bh, blurR, tint, cache) {
+  if (blurR < 0.5 && !tint) return off
+  if (!cache.echoScratch) cache.echoScratch = document.createElement('canvas')
+  const sc = cache.echoScratch
+  if (sc.width !== bw || sc.height !== bh) { sc.width = bw; sc.height = bh }
+  const c = sc.getContext('2d')
+  c.globalCompositeOperation = 'source-over'
+  c.globalAlpha = 1
+  c.clearRect(0, 0, bw, bh)
+  c.drawImage(off, 0, 0)
+
+  if (blurR >= 0.5) {
+    const img = c.getImageData(0, 0, bw, bh)
+    blurRGBA(img.data, bw, bh, Math.round(blurR))
+    c.putImageData(img, 0, 0)
+  }
+
+  if (tint) {
+    c.globalCompositeOperation = 'source-atop'
+    c.fillStyle = tint
+    c.fillRect(0, 0, bw, bh)
+    c.globalCompositeOperation = 'source-over'
+  }
+  return sc
+}
+
+/**
+ * Echo effect — the discrete cousin of the motion trail. Instead of a
+ * continuous smear it stamps N decaying ghost copies of the text, spaced along
+ * a direction (the After Effects Echo model: count, spacing, decay, operator).
+ *
+ * On top of that core it layers 2026-flavoured, mobile-safe extras: each
+ * successive ghost can grow/shrink (Zoom), rotate (Spin), and hue-shift
+ * (chromatic/prismatic ghosts), and the operator can be Stack (normal),
+ * Screen, or Lighten for additive glow. The sharp text is drawn over the top
+ * by the caller. Ghosts farther out fade (decay^i), and optionally blur more.
+ */
+function drawTextEcho(ctx, layer, geom, px, blockCenterY, cache) {
+  const {
+    size = 80, opacity = 100, align = 'center', stroke = false, strokeWidth = 35,
+    echoCount = 0, echoAngle = 0, echoSpacing = 40, echoGhosting = 60,
+    echoBlur = 0, echoZoom = 0, echoSpin = 0, echoHue = 0, echoBlend = 'stack',
+    echoEase = 50,
+  } = layer
+  const { maxLineW, blockH, isJustify } = geom
+  const n = Math.max(0, Math.min(16, Math.round(echoCount)))
+  if (maxLineW <= 0 || n <= 0) return
+
+  const P = Math.ceil(size * 0.4 + (stroke ? size * 0.001 * strokeWidth : 0) + 8)
+  const bw = Math.ceil(maxLineW + P * 2)
+  const bh = Math.ceil(blockH + P * 2)
+  if (bw < 2 || bh < 2 || bw > 4096 || bh > 4096) return
+
+  if (!cache.textEcho) cache.textEcho = document.createElement('canvas')
+  const off = cache.textEcho
+  if (off.width !== bw || off.height !== bh) { off.width = bw; off.height = bh }
+  const octx = off.getContext('2d')
+  octx.clearRect(0, 0, bw, bh)
+  const localAnchor = (align === 'center' || isJustify) ? P + maxLineW / 2
+                    : align === 'right'                 ? P + maxLineW : P
+  paintBlock(octx, layer, geom, localAnchor, P + blockH / 2, { drawBg: false, drawShadow: false, alpha: 1 })
+
+  // Bitmap block centre (transform pivot) and where it lands on the canvas.
+  const bcx = P + maxLineW / 2
+  const bcy = P + blockH / 2
+  const cxMain = blockLeftFor(align, isJustify, px, maxLineW) + maxLineW / 2
+  const cyMain = blockCenterY
+
+  const ang = echoAngle * Math.PI / 180
+  const ux = Math.cos(ang), uy = Math.sin(ang)
+  // Spacing follows an easing curve along the run. Linear keeps even gaps;
+  // positive (default) eases out — ghosts start tight and spread apart as they
+  // go; negative does the reverse (start spread, bunch up at the end). The full
+  // run reaches the same span (echoSpacing × count) at either extreme.
+  const span = echoSpacing * n
+  const k = Math.max(-100, Math.min(100, echoEase)) / 100 * 3
+  const denom = Math.abs(k) < 0.01 ? 0 : Math.exp(k) - 1
+  const ease = t => denom === 0 ? t : (Math.exp(k * t) - 1) / denom
+  const decay = 0.2 + Math.max(0, Math.min(100, echoGhosting)) / 100 * 0.78
+  const scaleStep = 1 + echoZoom / 100 * 0.18
+  const spinRad = echoSpin * Math.PI / 180
+  const op0 = opacity / 100
+
+  ctx.save()
+  if (echoBlend === 'screen') ctx.globalCompositeOperation = 'screen'
+  else if (echoBlend === 'lighten') ctx.globalCompositeOperation = 'lighten'
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  // Far ghosts first so nearer ones composite on top of them.
+  for (let i = n; i >= 1; i--) {
+    const fade = Math.pow(decay, i) * op0
+    if (fade <= 0.004) continue
+    const blurR = echoBlur > 0 ? echoBlur * (i / n) : 0
+    const tint = echoHue > 0 ? `hsl(${((i * echoHue) % 360 + 360) % 360}, 85%, 60%)` : null
+    const src = prepareEchoBitmap(off, bw, bh, blurR, tint, cache)
+    const di = span * ease(i / n)
+    ctx.save()
+    ctx.globalAlpha = fade
+    ctx.translate(cxMain + ux * di, cyMain + uy * di)
+    if (spinRad) ctx.rotate(spinRad * i)
+    if (echoZoom) { const s = Math.pow(scaleStep, i); ctx.scale(s, s) }
+    ctx.drawImage(src, -bcx, -bcy)
+    ctx.restore()
+  }
+  ctx.restore()
+}
+
+function hexToRgbTriple(hex) {
+  const h = (hex || '#000000').replace('#', '')
+  if (h.length === 3) return [parseInt(h[0] + h[0], 16), parseInt(h[1] + h[1], 16), parseInt(h[2] + h[2], 16)]
+  return [parseInt(h.slice(0, 2), 16) || 0, parseInt(h.slice(2, 4), 16) || 0, parseInt(h.slice(4, 6), 16) || 0]
+}
+
+// One separable box-blur pass over a single Float32 channel (src → src via tmp).
+function boxBlur1(src, tmp, w, h, r) {
+  if (r < 1) return
+  for (let y = 0; y < h; y++) {
+    const row = y * w
+    let sum = 0
+    for (let k = 0; k <= Math.min(r, w - 1); k++) sum += src[row + k]
+    for (let x = 0; x < w; x++) {
+      const cnt = Math.min(x + r, w - 1) - Math.max(x - r, 0) + 1
+      tmp[row + x] = sum / cnt
+      if (x - r >= 0) sum -= src[row + x - r]
+      if (x + r + 1 < w) sum += src[row + x + r + 1]
+    }
+  }
+  for (let x = 0; x < w; x++) {
+    let sum = 0
+    for (let k = 0; k <= Math.min(r, h - 1); k++) sum += tmp[k * w + x]
+    for (let y = 0; y < h; y++) {
+      const cnt = Math.min(y + r, h - 1) - Math.max(y - r, 0) + 1
+      src[y * w + x] = sum / cnt
+      if (y - r >= 0) sum -= tmp[(y - r) * w + x]
+      if (y + r + 1 < h) sum += tmp[(y + r + 1) * w + x]
+    }
+  }
+}
+
+// 1D squared-distance transform (Felzenszwalb & Huttenlocher) — the lower
+// envelope of parabolas. Exact and O(n). Scratch arrays d/v/z are reused.
+function edt1d(f, d, v, z, n) {
+  let k = 0
+  v[0] = 0
+  z[0] = -Infinity
+  z[1] = Infinity
+  for (let q = 1; q < n; q++) {
+    let s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k])
+    while (s <= z[k]) {
+      k--
+      s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k])
+    }
+    k++
+    v[k] = q
+    z[k] = s
+    z[k + 1] = Infinity
+  }
+  k = 0
+  for (let q = 0; q < n; q++) {
+    while (z[k + 1] < q) k++
+    const dx = q - v[k]
+    d[q] = dx * dx + f[v[k]]
+  }
+}
+
+// Exact Euclidean distance (in px) from every pixel to the nearest "inside"
+// pixel of `mask` (alpha ≥ 128). Separable: columns then rows. Cached scratch.
+function distanceField(mask, w, h, cache) {
+  const N = w * h
+  if (!cache.edtG || cache.edtG.length < N) cache.edtG = new Float64Array(N)
+  const g = cache.edtG
+  for (let i = 0; i < N; i++) g[i] = mask[i] ? 0 : 1e20
+  const m = Math.max(w, h)
+  if (!cache.edtF || cache.edtF.length < m) {
+    cache.edtF = new Float64Array(m)
+    cache.edtD = new Float64Array(m)
+    cache.edtV = new Int32Array(m)
+    cache.edtZ = new Float64Array(m + 1)
+  }
+  const f = cache.edtF, d = cache.edtD, v = cache.edtV, z = cache.edtZ
+  for (let x = 0; x < w; x++) {
+    for (let y = 0; y < h; y++) f[y] = g[y * w + x]
+    edt1d(f, d, v, z, h)
+    for (let y = 0; y < h; y++) g[y * w + x] = d[y]
+  }
+  for (let y = 0; y < h; y++) {
+    const row = y * w
+    for (let x = 0; x < w; x++) f[x] = g[row + x]
+    edt1d(f, d, v, z, w)
+    for (let x = 0; x < w; x++) g[row + x] = d[x]
+  }
+  if (!cache.edtDist || cache.edtDist.length < N) cache.edtDist = new Float32Array(N)
+  const dist = cache.edtDist
+  for (let i = 0; i < N; i++) dist[i] = Math.sqrt(g[i])
+  return dist
+}
+
+/**
+ * Blob stroke — a distance-field outline that merges nearby letters into curvy
+ * blobs. Built the way crisp SDF/sticker outlines are done (Red Blob Games,
+ * MSDF text): compute the exact distance from each pixel to the glyph edge, then
+ * keep pixels within Distance. Thresholding the *distance* (not a blurred alpha)
+ * gives a HARD edge at full opacity that stays hard at any size — no feathering.
+ *
+ * Curviness rounds the junctions: the dilated mask is blurred then re-thresholded
+ * at its steep midpoint (still crisp) to fillet the concave joins into gooey
+ * curves. An optional grain layer (shared with the motion trail) sits on top,
+ * with a true dissolve mode for hard grain holes.
+ *
+ * Pure JS on the alpha channel — no ctx.filter / SVG / WebGL.
+ */
+function drawTextBlob(ctx, layer, geom, px, blockCenterY, cache, animate) {
+  const {
+    size = 80, opacity = 100, align = 'center',
+    blobDistance = 40, blobCurve = 30, blobColor = '#000000',
+    blobGrain = 0, blobGrainSize = 30, blobGrainRough = 0,
+    blobGrainMono = true, blobGrainDissolve = false,
+  } = layer
+  const { maxLineW, blockH, isJustify } = geom
+  if (maxLineW <= 0) return
+
+  const dd = Math.max(0, Math.min(100, blobDistance)) / 100
+  const D = dd * size * 0.5                                       // outward stroke distance (px)
+  const B = Math.round(Math.max(0, Math.min(100, blobCurve)) / 100 * size * 0.35)  // junction rounding
+  const P = Math.ceil(size * 0.4 + D + B + 10)
+  const bw = Math.ceil(maxLineW + P * 2)
+  const bh = Math.ceil(blockH + P * 2)
+  if (bw < 2 || bh < 2 || bw > 4096 || bh > 4096) return
+  const w = bw, h = bh, len = w * h
+
+  // Glyph silhouette (fill only — we read its alpha as the mask).
+  if (!cache.blobGlyph) cache.blobGlyph = document.createElement('canvas')
+  const og = cache.blobGlyph
+  if (og.width !== w || og.height !== h) { og.width = w; og.height = h }
+  const ogc = og.getContext('2d')
+  ogc.clearRect(0, 0, w, h)
+  const localAnchor = (align === 'center' || isJustify) ? P + maxLineW / 2
+                    : align === 'right'                 ? P + maxLineW : P
+  paintBlock(ogc, { ...layer, color: '#ffffff', stroke: false, bg: 'none', shadow: false },
+    geom, localAnchor, P + blockH / 2, { drawBg: false, drawShadow: false, alpha: 1 })
+
+  // Binary mask → distance field → dilated mask with a 1px hard edge.
+  if (!cache.blobMask || cache.blobMask.length < len) cache.blobMask = new Uint8Array(len)
+  const mask = cache.blobMask
+  const sd = ogc.getImageData(0, 0, w, h).data
+  for (let i = 0, j = 3; i < len; i++, j += 4) mask[i] = sd[j] >= 128 ? 1 : 0
+  const dist = distanceField(mask, w, h, cache)
+
+  if (!cache.blobA || cache.blobA.length < len) {
+    cache.blobA = new Float32Array(len)
+    cache.blobTmp = new Float32Array(len)
+  }
+  const a = cache.blobA, tmp = cache.blobTmp
+  // a = 255 inside the dilated shape, 0 outside, 1px AA exactly at distance D.
+  for (let i = 0; i < len; i++) {
+    let u = D - dist[i] + 0.5
+    a[i] = (u < 0 ? 0 : u > 1 ? 1 : u) * 255
+  }
+
+  let e0, e1
+  if (B >= 1) {
+    // Round the junctions: blur the dilated mask, then re-threshold at its steep
+    // midpoint so the edge stays ~1px crisp while concave joins fillet into curves.
+    boxBlur1(a, tmp, w, h, B)
+    boxBlur1(a, tmp, w, h, B)
+    boxBlur1(a, tmp, w, h, B)
+    const s = Math.max(1.2, 255 / (2.5 * B) * 0.6)
+    e0 = 127.5 - s; e1 = 127.5 + s
+  } else {
+    e0 = 0; e1 = 255          // a is already a 1px hard edge
+  }
+  const inv = 1 / (e1 - e0)
+  const [cr, cg, cb] = hexToRgbTriple(blobColor)
+
+  if (!cache.blobOut) cache.blobOut = document.createElement('canvas')
+  const out = cache.blobOut
+  if (out.width !== w || out.height !== h) { out.width = w; out.height = h }
+  const octx = out.getContext('2d')
+  const oimg = octx.createImageData(w, h)
+  const od = oimg.data
+  for (let i = 0, j = 0; i < len; i++, j += 4) {
+    let u = (a[i] - e0) * inv
+    u = u < 0 ? 0 : u > 1 ? 1 : u
+    od[j] = cr; od[j + 1] = cg; od[j + 2] = cb
+    od[j + 3] = u * u * (3 - 2 * u) * 255           // smoothstep — full opacity fill, hard edge
+  }
+  octx.putImageData(oimg, 0, 0)
+
+  // Optional grain on the blob (same engine as the trail grain).
+  if (blobGrain > 0) {
+    applyTrailGrain(out, cache, {
+      amount: blobGrain, size: blobGrainSize, variability: blobGrainRough,
+      mono: blobGrainMono, spread: 0, dissolve: blobGrainDissolve, animate,
+    })
+  }
+
+  const baseX = blockLeftFor(align, isJustify, px, maxLineW) - P
+  const baseY = (blockCenterY - blockH / 2) - P
+  ctx.save()
+  ctx.globalAlpha = opacity / 100
+  ctx.drawImage(out, baseX, baseY)
+  ctx.restore()
+}
+
+function drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache, animate) {
+  const {
+    id, content, align = 'center', x = 0.5, y = 0.88, opacity = 100,
+    motionBlur = false, motionLength = 0, echo = false, echoCount = 0,
+    blobStroke = false,
+  } = layer
+
+  if (!content?.trim()) {
+    bboxMap?.delete(id)
+    return
+  }
+
+  ctx.save()
+  const geom = measureBlock(ctx, layer)
+  const { maxLineW, blockH } = geom
+  const px = x * totalW
+  const cy = y * totalH
+
+  // Hit-test bbox tracks the sharp text (not the trail) so dragging always grabs
+  // the readable glyphs.
+  if (bboxMap) {
+    const pad = 24
+    const boxLeft = blockLeftFor(align, geom.isJustify, px, maxLineW)
+    bboxMap.set(id, {
+      x: boxLeft - pad, y: cy - blockH / 2 - pad,
+      w: maxLineW + pad * 2, h: blockH + pad * 2,
+    })
+  }
+
+  // Echo ghosts furthest back, then the motion trail, then the blob stroke
+  // hugging the glyphs, then the sharp text on top.
+  if (echo && echoCount > 0 && cache) {
+    drawTextEcho(ctx, layer, geom, px, cy, cache)
+  }
+  if (motionBlur && motionLength > 0 && cache) {
+    drawTextTrail(ctx, layer, geom, px, cy, cache, animate)
+  }
+  if (blobStroke && cache) {
+    drawTextBlob(ctx, layer, geom, px, cy, cache, animate)
+  }
+  paintBlock(ctx, layer, geom, px, cy, { drawBg: true, drawShadow: true, alpha: opacity / 100 })
   ctx.restore()
 }
 
@@ -559,7 +1275,7 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
 
   // 4. Text layers (drawn last, on top of everything)
   if (bboxMap) bboxMap.clear()
-  textLayers.forEach(layer => drawTextLayer(ctx, totalW, totalH, layer, bboxMap))
+  textLayers.forEach(layer => drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache, isVideo))
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
