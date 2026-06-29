@@ -1,0 +1,18 @@
+/* Section — the padded, vertically-spaced column each control panel lives in. */
+.controls__section {
+  padding: 14px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.controls__divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0;
+}
+
+.controls__divider--inset {
+  margin: 2px 0;
+  opacity: 0.7;
+}

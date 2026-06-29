@@ -1,0 +1,27 @@
+/* Swatch — a color preview that opens the native color picker on tap. */
+.controls__color-swatch {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-sm);
+  border: 2px solid var(--border-strong);
+  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  transition: border-color var(--dur-fast), transform 0.2s var(--ease-spring);
+}
+
+.controls__color-swatch:active {
+  transform: scale(0.92);
+}
+
+.controls__color-swatch input[type="color"] {
+  position: absolute;
+  inset: -4px;
+  width: calc(100% + 8px);
+  height: calc(100% + 8px);
+  opacity: 0;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
