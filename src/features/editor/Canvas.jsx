@@ -11,7 +11,7 @@ import './Canvas.css'
  * All drawing/math lives in engine/; all state lives in the settings context.
  */
 const Canvas = forwardRef(function Canvas(
-  { media, pickMode, onSelectLayer, onPickColor }, ref
+  { media, pickMode, selectedLayerId, onSelectLayer, onPickColor }, ref
 ) {
   const { settings, update, updateLayer } = useSettings()
 
@@ -29,12 +29,14 @@ const Canvas = forwardRef(function Canvas(
     pickMode,
   })
 
-  // Show the alignment grid only while a text layer is being dragged (and snap
-  // is on). The overlay is transient — not in settings — so it never exports.
+  // Transient on-canvas overlay: a selection box around the active layer, plus
+  // the alignment grid while dragging (snap on). Not in settings → never exports
+  // (image export renders a clean offscreen frame; video renders without it).
   useEffect(() => {
-    overlayRef.current = (isDraggingText && settingsRef.current.snapToGrid !== false) ? { grid: true } : null
+    const snapOn = settingsRef.current.snapToGrid !== false
+    overlayRef.current = { selectedId: selectedLayerId, grid: isDraggingText && snapOn }
     redraw()
-  }, [isDraggingText, overlayRef, settingsRef, redraw])
+  }, [selectedLayerId, isDraggingText, overlayRef, settingsRef, redraw])
 
   useImperativeHandle(ref, () => ({
     save(onProgress) {

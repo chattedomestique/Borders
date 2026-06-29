@@ -35,6 +35,7 @@ export default function AppShell() {
   const [activeTab, setActiveTab] = useState(null)
   const [viewMode, setViewMode] = useState('fit')
   const [showHint, setShowHint] = useState(false)
+  const [justSaved, setJustSaved] = useState(false)
   const canvasRef = useRef(null)
   const appRef = useRef(null)
   const overlayRef = useRef(null)
@@ -87,11 +88,19 @@ export default function AppShell() {
     setRecordingProgress(0)
     try {
       await canvasRef.current.save(setRecordingProgress)
+      setJustSaved(true)
     } finally {
       setStep(STEPS.EDIT)
       setRecordingProgress(0)
     }
   }, [])
+
+  // Auto-dismiss the save confirmation
+  useEffect(() => {
+    if (!justSaved) return
+    const t = setTimeout(() => setJustSaved(false), 1800)
+    return () => clearTimeout(t)
+  }, [justSaved])
 
   const handleAddLayer = useCallback(() => {
     // Reuse an existing blank layer instead of stacking up "Empty" chips.
@@ -148,6 +157,7 @@ export default function AppShell() {
               ref={canvasRef}
               media={media}
               pickMode={pickMode}
+              selectedLayerId={selectedLayerId}
               onPickColor={handlePickColor}
               onSelectLayer={setSelectedLayerId}
             />
@@ -157,6 +167,14 @@ export default function AppShell() {
 
       {/* Gesture hint — shown once per session after first image load */}
       {showHint && <GestureHint />}
+
+      {/* Save confirmation */}
+      {justSaved && (
+        <div className="app__save-toast" role="status">
+          <span className="app__save-toast-check"><Icon name="check" size={15} /></span>
+          <span>Saved</span>
+        </div>
+      )}
 
       {/* Frosted glass overlay — direct child of .app so absolute bottom:0 is viewport bottom */}
       {step !== STEPS.UPLOAD && media && (

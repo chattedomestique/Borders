@@ -104,6 +104,12 @@ export const ICONS = {
     </svg>
   ),
 
+  check: ({ size = 18, className }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <polyline points="4 12 10 18 20 6"/>
+    </svg>
+  ),
+
   // ── Uploader ──────────────────────────────────────────────────────────────
   frameLarge: ({ size = 44, className }) => (
     <svg className={className} width={size} height={size} viewBox="0 0 44 44" fill="none" aria-hidden="true">

@@ -13,8 +13,8 @@
   --accent-subtle:  #FBEFE6;
   --accent-dim:     rgba(208, 94, 41, 0.13);
   --accent-2:       #E1923B;          /* amber — secondary accent */
-  --accent-2-dim:   rgba(225, 146, 59, 0.16);
-  --grad-accent:    linear-gradient(135deg, #DA632B 0%, #E5A043 100%);
+  --accent-2-dim:   rgba(225, 146, 59, 0.12);
+  --grad-accent:    linear-gradient(135deg, #CF5E29 0%, #D9772F 100%); /* subtle */
 
   --ink:            #1C1714;          /* warm near-black */
   --ink-2:          #574C44;          /* warm medium */
@@ -35,7 +35,7 @@
   --shadow-md: 0 4px 14px rgba(28, 23, 20, 0.10), 0 1px 4px  rgba(28, 23, 20, 0.05);
   --shadow-lg: 0 10px 30px rgba(28, 23, 20, 0.12), 0 3px 10px rgba(28, 23, 20, 0.06);
   --shadow-xl: 0 20px 50px rgba(28, 23, 20, 0.16), 0 8px 20px rgba(28, 23, 20, 0.08);
-  --glow-accent: 0 8px 26px rgba(208, 94, 41, 0.34);
+  --glow-accent: 0 4px 16px rgba(208, 94, 41, 0.20);
 
   /* Radii — slightly larger for a friendlier, modern feel */
   --r-xs:   8px;
@@ -60,10 +60,10 @@
   --text-md: 14px;
   --text-lg: 17px;
   --text-xl: 22px;
-  --text-2xl: 28px;
-  --display-sm: 32px;
-  --display-md: 42px;
-  --display-lg: 54px;
+  --text-2xl: 26px;
+  --display-sm: 28px;
+  --display-md: 36px;
+  --display-lg: 46px;
 
   /* Motion tokens */
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -103,8 +103,8 @@
     --accent-subtle:  #2E2118;
     --accent-dim:     rgba(237, 126, 64, 0.18);
     --accent-2:       #F0AE5A;          /* amber */
-    --accent-2-dim:   rgba(240, 174, 90, 0.20);
-    --grad-accent:    linear-gradient(135deg, #ED7E40 0%, #F2A857 100%);
+    --accent-2-dim:   rgba(240, 174, 90, 0.16);
+    --grad-accent:    linear-gradient(135deg, #ED7E40 0%, #F09148 100%); /* subtle */
 
     --ink:            #F5F0EA;
     --ink-2:          #CBC0B5;
@@ -123,7 +123,7 @@
     --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.48), 0 1px 4px  rgba(0, 0, 0, 0.32);
     --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.55), 0 3px 10px rgba(0, 0, 0, 0.38);
     --shadow-xl: 0 22px 52px rgba(0, 0, 0, 0.62), 0 8px 20px rgba(0, 0, 0, 0.4);
-    --glow-accent: 0 8px 28px rgba(237, 126, 64, 0.40);
+    --glow-accent: 0 4px 18px rgba(237, 126, 64, 0.26);
 
     color-scheme: dark;
   }
@@ -238,9 +238,9 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
 :focus:not(:focus-visible) { outline: none; }
 
 /* ── Entrance / feedback motion ────────────────────────────────────────────── */
-@keyframes bs-fade-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-@keyframes bs-pop     { from { opacity: 0; transform: scale(0.92); }       to { opacity: 1; transform: none; } }
-@keyframes bs-float   { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+@keyframes bs-fade-up { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
+@keyframes bs-pop     { from { opacity: 0; transform: scale(0.94); }     to { opacity: 1; transform: none; } }
+@keyframes bs-float   { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 @keyframes bs-check   { from { stroke-dashoffset: 28; } to { stroke-dashoffset: 0; } }
 
 /* ── Reduced motion ────────────────────────────────────────────────────────── */

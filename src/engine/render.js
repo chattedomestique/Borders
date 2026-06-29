@@ -14,6 +14,26 @@ export const OUT_SIZE = 1800
 export const GRID_DIVISIONS = 12
 
 /**
+ * Selection indicator around the active text layer — a thin accent outline with
+ * small corner dots. Transient (never exported), like the grid.
+ */
+function drawSelectionBox(ctx, bb, w, h) {
+  const u = Math.max(2, Math.round(Math.min(w, h) / 650))
+  const r = Math.max(0, Math.min(18, bb.w / 2, bb.h / 2))
+  ctx.save()
+  ctx.strokeStyle = 'rgba(208, 94, 41, 0.95)'
+  ctx.lineWidth = u
+  ctx.beginPath()
+  ctx.roundRect(bb.x, bb.y, bb.w, bb.h, r)
+  ctx.stroke()
+  ctx.fillStyle = 'rgba(208, 94, 41, 0.95)'
+  for (const [cx, cy] of [[bb.x, bb.y], [bb.x + bb.w, bb.y], [bb.x, bb.y + bb.h], [bb.x + bb.w, bb.y + bb.h]]) {
+    ctx.beginPath(); ctx.arc(cx, cy, u * 1.7, 0, 6.2832); ctx.fill()
+  }
+  ctx.restore()
+}
+
+/**
  * Transient alignment grid drawn on top of the composite while a text layer is
  * being dragged. It is NOT part of `settings`, so it never lands in history and
  * never bakes into an exported frame (export renders with overlay = null).
@@ -163,6 +183,11 @@ export function renderFrame(canvas, source, settings, cache, geoRef, bboxMap, ov
   if (bboxMap) bboxMap.clear()
   textLayers.forEach(layer => drawTextLayer(ctx, totalW, totalH, layer, bboxMap))
 
-  // 5. Transient drag-time grid overlay (never persisted, never exported)
+  // 5. Transient overlays (never persisted, never exported): the drag-time
+  //    alignment grid, and the selection box around the active text layer.
   if (overlay?.grid) drawGridOverlay(ctx, totalW, totalH)
+  if (overlay?.selectedId && bboxMap) {
+    const bb = bboxMap.get(overlay.selectedId)
+    if (bb) drawSelectionBox(ctx, bb, totalW, totalH)
+  }
 }
