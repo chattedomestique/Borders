@@ -20,6 +20,7 @@
 }
 
 .app__panel--open .app__panel-inner {
+  overflow-x: hidden;       /* the panel scrolls vertically only — never sideways */
   overflow-y: auto;
   max-height: 55vh;
   overscroll-behavior: contain;

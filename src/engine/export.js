@@ -122,7 +122,12 @@ export function saveMedia({ canvas, source, mediaType, settingsRef, cacheRef, ge
 
   // ── Image ────────────────────────────────────────────────────────────
   return (async () => {
-    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
+    // Render a fresh, overlay-free frame to an offscreen canvas so on-canvas
+    // editing aids (selection box, grid) can never bake into the export. The
+    // visible canvas — which may carry a selection box — is left untouched.
+    const exportCanvas = document.createElement('canvas')
+    renderFrame(exportCanvas, source, settingsRef.current, cacheRef.current, geoRef, null, null)
+    const blob = await new Promise(resolve => exportCanvas.toBlob(resolve, 'image/png'))
     if (!blob) return
     const url = URL.createObjectURL(blob)
 

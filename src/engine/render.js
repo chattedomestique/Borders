@@ -9,11 +9,67 @@ import { drawTextLayer } from './text.js'
 // on all four sides regardless of the media's aspect ratio.
 export const OUT_SIZE = 1800
 
+// Snap grid resolution. 1/12 conveniently lands on center (6/12), the
+// rule-of-thirds (4/12, 8/12) and the quarters (3/12, 9/12).
+export const GRID_DIVISIONS = 12
+
+/**
+ * Selection indicator around the active text layer — a thin accent outline with
+ * small corner dots. Transient (never exported), like the grid.
+ */
+function drawSelectionBox(ctx, bb, w, h) {
+  const u = Math.max(2, Math.round(Math.min(w, h) / 650))
+  const r = Math.max(0, Math.min(18, bb.w / 2, bb.h / 2))
+  ctx.save()
+  ctx.strokeStyle = 'rgba(208, 94, 41, 0.95)'
+  ctx.lineWidth = u
+  ctx.beginPath()
+  ctx.roundRect(bb.x, bb.y, bb.w, bb.h, r)
+  ctx.stroke()
+  ctx.fillStyle = 'rgba(208, 94, 41, 0.95)'
+  for (const [cx, cy] of [[bb.x, bb.y], [bb.x + bb.w, bb.y], [bb.x, bb.y + bb.h], [bb.x + bb.w, bb.y + bb.h]]) {
+    ctx.beginPath(); ctx.arc(cx, cy, u * 1.7, 0, 6.2832); ctx.fill()
+  }
+  ctx.restore()
+}
+
+/**
+ * Transient alignment grid drawn on top of the composite while a text layer is
+ * being dragged. It is NOT part of `settings`, so it never lands in history and
+ * never bakes into an exported frame (export renders with overlay = null).
+ */
+function drawGridOverlay(ctx, w, h, divisions = GRID_DIVISIONS) {
+  const unit = Math.max(1, Math.round(Math.min(w, h) / 1000))
+  const stroke = (x1, y1, x2, y2, lw, color) => {
+    ctx.lineWidth = lw; ctx.strokeStyle = color
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke()
+  }
+  ctx.save()
+  ctx.lineCap = 'butt'
+  // Interior grid lines — a dark underlay + light line keeps them visible on
+  // any background (light photo, dark photo, or the bright border).
+  for (let i = 1; i < divisions; i++) {
+    const x = Math.round(w * i / divisions) + 0.5
+    const y = Math.round(h * i / divisions) + 0.5
+    stroke(x, 0, x, h, unit * 2, 'rgba(0, 0, 0, 0.22)')
+    stroke(0, y, w, y, unit * 2, 'rgba(0, 0, 0, 0.22)')
+    stroke(x, 0, x, h, unit, 'rgba(255, 255, 255, 0.5)')
+    stroke(0, y, w, y, unit, 'rgba(255, 255, 255, 0.5)')
+  }
+  // Emphasised centre cross — accent over a dark halo
+  const cx = Math.round(w / 2) + 0.5, cy = Math.round(h / 2) + 0.5
+  stroke(cx, 0, cx, h, unit * 3, 'rgba(0, 0, 0, 0.3)')
+  stroke(0, cy, w, cy, unit * 3, 'rgba(0, 0, 0, 0.3)')
+  stroke(cx, 0, cx, h, unit * 2, 'rgba(232, 120, 60, 0.95)')
+  stroke(0, cy, w, cy, unit * 2, 'rgba(232, 120, 60, 0.95)')
+  ctx.restore()
+}
+
 /**
  * Core render. The border is added AROUND the scaled media so it is
  * always uniform on all four sides, regardless of aspect ratio.
  */
-export function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
+export function renderFrame(canvas, source, settings, cache, geoRef, bboxMap, overlay = null) {
   if (!canvas || !source) return
   const { borderThickness, bgMode, bgColor = '#ffffff', blurAmount = 60, cornerRadius, cropRatio = 'free',
           zoom = 1, panX = 0.5, panY = 0.5,
@@ -126,4 +182,12 @@ export function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
   // 4. Text layers (drawn last, on top of everything)
   if (bboxMap) bboxMap.clear()
   textLayers.forEach(layer => drawTextLayer(ctx, totalW, totalH, layer, bboxMap))
+
+  // 5. Transient overlays (never persisted, never exported): the drag-time
+  //    alignment grid, and the selection box around the active text layer.
+  if (overlay?.grid) drawGridOverlay(ctx, totalW, totalH)
+  if (overlay?.selectedId && bboxMap) {
+    const bb = bboxMap.get(overlay.selectedId)
+    if (bb) drawSelectionBox(ctx, bb, totalW, totalH)
+  }
 }

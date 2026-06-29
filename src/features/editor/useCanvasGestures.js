@@ -1,6 +1,12 @@
 import { useRef, useState, useCallback } from 'react'
+import { GRID_DIVISIONS } from '../../engine/render.js'
 
 const MAX_ZOOM = 6
+
+// Snap a normalized (0..1) position to the alignment grid, then clamp so the
+// layer stays on-canvas. 1/12 lands on centre, thirds and quarters.
+const clampPos = (v) => Math.max(0.02, Math.min(0.98, v))
+const snapPos = (v, on) => clampPos(on ? Math.round(v * GRID_DIVISIONS) / GRID_DIVISIONS : v)
 
 /**
  * Pinch-to-zoom, drag-to-pan, double-tap-to-reset, eyedropper sampling, and
@@ -134,8 +140,11 @@ export function useCanvasGestures({
     // Text drag takes priority — don't update pointersRef so pinch stays inactive
     if (dragRef.current?.isText) {
       const drag = dragRef.current
-      onUpdateLayerRef.current?.(drag.layerId, 'x', Math.max(0.02, Math.min(0.98, drag.startTextX + (e.clientX - drag.startX) / drag.rect.width)))
-      onUpdateLayerRef.current?.(drag.layerId, 'y', Math.max(0.02, Math.min(0.98, drag.startTextY + (e.clientY - drag.startY) / drag.rect.height)))
+      const snap = settingsRef.current.snapToGrid !== false
+      const rawX = drag.startTextX + (e.clientX - drag.startX) / drag.rect.width
+      const rawY = drag.startTextY + (e.clientY - drag.startY) / drag.rect.height
+      onUpdateLayerRef.current?.(drag.layerId, 'x', snapPos(rawX, snap))
+      onUpdateLayerRef.current?.(drag.layerId, 'y', snapPos(rawY, snap))
       return
     }
 
@@ -173,7 +182,7 @@ export function useCanvasGestures({
       onUpdateRef.current?.('panX', (newSrcLeft + drag.viewW / 2) / geo.srcW)
       onUpdateRef.current?.('panY', (newSrcTop  + drag.viewH / 2) / geo.srcH)
     }
-  }, [geoRef])
+  }, [geoRef, settingsRef])
 
   const onPointerUp = useCallback((e) => {
     pointersRef.current.delete(e.pointerId)

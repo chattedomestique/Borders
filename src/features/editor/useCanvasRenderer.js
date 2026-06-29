@@ -18,13 +18,14 @@ export function useCanvasRenderer(media, settings) {
   const geoRef       = useRef({ totalW: OUT_SIZE, totalH: OUT_SIZE, scaledW: OUT_SIZE, scaledH: OUT_SIZE,
                                 offsetX: 0, offsetY: 0, srcW: 1, srcH: 1, mediaW: 1, mediaH: 1 })
   const textBBoxesRef = useRef(new Map())  // Map<layerId, bbox> in canvas coords
+  const overlayRef    = useRef(null)       // transient { grid } shown while dragging
   const [ready, setReady] = useState(false)
 
   settingsRef.current = settings
   mediaRef.current    = media
 
   const redraw = useCallback(() => {
-    renderFrame(canvasRef.current, sourceRef.current, settingsRef.current, cacheRef.current, geoRef, textBBoxesRef.current)
+    renderFrame(canvasRef.current, sourceRef.current, settingsRef.current, cacheRef.current, geoRef, textBBoxesRef.current, overlayRef.current)
   }, [])
 
   const stopLoop = useCallback(() => {
@@ -37,7 +38,7 @@ export function useCanvasRenderer(media, settings) {
   const startLoop = useCallback(() => {
     stopLoop()
     const loop = () => {
-      renderFrame(canvasRef.current, sourceRef.current, settingsRef.current, cacheRef.current, geoRef, textBBoxesRef.current)
+      renderFrame(canvasRef.current, sourceRef.current, settingsRef.current, cacheRef.current, geoRef, textBBoxesRef.current, overlayRef.current)
       animFrameRef.current = requestAnimationFrame(loop)
     }
     animFrameRef.current = requestAnimationFrame(loop)
@@ -101,7 +102,7 @@ export function useCanvasRenderer(media, settings) {
   }, [ready, startLoop, stopLoop])
 
   return {
-    canvasRef, sourceRef, settingsRef, mediaRef, cacheRef, geoRef, textBBoxesRef,
+    canvasRef, sourceRef, settingsRef, mediaRef, cacheRef, geoRef, textBBoxesRef, overlayRef,
     ready, redraw, startLoop, stopLoop,
   }
 }

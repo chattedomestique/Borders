@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle } from 'react'
+import { forwardRef, useImperativeHandle, useEffect } from 'react'
 import { useSettings } from '../../state/settingsStore.js'
 import { useCanvasRenderer } from './useCanvasRenderer.js'
 import { useCanvasGestures } from './useCanvasGestures.js'
@@ -11,13 +11,13 @@ import './Canvas.css'
  * All drawing/math lives in engine/; all state lives in the settings context.
  */
 const Canvas = forwardRef(function Canvas(
-  { media, pickMode, onSelectLayer, onPickColor }, ref
+  { media, pickMode, selectedLayerId, onSelectLayer, onPickColor }, ref
 ) {
   const { settings, update, updateLayer } = useSettings()
 
   const {
-    canvasRef, sourceRef, settingsRef, mediaRef, cacheRef, geoRef, textBBoxesRef,
-    ready, startLoop, stopLoop,
+    canvasRef, sourceRef, settingsRef, mediaRef, cacheRef, geoRef, textBBoxesRef, overlayRef,
+    ready, redraw, startLoop, stopLoop,
   } = useCanvasRenderer(media, settings)
 
   const { handlers, isDragging, isDraggingText } = useCanvasGestures({
@@ -28,6 +28,15 @@ const Canvas = forwardRef(function Canvas(
     onSelectLayer,
     pickMode,
   })
+
+  // Transient on-canvas overlay: a selection box around the active layer, plus
+  // the alignment grid while dragging (snap on). Not in settings → never exports
+  // (image export renders a clean offscreen frame; video renders without it).
+  useEffect(() => {
+    const snapOn = settingsRef.current.snapToGrid !== false
+    overlayRef.current = { selectedId: selectedLayerId, grid: isDraggingText && snapOn }
+    redraw()
+  }, [selectedLayerId, isDraggingText, overlayRef, settingsRef, redraw])
 
   useImperativeHandle(ref, () => ({
     save(onProgress) {

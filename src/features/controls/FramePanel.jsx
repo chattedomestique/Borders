@@ -15,7 +15,7 @@ const CROP_RATIOS = [
 ]
 
 export default function FramePanel() {
-  const { borderThickness, cornerRadius, cropRatio = 'free', showMedia, set, update } = useSettings()
+  const { borderThickness, cornerRadius, cropRatio = 'free', showMedia, snapToGrid = true, set, update } = useSettings()
 
   return (
     <Section label="Frame">
@@ -51,6 +51,11 @@ export default function FramePanel() {
       <div className="controls__row controls__row--spaced">
         <label className="controls__label">Show photo</label>
         <Toggle checked={showMedia} onChange={set('showMedia')} label="Toggle photo visibility" />
+      </div>
+
+      <div className="controls__row controls__row--spaced">
+        <label className="controls__label">Snap to grid</label>
+        <Toggle checked={snapToGrid} onChange={set('snapToGrid')} label="Toggle grid snapping for text" />
       </div>
     </Section>
   )

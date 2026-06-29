@@ -1,49 +1,58 @@
 /* ── Design Tokens ─────────────────────────────────────────────────────────── */
 :root {
-  /* Palette — warm editorial (light) */
-  --bg:             #F2EDE6;
-  --surface:        #FDFAF7;
-  --border:         #E4DDD3;
-  --border-strong:  #CBBFB3;
+  /* Palette — warm editorial, 2026 refresh (light) */
+  --bg:             #F1EBE2;
+  --bg-2:           #EAE2D6;          /* deeper warm wash for layering */
+  --surface:        #FFFCF8;
+  --surface-2:      #F8F2E9;          /* subtle raised surface */
+  --border:         #E6DED2;
+  --border-strong:  #CABDAD;
 
-  --accent:         #C9622C;          /* terracotta */
-  --accent-subtle:  #FAF0E9;
-  --accent-dim:     rgba(201, 98, 44, 0.13);
+  --accent:         #D05E29;          /* terracotta — a touch more vivid */
+  --accent-strong:  #B94C1C;          /* pressed / emphasis */
+  --accent-subtle:  #FBEFE6;
+  --accent-dim:     rgba(208, 94, 41, 0.13);
+  --accent-2:       #E1923B;          /* amber — secondary accent */
+  --accent-2-dim:   rgba(225, 146, 59, 0.12);
+  --grad-accent:    linear-gradient(135deg, #CF5E29 0%, #D9772F 100%); /* subtle */
 
   --ink:            #1C1714;          /* warm near-black */
-  --ink-2:          #5A4F47;          /* warm medium */
-  --ink-3:          #6E6258;          /* warm tertiary — 4.85:1 on --bg, passes WCAG AA */
+  --ink-2:          #574C44;          /* warm medium */
+  --ink-3:          #6E6258;          /* warm tertiary — passes WCAG AA on --bg */
 
   /* Translucent "glass" surfaces (theme-aware) */
-  --glass-strong:   rgba(242, 237, 230, 0.88);
-  --glass:          rgba(242, 237, 230, 0.55);
-  --glass-toolbar:  rgba(242, 237, 230, 0.46);
-  --glass-border:   rgba(228, 221, 211, 0.5);
-  --seg-track:      rgba(228, 221, 211, 0.45);
-  --surface-raised: rgba(253, 250, 247, 0.92);
-  --save-bg:        rgba(28, 23, 20, 0.78);
-  --save-ink:       #FDFAF7;
+  --glass-strong:   rgba(241, 235, 226, 0.90);
+  --glass:          rgba(241, 235, 226, 0.62);
+  --glass-toolbar:  rgba(241, 235, 226, 0.52);
+  --glass-border:   rgba(230, 222, 210, 0.6);
+  --seg-track:      rgba(228, 220, 209, 0.55);
+  --surface-raised: rgba(255, 252, 248, 0.96);
+  --save-bg:        var(--grad-accent);
+  --save-ink:       #FFFCF8;
 
-  /* Shadows — warm-tinted */
+  /* Elevation — warm-tinted, with a soft floating tier + accent glow */
   --shadow-sm: 0 1px 3px  rgba(28, 23, 20, 0.08), 0 1px 2px  rgba(28, 23, 20, 0.04);
-  --shadow-md: 0 3px 10px rgba(28, 23, 20, 0.09), 0 1px 4px  rgba(28, 23, 20, 0.05);
-  --shadow-lg: 0 8px 28px rgba(28, 23, 20, 0.11), 0 3px 10px rgba(28, 23, 20, 0.06);
+  --shadow-md: 0 4px 14px rgba(28, 23, 20, 0.10), 0 1px 4px  rgba(28, 23, 20, 0.05);
+  --shadow-lg: 0 10px 30px rgba(28, 23, 20, 0.12), 0 3px 10px rgba(28, 23, 20, 0.06);
+  --shadow-xl: 0 20px 50px rgba(28, 23, 20, 0.16), 0 8px 20px rgba(28, 23, 20, 0.08);
+  --glow-accent: 0 4px 16px rgba(208, 94, 41, 0.20);
 
-  /* Radii */
-  --r-xs:   6px;
-  --r-sm:   10px;
-  --r-md:   14px;
-  --r-lg:   18px;
-  --r-xl:   24px;
+  /* Radii — slightly larger for a friendlier, modern feel */
+  --r-xs:   8px;
+  --r-sm:   12px;
+  --r-md:   16px;
+  --r-lg:   22px;
+  --r-xl:   30px;
   --r-pill: 999px;
 
-  /* Spacing scale — replaces ad-hoc 4/6/8/14/20px in components */
+  /* Spacing scale */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 20px;
   --space-6: 24px;
+  --space-8: 32px;
 
   /* Type scale */
   --text-xs: 11px;
@@ -51,13 +60,17 @@
   --text-md: 14px;
   --text-lg: 17px;
   --text-xl: 22px;
+  --text-2xl: 26px;
+  --display-sm: 28px;
+  --display-md: 36px;
+  --display-lg: 46px;
 
-  /* Motion tokens — the spring/out curves repeated across components */
+  /* Motion tokens */
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --ease-out:    cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out:    cubic-bezier(0.22, 1, 0.36, 1);
   --dur-fast: 0.15s;
   --dur-med:  0.25s;
-  --dur-slow: 0.36s;
+  --dur-slow: 0.42s;
 
   /* Minimum touch target — applied by interactive primitives */
   --touch-min: 44px;
@@ -78,31 +91,39 @@
 /* ── Dark theme — warm, low-glare (ideal backdrop for editing photos) ───────── */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg:             #181513;
-    --surface:        #23201C;
+    --bg:             #16130F;
+    --bg-2:           #0F0D0A;
+    --surface:        #221E19;
+    --surface-2:      #2B2620;
     --border:         #38322C;
-    --border-strong:  #4F463E;
+    --border-strong:  #52483F;
 
-    --accent:         #E8783C;          /* brighter terracotta for dark bg */
-    --accent-subtle:  #2B201A;
-    --accent-dim:     rgba(232, 120, 60, 0.18);
+    --accent:         #ED7E40;          /* brighter terracotta for dark bg */
+    --accent-strong:  #F2924F;
+    --accent-subtle:  #2E2118;
+    --accent-dim:     rgba(237, 126, 64, 0.18);
+    --accent-2:       #F0AE5A;          /* amber */
+    --accent-2-dim:   rgba(240, 174, 90, 0.16);
+    --grad-accent:    linear-gradient(135deg, #ED7E40 0%, #F09148 100%); /* subtle */
 
-    --ink:            #F4EFE9;
-    --ink-2:          #C7BCB1;
-    --ink-3:          #968B80;
+    --ink:            #F5F0EA;
+    --ink-2:          #CBC0B5;
+    --ink-3:          #998D81;
 
-    --glass-strong:   rgba(24, 21, 19, 0.86);
-    --glass:          rgba(24, 21, 19, 0.62);
-    --glass-toolbar:  rgba(24, 21, 19, 0.52);
-    --glass-border:   rgba(80, 70, 62, 0.55);
-    --seg-track:      rgba(80, 70, 62, 0.30);
-    --surface-raised: rgba(74, 66, 58, 0.95);
-    --save-bg:        var(--accent);
+    --glass-strong:   rgba(22, 19, 15, 0.88);
+    --glass:          rgba(22, 19, 15, 0.66);
+    --glass-toolbar:  rgba(22, 19, 15, 0.58);
+    --glass-border:   rgba(82, 72, 63, 0.55);
+    --seg-track:      rgba(82, 72, 63, 0.32);
+    --surface-raised: rgba(78, 70, 61, 0.96);
+    --save-bg:        var(--grad-accent);
     --save-ink:       #1A1310;
 
     --shadow-sm: 0 1px 3px  rgba(0, 0, 0, 0.40), 0 1px 2px  rgba(0, 0, 0, 0.30);
-    --shadow-md: 0 3px 10px rgba(0, 0, 0, 0.45), 0 1px 4px  rgba(0, 0, 0, 0.30);
-    --shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.55), 0 3px 10px rgba(0, 0, 0, 0.35);
+    --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.48), 0 1px 4px  rgba(0, 0, 0, 0.32);
+    --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.55), 0 3px 10px rgba(0, 0, 0, 0.38);
+    --shadow-xl: 0 22px 52px rgba(0, 0, 0, 0.62), 0 8px 20px rgba(0, 0, 0, 0.4);
+    --glow-accent: 0 4px 18px rgba(237, 126, 64, 0.26);
 
     color-scheme: dark;
   }
@@ -113,11 +134,15 @@
 
 html {
   overscroll-behavior: none;
+  overflow-x: hidden;
 }
 
 body {
   overscroll-behavior: none;
-  background: var(--bg);
+  overflow-x: hidden;
+  /* Subtle warm depth — lighter at the top, deeper toward the edges */
+  background: radial-gradient(130% 90% at 50% -10%, var(--bg) 0%, var(--bg-2) 100%);
+  background-attachment: fixed;
   color: var(--ink);
 }
 
@@ -141,44 +166,58 @@ button {
   justify-content: center;
 }
 
-/* ── Range Slider ──────────────────────────────────────────────────────────── */
+/* ── Range Slider — 44px hit area, thin visible track, springy thumb ───────── */
 input[type="range"] {
   -webkit-tap-highlight-color: transparent;
   -webkit-appearance: none;
   appearance: none;
   touch-action: pan-x;
   width: 100%;
-  height: 4px;
-  border-radius: var(--r-pill);
-  background: var(--border);
+  height: var(--touch-min);
+  background: transparent;
   outline: none;
   cursor: pointer;
 }
 
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--border);
+}
+input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--border);
+}
+
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 22px;
-  height: 22px;
+  margin-top: -10px;                 /* centre the 26px thumb on the 6px track */
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   background: var(--surface);
-  border: 2px solid var(--accent);
-  box-shadow: 0 1px 4px rgba(28, 23, 20, 0.18);
+  border: 2.5px solid var(--accent);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
-  transition: transform 0.2s var(--ease-spring);
+  transition: transform 0.18s var(--ease-spring), box-shadow 0.18s var(--ease-out);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2.5px solid var(--accent);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
 }
 
 input[type="range"]:active::-webkit-slider-thumb {
-  transform: scale(1.15);
+  transform: scale(1.18);
+  box-shadow: var(--glow-accent);
 }
-
-input[type="range"]::-moz-range-thumb {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--surface);
-  border: 2px solid var(--accent);
-  box-shadow: 0 1px 4px rgba(28, 23, 20, 0.18);
-  cursor: pointer;
+input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px var(--accent-dim);
 }
 
 /* ── Shared card ───────────────────────────────────────────────────────────── */
@@ -191,12 +230,18 @@ input[type="range"]::-moz-range-thumb {
 
 /* ── Focus visible — keyboard / switch-control users ───────────────────────── */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2.5px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 6px;
 }
 /* Remove the default browser outline only when we've replaced it */
 :focus:not(:focus-visible) { outline: none; }
+
+/* ── Entrance / feedback motion ────────────────────────────────────────────── */
+@keyframes bs-fade-up { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
+@keyframes bs-pop     { from { opacity: 0; transform: scale(0.94); }     to { opacity: 1; transform: none; } }
+@keyframes bs-float   { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes bs-check   { from { stroke-dashoffset: 28; } to { stroke-dashoffset: 0; } }
 
 /* ── Reduced motion ────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
