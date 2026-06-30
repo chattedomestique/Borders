@@ -99,6 +99,12 @@ export default function App() {
   const [activeTab, setActiveTab] = useState(null)
   const [viewMode, setViewMode] = useState('fit')
   const [showHint, setShowHint] = useState(false)
+  const [snapEnabled, setSnapEnabled] = useState(() => {
+    try { return localStorage.getItem('bs-snap') !== '0' } catch { return true }
+  })
+  const [gridDivisions, setGridDivisions] = useState(() => {
+    try { return Number(localStorage.getItem('bs-grid')) || 3 } catch { return 3 }
+  })
   const canvasRef = useRef(null)
   const appRef = useRef(null)
   const overlayRef = useRef(null)
@@ -116,6 +122,9 @@ export default function App() {
     ro.observe(el)
     return () => ro.disconnect()
   }, [step, media])
+
+  useEffect(() => { try { localStorage.setItem('bs-snap', snapEnabled ? '1' : '0') } catch { /* ignore */ } }, [snapEnabled])
+  useEffect(() => { try { localStorage.setItem('bs-grid', String(gridDivisions)) } catch { /* ignore */ } }, [gridDivisions])
 
   const dismissHint = useCallback(() => {
     setShowHint(false)
@@ -232,6 +241,18 @@ export default function App() {
                 </svg>
               </button>
               <button
+                className={`app__icon-btn${snapEnabled ? ' app__icon-btn--active' : ''}`}
+                onClick={() => setSnapEnabled(s => !s)}
+                aria-label={snapEnabled ? 'Snapping on (tap to disable)' : 'Snapping off (tap to enable)'}
+                aria-pressed={snapEnabled}
+                onContextMenu={(e) => { e.preventDefault(); setGridDivisions(d => d >= 8 ? 3 : d + 1) }}
+                title={`Snap to grid (${gridDivisions}×${gridDivisions})`}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>
+                </svg>
+              </button>
+              <button
                 className={`app__icon-btn${viewMode === 'fit' ? ' app__icon-btn--active' : ''}`}
                 onClick={() => setViewMode(v => v === 'fit' ? 'fill' : 'fit')}
                 aria-label={viewMode === 'fit' ? 'View: Fit (tap for Fill)' : 'View: Fill (tap for Fit)'}
@@ -273,6 +294,8 @@ export default function App() {
               selectedLayerId={selectedLayerId}
               onSelectLayer={setSelectedLayerId}
               onUpdateLayer={updateTextLayer}
+              snapEnabled={snapEnabled}
+              gridDivisions={gridDivisions}
             />
           </div>
         ) : null}
@@ -306,6 +329,10 @@ export default function App() {
                   onAddLayer={addTextLayer}
                   onRemoveLayer={removeTextLayer}
                   onUpdateLayer={updateTextLayer}
+                  snapEnabled={snapEnabled}
+                  onSnapToggle={() => setSnapEnabled(s => !s)}
+                  gridDivisions={gridDivisions}
+                  onGridDivisions={setGridDivisions}
                 />
                 </div>
               </div>

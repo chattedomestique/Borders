@@ -601,9 +601,12 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
   )
 }
 
+const GRID_OPTIONS = [3, 4, 6, 8]
+
 export default function Controls({
   tab, settings, onUpdate, pickMode, onPickMode,
   selectedLayerId, onSelectLayer, onAddLayer, onRemoveLayer, onUpdateLayer,
+  snapEnabled = true, onSnapToggle, gridDivisions = 3, onGridDivisions,
 }) {
   if (!tab) return null
 
@@ -676,6 +679,28 @@ export default function Controls({
             <label className="controls__label">Show photo</label>
             <Toggle on={showMedia} onChange={v => onUpdate('showMedia', v)} label="Toggle photo visibility"/>
           </div>
+
+          <div className="controls__divider controls__divider--inset"/>
+
+          {/* Snap to grid — applies to dragging text layers and panning the photo */}
+          <div className="controls__row controls__row--spaced">
+            <label className="controls__label">Snap to grid</label>
+            <Toggle on={!!snapEnabled} onChange={() => onSnapToggle?.()} label="Toggle snapping"/>
+          </div>
+
+          {snapEnabled && (
+            <>
+              <label className="controls__label" style={{ marginBottom: 4 }}>Grid</label>
+              <div className="controls__seg" role="radiogroup" aria-label="Grid divisions"
+                style={{ gridTemplateColumns: `repeat(${GRID_OPTIONS.length}, 1fr)` }}>
+                {GRID_OPTIONS.map(n => (
+                  <button key={n} role="radio" aria-checked={gridDivisions === n}
+                    className={`controls__seg-btn${gridDivisions === n ? ' controls__seg-btn--active' : ''}`}
+                    onClick={() => onGridDivisions?.(n)}>{n}×{n}</button>
+                ))}
+              </div>
+            </>
+          )}
         </section>
       )}
 

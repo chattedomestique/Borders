@@ -1281,9 +1281,34 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const MAX_ZOOM = 6
+const SNAP_PX = 7   // how close (screen px) a drag must get to a target before it snaps
+
+// Snap `value` (normalized 0–1) to the nearest target within `threshold`.
+// Returns [snappedValue, guidePosition|null].
+function snapAxis(value, targets, threshold) {
+  let best = value, bestDist = threshold, guide = null
+  for (let i = 0; i < targets.length; i++) {
+    const t = targets[i]
+    const dist = Math.abs(value - t)
+    if (dist < bestDist) { bestDist = dist; best = t; guide = t }
+  }
+  return [best, guide]
+}
+
+// Build the snap targets for one axis: the grid lines (i/N), the centre, the
+// edge margins, and every other layer's position on that axis (smart guides).
+function snapTargets(divisions, siblingPositions) {
+  const t = [0.5]
+  const n = Math.max(2, Math.min(12, Math.round(divisions)))
+  for (let i = 1; i < n; i++) t.push(i / n)
+  t.push(0.04, 0.96)                 // edge margins (matches the 0.02–0.98 drag clamp)
+  for (let i = 0; i < siblingPositions.length; i++) t.push(siblingPositions[i])
+  return t
+}
 
 const BorderCanvas = forwardRef(function BorderCanvas(
-  { media, settings, onUpdate, pickMode, onPickColor, selectedLayerId, onSelectLayer, onUpdateLayer }, ref
+  { media, settings, onUpdate, pickMode, onPickColor, selectedLayerId, onSelectLayer, onUpdateLayer,
+    snapEnabled = true, gridDivisions = 3 }, ref
 ) {
   const canvasRef    = useRef(null)
   const sourceRef    = useRef(null)
@@ -1295,6 +1320,8 @@ const BorderCanvas = forwardRef(function BorderCanvas(
   const onSelectLayerRef = useRef(onSelectLayer)
   const onUpdateLayerRef = useRef(onUpdateLayer)
   const selectedLayerIdRef = useRef(selectedLayerId)
+  const snapEnabledRef   = useRef(snapEnabled)
+  const gridDivisionsRef = useRef(gridDivisions)
   const animFrameRef = useRef(null)
   const cacheRef     = useRef({})
   const geoRef       = useRef({ totalW: OUT_SIZE, totalH: OUT_SIZE, scaledW: OUT_SIZE, scaledH: OUT_SIZE,
@@ -1307,8 +1334,11 @@ const BorderCanvas = forwardRef(function BorderCanvas(
   const [isDragging, setIsDragging] = useState(false)
   const [isDraggingText, setIsDraggingText] = useState(false)
   const [ready, setReady] = useState(false)
+  const [snapGuides, setSnapGuides] = useState({ x: null, y: null })  // active guide lines (normalized 0–1)
 
   settingsRef.current      = settings
+  snapEnabledRef.current   = snapEnabled
+  gridDivisionsRef.current = gridDivisions
   mediaRef.current         = media
   onUpdateRef.current      = onUpdate
   onPickColorRef.current   = onPickColor
@@ -1441,8 +1471,23 @@ const BorderCanvas = forwardRef(function BorderCanvas(
     // Text drag takes priority — don't update pointersRef so pinch stays inactive
     if (dragRef.current?.isText) {
       const drag = dragRef.current
-      onUpdateLayerRef.current?.(drag.layerId, 'x', Math.max(0.02, Math.min(0.98, drag.startTextX + (e.clientX - drag.startX) / drag.rect.width)))
-      onUpdateLayerRef.current?.(drag.layerId, 'y', Math.max(0.02, Math.min(0.98, drag.startTextY + (e.clientY - drag.startY) / drag.rect.height)))
+      let nx = Math.max(0.02, Math.min(0.98, drag.startTextX + (e.clientX - drag.startX) / drag.rect.width))
+      let ny = Math.max(0.02, Math.min(0.98, drag.startTextY + (e.clientY - drag.startY) / drag.rect.height))
+      let gx = null, gy = null
+      if (snapEnabledRef.current) {
+        const layers = settingsRef.current.textLayers ?? []
+        const sibsX = [], sibsY = []
+        for (const l of layers) {
+          if (l.id === drag.layerId) continue
+          sibsX.push(l.x ?? 0.5); sibsY.push(l.y ?? 0.5)
+        }
+        const N = gridDivisionsRef.current
+        ;[nx, gx] = snapAxis(nx, snapTargets(N, sibsX), SNAP_PX / drag.rect.width)
+        ;[ny, gy] = snapAxis(ny, snapTargets(N, sibsY), SNAP_PX / drag.rect.height)
+      }
+      onUpdateLayerRef.current?.(drag.layerId, 'x', nx)
+      onUpdateLayerRef.current?.(drag.layerId, 'y', ny)
+      setSnapGuides({ x: gx, y: gy })
       return
     }
 
@@ -1477,8 +1522,17 @@ const BorderCanvas = forwardRef(function BorderCanvas(
       const srcPxPerCSS = drag.viewW * geo.totalW / (geo.scaledW * drag.rect.width)
       const newSrcLeft = Math.max(0, Math.min(geo.srcW - drag.viewW, drag.startSrcLeft - (e.clientX - drag.startX) * srcPxPerCSS))
       const newSrcTop  = Math.max(0, Math.min(geo.srcH - drag.viewH, drag.startSrcTop  - (e.clientY - drag.startY) * srcPxPerCSS))
-      onUpdateRef.current?.('panX', (newSrcLeft + drag.viewW / 2) / geo.srcW)
-      onUpdateRef.current?.('panY', (newSrcTop  + drag.viewH / 2) / geo.srcH)
+      let panX = (newSrcLeft + drag.viewW / 2) / geo.srcW
+      let panY = (newSrcTop  + drag.viewH / 2) / geo.srcH
+      // Pan snaps to centred (0.5) so you can re-centre the photo easily.
+      let gx = null, gy = null
+      if (snapEnabledRef.current) {
+        if (Math.abs(panX - 0.5) < SNAP_PX / drag.rect.width)  { panX = 0.5; gx = 0.5 }
+        if (Math.abs(panY - 0.5) < SNAP_PX / drag.rect.height) { panY = 0.5; gy = 0.5 }
+        setSnapGuides({ x: gx, y: gy })
+      }
+      onUpdateRef.current?.('panX', panX)
+      onUpdateRef.current?.('panY', panY)
     }
   }, [])
 
@@ -1508,6 +1562,7 @@ const BorderCanvas = forwardRef(function BorderCanvas(
       dragRef.current = null
       setIsDragging(false)
       setIsDraggingText(false)
+      setSnapGuides({ x: null, y: null })
     }
   }, [])
 
@@ -1721,6 +1776,25 @@ const BorderCanvas = forwardRef(function BorderCanvas(
         className={`border-canvas__el${ready ? ' border-canvas__el--ready' : ''}`}
         aria-label="Preview of your bordered media"
       />
+      {snapEnabled && isDragging && ready && (
+        <svg className="border-canvas__grid" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          {Array.from({ length: Math.max(2, Math.min(12, gridDivisions)) - 1 }, (_, i) => {
+            const p = ((i + 1) / Math.max(2, Math.min(12, gridDivisions))) * 100
+            return (
+              <g key={i}>
+                <line className="border-canvas__grid-line" x1={p} y1="0" x2={p} y2="100" />
+                <line className="border-canvas__grid-line" x1="0" y1={p} x2="100" y2={p} />
+              </g>
+            )
+          })}
+          {snapGuides.x != null && (
+            <line className="border-canvas__snap-line" x1={snapGuides.x * 100} y1="0" x2={snapGuides.x * 100} y2="100" />
+          )}
+          {snapGuides.y != null && (
+            <line className="border-canvas__snap-line" x1="0" y1={snapGuides.y * 100} x2="100" y2={snapGuides.y * 100} />
+          )}
+        </svg>
+      )}
       {!ready && (
         <div className="border-canvas__loading" aria-hidden="true">
           <div className="border-canvas__spinner"/>
