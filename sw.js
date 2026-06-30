@@ -1,7 +1,5 @@
 // Border Studio Service Worker
-// NOTE: bump this version on every deploy that changes built assets — it is what
-// triggers the worker to re-activate and purge the previous cache.
-const CACHE = 'border-studio-v22'
+const CACHE = 'border-studio-v19'
 const PRECACHE = [
   '/Borders/',
   '/Borders/index.html',
