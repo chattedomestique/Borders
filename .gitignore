@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Spun-off text-effects resources — kept locally, delivered to the user
+# directly (not part of the Border Studio repo).
+/TEXT_EFFECTS.md
+/text-effects-pwa/
