@@ -36,6 +36,51 @@ const FONTS = [
   { id: "'Caffeine', sans-serif",    label: 'Caffeine',    group: 'Too Much Type' },
   { id: "'M Krone', sans-serif",     label: 'M Krone',     group: 'Too Much Type' },
   { id: "'Mini Mochi', cursive",     label: 'Mini Mochi',  group: 'Too Much Type' },
+
+  // Indestructible Type (revivals)
+  { id: "'Jones', serif",        label: 'Jones',       group: 'Indestructible Type' },
+  { id: "'Copperplate', serif",  label: 'Copperplate', group: 'Indestructible Type' },
+  { id: "'Tiffany', sans-serif", label: 'Tiffany',     group: 'Indestructible Type' },
+  { id: "'Engraving', serif",    label: 'Engraving',   group: 'Indestructible Type' },
+  { id: "'Railroad', sans-serif",label: 'Railroad',    group: 'Indestructible Type' },
+
+  // Tunera
+  { id: "'Brassia', sans-serif",             label: 'Brassia',              group: 'Tunera' },
+  { id: "'Canarina', sans-serif",            label: 'Canarina',             group: 'Tunera' },
+  { id: "'Malebolge', sans-serif",           label: 'Malebolge',            group: 'Tunera' },
+  { id: "'Picaflor', serif",                 label: 'Picaflor',             group: 'Tunera' },
+  { id: "'Isenheim', serif",                 label: 'Isenheim',             group: 'Tunera' },
+  { id: "'Lobular', sans-serif",             label: 'Lobular',              group: 'Tunera' },
+  { id: "'Teranoptia', sans-serif",          label: 'Teranoptia',           group: 'Tunera' },
+  { id: "'Pescante', sans-serif",            label: 'Pescante',             group: 'Tunera' },
+  { id: "'Roubaix Industrielle', sans-serif",label: 'Roubaix Industrielle', group: 'Tunera' },
+  { id: "'Piscolabis', sans-serif",          label: 'Piscolabis',           group: 'Tunera' },
+  { id: "'Amakan', sans-serif",              label: 'Amakan',               group: 'Tunera' },
+  { id: "'Tanklager', sans-serif",           label: 'Tanklager',            group: 'Tunera' },
+  { id: "'Azabache', serif",                 label: 'Azabache',             group: 'Tunera' },
+  { id: "'Choso', sans-serif",               label: 'Choso',                group: 'Tunera' },
+  { id: "'Luperca', serif",                  label: 'Luperca',              group: 'Tunera' },
+  { id: "'Ampoule', sans-serif",             label: 'Ampoule',              group: 'Tunera' },
+
+  // Too Much Type (experimental / variable)
+  { id: "'AUTHENTIC Remixed', sans-serif", label: 'AUTHENTIC Remixed', group: 'Too Much Type' },
+  { id: "'Bashful', sans-serif",           label: 'Bashful',           group: 'Too Much Type' },
+  { id: "'PowerPack', sans-serif",         label: 'PowerPack',         group: 'Too Much Type' },
+  { id: "'That Then This', sans-serif",    label: 'That Then This',    group: 'Too Much Type' },
+  { id: "'Urging Osmosis A', sans-serif",  label: 'Urging Osmosis A',  group: 'Too Much Type' },
+  { id: "'Urging Osmosis B', sans-serif",  label: 'Urging Osmosis B',  group: 'Too Much Type' },
+  { id: "'Urging Osmosis C', sans-serif",  label: 'Urging Osmosis C',  group: 'Too Much Type' },
+  { id: "'Urging Osmosis E', sans-serif",  label: 'Urging Osmosis E',  group: 'Too Much Type' },
+  { id: "'Urging Osmosis K', sans-serif",  label: 'Urging Osmosis K',  group: 'Too Much Type' },
+  { id: "'Urging Osmosis L', sans-serif",  label: 'Urging Osmosis L',  group: 'Too Much Type' },
+  { id: "'Dreidel', sans-serif",           label: 'Dreidel',           group: 'Too Much Type' },
+  { id: "'Limkin', sans-serif",            label: 'Limkin',            group: 'Too Much Type' },
+  { id: "'Limkin Pixel', monospace",       label: 'Limkin Pixel',      group: 'Too Much Type' },
+  { id: "'Music Box', sans-serif",         label: 'Music Box',         group: 'Too Much Type' },
+  { id: "'Work Sans Galápagos', sans-serif",label: 'Work Sans Galápagos', group: 'Too Much Type' },
+  { id: "'Avara Burst', sans-serif",       label: 'Avara Burst',       group: 'Too Much Type' },
+  { id: "'FT88 RISD', sans-serif",         label: 'FT88 RISD',         group: 'Too Much Type' },
+  { id: "'Typey', sans-serif",             label: 'Typey',             group: 'Too Much Type' },
 ]
 
 // FONTS grouped, in declaration order, for the scrolling picker.

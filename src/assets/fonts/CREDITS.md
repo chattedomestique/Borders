@@ -1,25 +1,30 @@
 # Bundled fonts — credits & license
 
-All fonts here are licensed under the **SIL Open Font License 1.1**
-(<https://openfontlicense.org>) — free to use, embed, and redistribute
-(including commercially) with attribution; not sold on their own. They are
-self-hosted so the app works offline.
+All fonts here are from **open-source type foundries** and licensed under the
+**SIL Open Font License 1.1** (<https://openfontlicense.org>) — free to use,
+embed, and redistribute (incl. commercially) with attribution; not sold on
+their own. They are self-hosted so the app works offline. Reserved font names
+are unchanged.
 
-| Font | Foundry / designer | Source |
-|---|---|---|
-| Jost | Indestructible Type (Owen Earl), orig. by aajlkn | https://indestructibletype.com |
-| Besley | Indestructible Type (Owen Earl) | https://indestructibletype.com |
-| Bodoni Moda | Indestructible Type (Owen Earl) | https://indestructibletype.com |
-| Nyght Serif | Tunera Type Foundry | https://www.tunera.xyz |
-| Paysage | Tunera Type Foundry | https://www.tunera.xyz |
-| Kobata | Tunera Type Foundry | https://www.tunera.xyz |
-| Manosque | Tunera Type Foundry | https://www.tunera.xyz |
-| Caffeine | Too Much Type (Gabriel Drozdov / No Replica) | https://toomuchtype.com |
-| M Krone | Too Much Type (Gabriel Drozdov / No Replica) | https://toomuchtype.com |
-| Mini Mochi | Too Much Type (Gabriel Drozdov / No Replica) | https://toomuchtype.com |
+## Indestructible Type — https://indestructibletype.com
+Owen Earl. Jost, Besley, Bodoni Moda, Jones, Copperplate, Tiffany, Engraving,
+Railroad. (Jost, Besley, Bodoni Moda via Google Fonts, same OFL originals.)
 
-Each font's full copyright/OFL notice lives in its original download from the
-foundry linked above. Reserved font names are unchanged; no font here is sold
-on its own.
+## Tunera Type Foundry — https://www.tunera.xyz
+Ariel Martín Pérez, Anton Moglia & contributors. OFL per
+<https://www.tunera.xyz/licenses/sil-open-font-license-1.1/>. Nyght Serif,
+Paysage, Kobata, Manosque, Brassia, Canarina, Malebolge, Picaflor, Isenheim,
+Lobular, Teranoptia, Pescante, Roubaix Industrielle, Piscolabis, Amakan,
+Tanklager, Azabache, Choso, Luperca, Ampoule.
 
-Tunera fonts are OFL per <https://www.tunera.xyz/licenses/sil-open-font-license-1.1/>.
+## Too Much Type — https://toomuchtype.com
+Gabriel Drozdov / No Replica. Experimental & variable fonts (some intentionally
+limited character sets). Caffeine, M Krone, Mini Mochi, AUTHENTIC Remixed,
+Bashful, PowerPack, That Then This, Urging Osmosis (A/B/C/E/K/L), Dreidel,
+Limkin, Limkin Pixel, Music Box, Work Sans Galápagos, Avara Burst, FT88 RISD,
+Typey.
+
+---
+Each font's full copyright/OFL notice is in its original download from the
+foundry linked above. u270d.eesab.fr loads its fonts dynamically (no static
+stylesheet) and wasn't auto-importable; those can be added individually.

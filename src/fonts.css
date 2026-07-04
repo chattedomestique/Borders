@@ -36,3 +36,89 @@
   src: url('./assets/fonts/TMT-MKrone.woff2') format('woff2'); }
 @font-face { font-family: 'Mini Mochi'; font-display: swap;
   src: url('./assets/fonts/TMT-MiniMochi.woff2') format('woff2'); }
+
+/* ── All families (auto-added) ── */
+
+/* Indestructible Type */
+@font-face { font-family: 'Jones'; font-display: swap;
+  src: url('./assets/fonts/Jones.otf') format('opentype'); }
+@font-face { font-family: 'Copperplate'; font-display: swap;
+  src: url('./assets/fonts/Copperplate.ttf') format('truetype'); }
+@font-face { font-family: 'Tiffany'; font-display: swap;
+  src: url('./assets/fonts/Tiffany.ttf') format('truetype'); }
+@font-face { font-family: 'Engraving'; font-display: swap;
+  src: url('./assets/fonts/Engraving.ttf') format('truetype'); }
+@font-face { font-family: 'Railroad'; font-display: swap;
+  src: url('./assets/fonts/Railroad.ttf') format('truetype'); }
+
+/* Tunera */
+@font-face { font-family: 'Brassia'; font-display: swap;
+  src: url('./assets/fonts/Brassia.woff') format('woff'); }
+@font-face { font-family: 'Canarina'; font-display: swap;
+  src: url('./assets/fonts/Canarina.woff') format('woff'); }
+@font-face { font-family: 'Malebolge'; font-display: swap;
+  src: url('./assets/fonts/Malebolge.woff') format('woff'); }
+@font-face { font-family: 'Picaflor'; font-display: swap;
+  src: url('./assets/fonts/Picaflor.woff') format('woff'); }
+@font-face { font-family: 'Isenheim'; font-display: swap;
+  src: url('./assets/fonts/Isenheim.woff') format('woff'); }
+@font-face { font-family: 'Lobular'; font-display: swap;
+  src: url('./assets/fonts/Lobular.woff') format('woff'); }
+@font-face { font-family: 'Teranoptia'; font-display: swap;
+  src: url('./assets/fonts/Teranoptia.woff') format('woff'); }
+@font-face { font-family: 'Pescante'; font-display: swap;
+  src: url('./assets/fonts/Pescante.woff') format('woff'); }
+@font-face { font-family: 'Roubaix Industrielle'; font-display: swap;
+  src: url('./assets/fonts/RoubaixIndustrielle.woff') format('woff'); }
+@font-face { font-family: 'Piscolabis'; font-display: swap;
+  src: url('./assets/fonts/Piscolabis.woff') format('woff'); }
+@font-face { font-family: 'Amakan'; font-display: swap;
+  src: url('./assets/fonts/Amakan.woff') format('woff'); }
+@font-face { font-family: 'Tanklager'; font-display: swap;
+  src: url('./assets/fonts/Tanklager.woff') format('woff'); }
+@font-face { font-family: 'Azabache'; font-display: swap;
+  src: url('./assets/fonts/Azabache.woff') format('woff'); }
+@font-face { font-family: 'Choso'; font-display: swap;
+  src: url('./assets/fonts/Choso.woff') format('woff'); }
+@font-face { font-family: 'Luperca'; font-display: swap;
+  src: url('./assets/fonts/Luperca.woff') format('woff'); }
+@font-face { font-family: 'Ampoule'; font-display: swap;
+  src: url('./assets/fonts/Ampoule.woff') format('woff'); }
+
+/* Too Much Type */
+@font-face { font-family: 'AUTHENTIC Remixed'; font-display: swap;
+  src: url('./assets/fonts/AUTHENTICRemixed.woff2') format('woff2'); }
+@font-face { font-family: 'Bashful'; font-display: swap;
+  src: url('./assets/fonts/Bashful.woff2') format('woff2'); }
+@font-face { font-family: 'PowerPack'; font-display: swap;
+  src: url('./assets/fonts/PowerPack.woff2') format('woff2'); }
+@font-face { font-family: 'That Then This'; font-display: swap;
+  src: url('./assets/fonts/ThatThenThis.woff2') format('woff2'); }
+@font-face { font-family: 'Urging Osmosis A'; font-display: swap;
+  src: url('./assets/fonts/UrgingOsmosisA.woff2') format('woff2'); }
+@font-face { font-family: 'Urging Osmosis B'; font-display: swap;
+  src: url('./assets/fonts/UrgingOsmosisB.woff2') format('woff2'); }
+@font-face { font-family: 'Urging Osmosis C'; font-display: swap;
+  src: url('./assets/fonts/UrgingOsmosisC.woff2') format('woff2'); }
+@font-face { font-family: 'Urging Osmosis E'; font-display: swap;
+  src: url('./assets/fonts/UrgingOsmosisE.woff2') format('woff2'); }
+@font-face { font-family: 'Urging Osmosis K'; font-display: swap;
+  src: url('./assets/fonts/UrgingOsmosisK.woff2') format('woff2'); }
+@font-face { font-family: 'Urging Osmosis L'; font-display: swap;
+  src: url('./assets/fonts/UrgingOsmosisL.woff2') format('woff2'); }
+@font-face { font-family: 'Dreidel'; font-display: swap;
+  src: url('./assets/fonts/Dreidel.woff2') format('woff2'); }
+@font-face { font-family: 'Limkin'; font-display: swap;
+  src: url('./assets/fonts/Limkin.woff2') format('woff2'); }
+@font-face { font-family: 'Limkin Pixel'; font-display: swap;
+  src: url('./assets/fonts/LimkinPixel.woff2') format('woff2'); }
+@font-face { font-family: 'Music Box'; font-display: swap;
+  src: url('./assets/fonts/MusicBox.woff2') format('woff2'); }
+@font-face { font-family: 'Work Sans Galápagos'; font-display: swap;
+  src: url('./assets/fonts/WorkSansGalpagos.woff2') format('woff2'); }
+@font-face { font-family: 'Avara Burst'; font-display: swap;
+  src: url('./assets/fonts/AvaraBurst.woff2') format('woff2'); }
+@font-face { font-family: 'FT88 RISD'; font-display: swap;
+  src: url('./assets/fonts/FT88RISD.woff2') format('woff2'); }
+@font-face { font-family: 'Typey'; font-display: swap;
+  src: url('./assets/fonts/Typey.woff2') format('woff2'); }
