@@ -1,0 +1,38 @@
+/* Self-hosted OFL fonts from open-source foundries.
+ * Indestructible Type (indestructibletype.com), Tunera (tunera.xyz),
+ * Too Much Type (toomuchtype.com). All SIL Open Font License 1.1.
+ * See src/assets/fonts/CREDITS.md for attribution. */
+
+/* ── Indestructible Type ── */
+@font-face { font-family: 'Jost'; font-weight: 400; font-display: swap;
+  src: url('./assets/fonts/Jost-400.woff2') format('woff2'); }
+@font-face { font-family: 'Jost'; font-weight: 700; font-display: swap;
+  src: url('./assets/fonts/Jost-700.woff2') format('woff2'); }
+
+@font-face { font-family: 'Besley'; font-weight: 400; font-display: swap;
+  src: url('./assets/fonts/Besley-Book.woff2') format('woff2'); }
+@font-face { font-family: 'Besley'; font-weight: 700; font-display: swap;
+  src: url('./assets/fonts/Besley-Bold.woff2') format('woff2'); }
+
+@font-face { font-family: 'Bodoni Moda'; font-weight: 400; font-display: swap;
+  src: url('./assets/fonts/BodoniModa-400.woff2') format('woff2'); }
+@font-face { font-family: 'Bodoni Moda'; font-weight: 700; font-display: swap;
+  src: url('./assets/fonts/BodoniModa-700.woff2') format('woff2'); }
+
+/* ── Tunera Type Foundry ── */
+@font-face { font-family: 'Nyght Serif'; font-display: swap;
+  src: url('./assets/fonts/NyghtSerif-Regular.woff') format('woff'); }
+@font-face { font-family: 'Paysage'; font-display: swap;
+  src: url('./assets/fonts/Paysage-Bold.woff') format('woff'); }
+@font-face { font-family: 'Kobata'; font-display: swap;
+  src: url('./assets/fonts/Kobata-Regular.woff') format('woff'); }
+@font-face { font-family: 'Manosque'; font-display: swap;
+  src: url('./assets/fonts/Manosque-Regular.woff') format('woff'); }
+
+/* ── Too Much Type (variable) ── */
+@font-face { font-family: 'Caffeine'; font-display: swap;
+  src: url('./assets/fonts/TMT-Caffeine.woff2') format('woff2'); }
+@font-face { font-family: 'M Krone'; font-display: swap;
+  src: url('./assets/fonts/TMT-MKrone.woff2') format('woff2'); }
+@font-face { font-family: 'Mini Mochi'; font-display: swap;
+  src: url('./assets/fonts/TMT-MiniMochi.woff2') format('woff2'); }

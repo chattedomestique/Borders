@@ -17,11 +17,33 @@ const BG_MODES = [
   { id: 'frosted',       label: 'Frosted' },
 ]
 
+// System stacks + self-hosted OFL fonts from open-source foundries
+// (see src/fonts.css and src/assets/fonts/CREDITS.md).
 const FONTS = [
-  { id: 'system-ui, -apple-system, sans-serif',  label: 'Sans' },
-  { id: "'New York', Georgia, serif",             label: 'Serif' },
-  { id: "ui-monospace, 'Courier New', monospace", label: 'Mono' },
+  { id: 'system-ui, -apple-system, sans-serif',  label: 'Sans',  group: 'System' },
+  { id: "'New York', Georgia, serif",             label: 'Serif', group: 'System' },
+  { id: "ui-monospace, 'Courier New', monospace", label: 'Mono',  group: 'System' },
+
+  { id: "'Jost', sans-serif",        label: 'Jost',        group: 'Indestructible Type' },
+  { id: "'Besley', serif",           label: 'Besley',      group: 'Indestructible Type' },
+  { id: "'Bodoni Moda', serif",      label: 'Bodoni',      group: 'Indestructible Type' },
+
+  { id: "'Nyght Serif', serif",      label: 'Nyght Serif', group: 'Tunera' },
+  { id: "'Paysage', sans-serif",     label: 'Paysage',     group: 'Tunera' },
+  { id: "'Kobata', sans-serif",      label: 'Kobata',      group: 'Tunera' },
+  { id: "'Manosque', serif",         label: 'Manosque',    group: 'Tunera' },
+
+  { id: "'Caffeine', sans-serif",    label: 'Caffeine',    group: 'Too Much Type' },
+  { id: "'M Krone', sans-serif",     label: 'M Krone',     group: 'Too Much Type' },
+  { id: "'Mini Mochi', cursive",     label: 'Mini Mochi',  group: 'Too Much Type' },
 ]
+
+// FONTS grouped, in declaration order, for the scrolling picker.
+const FONT_GROUPS = FONTS.reduce((acc, f) => {
+  const g = acc.find(x => x.name === f.group)
+  if (g) g.fonts.push(f); else acc.push({ name: f.group, fonts: [f] })
+  return acc
+}, [])
 
 const ALIGNS = [
   { id: 'left',    label: 'L' },
@@ -201,12 +223,16 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
       {sub === 'style' && (
         selectedLayer ? (
           <>
-            <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}
-              role="radiogroup" aria-label="Font family">
-              {FONTS.map(f => (
-                <button key={f.id} role="radio" aria-checked={selectedLayer.font === f.id}
-                  className={`controls__seg-btn${selectedLayer.font === f.id ? ' controls__seg-btn--active' : ''}`}
-                  style={{ fontFamily: f.id }} onClick={() => ul('font', f.id)}>{f.label}</button>
+            <div className="controls__fontlist" role="radiogroup" aria-label="Font family">
+              {FONT_GROUPS.map(group => (
+                <div key={group.name} className="controls__font-group">
+                  <div className="controls__font-group-label">{group.name}</div>
+                  {group.fonts.map(f => (
+                    <button key={f.id} role="radio" aria-checked={selectedLayer.font === f.id}
+                      className={`controls__font-item${selectedLayer.font === f.id ? ' controls__font-item--active' : ''}`}
+                      style={{ fontFamily: f.id }} onClick={() => ul('font', f.id)}>{f.label}</button>
+                  ))}
+                </div>
               ))}
             </div>
 

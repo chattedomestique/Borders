@@ -1610,6 +1610,21 @@ const BorderCanvas = forwardRef(function BorderCanvas(
     redraw()
   }, [settings, ready, redraw])
 
+  // Web fonts load asynchronously; a custom font renders as a fallback until its
+  // file arrives. Kick off loading the fonts used by the text layers and redraw
+  // once they're ready so the canvas (and export) show the real typeface.
+  useEffect(() => {
+    if (!ready || !document.fonts) return
+    const fonts = [...new Set((settings.textLayers ?? []).map(l => l.font).filter(Boolean))]
+    if (!fonts.length) return
+    let cancelled = false
+    Promise.all(fonts.flatMap(f => [
+      document.fonts.load(`400 40px ${f}`).catch(() => {}),
+      document.fonts.load(`700 40px ${f}`).catch(() => {}),
+    ])).then(() => { if (!cancelled && mediaRef.current?.type !== 'video') redraw() })
+    return () => { cancelled = true }
+  }, [settings, ready, redraw])
+
   // Pause rAF when the page/app is hidden (battery + CPU savings)
   useEffect(() => {
     const onVisibility = () => {
@@ -1738,6 +1753,10 @@ const BorderCanvas = forwardRef(function BorderCanvas(
       }
 
       // ── Image ────────────────────────────────────────────────────────────
+      // Ensure any custom fonts are loaded, then re-render so the export never
+      // captures a fallback face.
+      if (document.fonts) { try { await document.fonts.ready } catch { /* ignore */ } }
+      renderFrame(canvas, source, settingsRef.current, cacheRef.current, geoRef, null)
       const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
       if (!blob) return
       const url = URL.createObjectURL(blob)
