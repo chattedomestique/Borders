@@ -87,14 +87,43 @@
 }
 
 /* ── Font picker (scrollable, grouped, live previews) ── */
+.controls__fontlist-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 4px 5px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+}
+.controls__fontlist-count {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  opacity: 0.75;
+}
 .controls__fontlist {
-  max-height: 168px;
+  /* Tall enough to show ~9 families at once so the full library (50+)
+   * reads as a long scrollable list, not a cramped 3-item box.
+   * Capped to the viewport so it never eats the controls below it. */
+  max-height: min(46vh, 360px);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   background: var(--seg-track);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   padding: 4px;
+  /* Bottom fade cue that more fonts lie below the fold. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
+          mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
+}
+/* Drop the fade once scrolled to the end (no more content below). */
+.controls__fontlist--atend {
+  -webkit-mask-image: none;
+          mask-image: none;
 }
 .controls__font-group + .controls__font-group { margin-top: 2px; }
 .controls__font-group-label {

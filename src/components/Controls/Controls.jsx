@@ -268,7 +268,16 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
       {sub === 'style' && (
         selectedLayer ? (
           <>
-            <div className="controls__fontlist" role="radiogroup" aria-label="Font family">
+            <div className="controls__fontlist-head">
+              <span>Font</span>
+              <span className="controls__fontlist-count">{FONTS.length} families · scroll</span>
+            </div>
+            <div className="controls__fontlist" role="radiogroup" aria-label="Font family"
+              onScroll={(e) => {
+                const el = e.currentTarget
+                const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 8
+                el.classList.toggle('controls__fontlist--atend', atEnd)
+              }}>
               {FONT_GROUPS.map(group => (
                 <div key={group.name} className="controls__font-group">
                   <div className="controls__font-group-label">{group.name}</div>
