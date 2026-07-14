@@ -2,6 +2,7 @@ import {
   forwardRef, useImperativeHandle, useRef, useEffect, useCallback, useState
 } from 'react'
 import './BorderCanvas.css'
+import { buildBorderSuggestions } from '../../palette'
 
 // The inner media (without border) is scaled so its longest side = OUT_SIZE.
 // The border pixels are then ADDED around it, so the border is always uniform
@@ -1307,11 +1308,12 @@ function snapTargets(divisions, siblingPositions) {
 }
 
 const BorderCanvas = forwardRef(function BorderCanvas(
-  { media, settings, onUpdate, pickMode, onPickColor, selectedLayerId, onSelectLayer, onUpdateLayer,
+  { media, settings, onUpdate, pickMode, onPickColor, onPalette, selectedLayerId, onSelectLayer, onUpdateLayer,
     snapEnabled = true, gridDivisions = 3 }, ref
 ) {
   const canvasRef    = useRef(null)
   const sourceRef    = useRef(null)
+  const onPaletteRef = useRef(onPalette)
   const settingsRef  = useRef(settings)
   const mediaRef     = useRef(media)
   const onUpdateRef      = useRef(onUpdate)
@@ -1342,6 +1344,7 @@ const BorderCanvas = forwardRef(function BorderCanvas(
   mediaRef.current         = media
   onUpdateRef.current      = onUpdate
   onPickColorRef.current   = onPickColor
+  onPaletteRef.current     = onPalette
   pickModeRef.current      = pickMode
   onSelectLayerRef.current = onSelectLayer
   onUpdateLayerRef.current = onUpdateLayer
@@ -1575,7 +1578,10 @@ const BorderCanvas = forwardRef(function BorderCanvas(
 
     if (media.type === 'image') {
       const img = new Image()
-      img.onload = () => { sourceRef.current = img; redraw(); setReady(true) }
+      img.onload = () => {
+        sourceRef.current = img; redraw(); setReady(true)
+        try { onPaletteRef.current?.(buildBorderSuggestions(img)) } catch { /* ignore */ }
+      }
       img.onerror = () => setReady(false)
       img.src = media.url
     } else {
@@ -1589,6 +1595,7 @@ const BorderCanvas = forwardRef(function BorderCanvas(
 
       const onLoaded = () => {
         sourceRef.current = video
+        try { onPaletteRef.current?.(buildBorderSuggestions(video)) } catch { /* ignore */ }
         video.play().catch(() => {})
         startLoop()
         setReady(true)

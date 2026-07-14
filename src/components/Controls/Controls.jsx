@@ -10,12 +10,12 @@ const CROP_RATIOS = [
   { id: '2:3',  label: '2:3',  alt: '3:2' },
 ]
 
-const BG_MODES = [
-  { id: 'average',       label: 'Match' },
-  { id: 'contrast',      label: 'Contrast' },
-  { id: 'complementary', label: 'Pop' },
-  { id: 'frosted',       label: 'Frosted' },
-]
+// Perceived-luminance test so a checkmark on a swatch stays legible.
+function isLightHex(hex) {
+  const h = hex.replace('#', '')
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16)
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 150
+}
 
 // System stacks + self-hosted OFL fonts from open-source foundries
 // (see src/fonts.css and src/assets/fonts/CREDITS.md).
@@ -685,6 +685,7 @@ const GRID_OPTIONS = [3, 4, 6, 8]
 
 export default function Controls({
   tab, settings, onUpdate, pickMode, onPickMode,
+  borderSuggestions = [], onApplyBorderColor,
   selectedLayerId, onSelectLayer, onAddLayer, onRemoveLayer, onUpdateLayer,
   snapEnabled = true, onSnapToggle, gridDivisions = 3, onGridDivisions,
 }) {
@@ -787,37 +788,75 @@ export default function Controls({
       {/* ── Background ── */}
       {tab === 'bg' && (
         <section className="controls__section" aria-label="Background">
-          <div className="controls__seg" role="radiogroup" aria-label="Background style">
-            {BG_MODES.map(mode => (
-              <button key={mode.id} role="radio" aria-checked={bgMode === mode.id}
-                className={`controls__seg-btn${bgMode === mode.id ? ' controls__seg-btn--active' : ''}`}
-                onClick={() => onUpdate('bgMode', mode.id)}
-              >{mode.label}</button>
-            ))}
+          {/* Treatment: a flat colour, or a frosted-glass blur of the photo. */}
+          <div className="controls__seg" role="radiogroup" aria-label="Border treatment">
+            <button role="radio" aria-checked={bgMode !== 'frosted'}
+              className={`controls__seg-btn${bgMode !== 'frosted' ? ' controls__seg-btn--active' : ''}`}
+              onClick={() => onUpdate('bgMode', 'color')}>Color</button>
+            <button role="radio" aria-checked={bgMode === 'frosted'}
+              className={`controls__seg-btn${bgMode === 'frosted' ? ' controls__seg-btn--active' : ''}`}
+              onClick={() => onUpdate('bgMode', 'frosted')}>Frosted</button>
           </div>
 
-          <div className={`controls__color-row${bgMode === 'color' ? ' controls__color-row--active' : ''}`}>
-            <label className="controls__color-swatch" style={{ background: bgColor }}
-              title="Choose custom color" aria-label="Custom background color">
-              <input type="color" value={bgColor}
-                onChange={e => { onUpdate('bgColor', e.target.value); onUpdate('bgMode', 'color') }} />
-            </label>
-            <button
-              className={`controls__eyedropper${pickMode ? ' controls__eyedropper--active' : ''}`}
-              onClick={onPickMode} aria-label="Pick color from image" aria-pressed={pickMode}
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
-                <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
-                <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
-                <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
-              </svg>
-            </button>
-            <span className="controls__color-hint">
-              {pickMode ? 'Tap image to pick' : (bgMode === 'color' ? bgColor : 'Custom')}
-            </span>
-          </div>
+          {bgMode !== 'frosted' && (
+            <>
+              {/* Suggested palette — harmonies pulled from the photo itself. */}
+              {borderSuggestions.length > 0 && (
+                <>
+                  <div className="controls__fontlist-head" style={{ marginTop: 4 }}>
+                    <span>From your photo</span>
+                    <span className="controls__fontlist-count">tap to apply</span>
+                  </div>
+                  <div className="controls__swatches" role="radiogroup" aria-label="Suggested border colors">
+                    {borderSuggestions.map(s => {
+                      const active = bgMode === 'color' && (bgColor || '').toLowerCase() === s.hex.toLowerCase()
+                      return (
+                        <button key={s.id} role="radio" aria-checked={active}
+                          className={`controls__swatch${active ? ' controls__swatch--active' : ''}`}
+                          onClick={() => onApplyBorderColor?.(s.hex)}
+                          title={`${s.label} · ${s.hex}`} aria-label={`${s.label} border ${s.hex}`}>
+                          <span className="controls__swatch-chip" style={{ background: s.hex }}>
+                            {active && (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                stroke={isLightHex(s.hex) ? '#111' : '#fff'} strokeWidth="3.2"
+                                strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <polyline points="20 6 9 17 4 12"/>
+                              </svg>
+                            )}
+                          </span>
+                          <span className="controls__swatch-label">{s.label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+
+              {/* Custom colour + eyedropper. */}
+              <div className="controls__color-row controls__color-row--active">
+                <label className="controls__color-swatch" style={{ background: bgColor }}
+                  title="Choose custom color" aria-label="Custom border color">
+                  <input type="color" value={bgColor}
+                    onChange={e => { onUpdate('bgColor', e.target.value); onUpdate('bgMode', 'color') }} />
+                </label>
+                <button
+                  className={`controls__eyedropper${pickMode ? ' controls__eyedropper--active' : ''}`}
+                  onClick={onPickMode} aria-label="Pick color from image" aria-pressed={pickMode}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
+                    <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
+                    <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
+                    <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
+                  </svg>
+                </button>
+                <span className="controls__color-hint">
+                  {pickMode ? 'Tap image to pick' : 'Custom'}
+                </span>
+              </div>
+            </>
+          )}
 
           {bgMode === 'frosted' && (
             <>

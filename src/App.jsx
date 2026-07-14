@@ -95,6 +95,7 @@ export default function App() {
   const { settings, set: setSettings, undo, redo, reset: resetHistory, canUndo, canRedo } = useHistory(DEFAULT_SETTINGS)
   const [recordingProgress, setRecordingProgress] = useState(0)
   const [pickMode, setPickMode] = useState(false)
+  const [borderSuggestions, setBorderSuggestions] = useState([])
   const [selectedLayerId, setSelectedLayerId] = useState(null)
   const [activeTab, setActiveTab] = useState(null)
   const [viewMode, setViewMode] = useState('fit')
@@ -140,6 +141,7 @@ export default function App() {
 
   const handleMediaLoaded = useCallback((mediaObj) => {
     setMedia(mediaObj)
+    setBorderSuggestions([])   // recomputed once the new source decodes
     resetHistory(DEFAULT_SETTINGS)
     setSelectedLayerId(null)
     setActiveTab(null)
@@ -194,6 +196,26 @@ export default function App() {
   const handlePickColor = useCallback((hex) => {
     setSettings(prev => ({ ...prev, bgColor: hex, bgMode: 'color' }), { immediate: true })
     setPickMode(false)
+  }, [setSettings])
+
+  // Apply a border colour (custom picker or a suggested swatch). Discrete choice
+  // → commit immediately so each tap is its own undo step.
+  const applyBorderColor = useCallback((hex) => {
+    setSettings(prev => ({ ...prev, bgColor: hex, bgMode: 'color' }), { immediate: true })
+  }, [setSettings])
+
+  // Suggestions arrive once the source decodes. Store them, and if the border is
+  // still the pristine default, key it to the photo so the frame is beautiful out
+  // of the box (still a normal, undoable setting the user can change).
+  const handlePalette = useCallback((sugg) => {
+    setBorderSuggestions(sugg)
+    const photo = sugg?.find(s => s.id === 'photo')
+    if (!photo) return
+    setSettings(prev => (
+      prev.bgMode === 'average' && prev.bgColor === '#ffffff'
+        ? { ...prev, bgMode: 'color', bgColor: photo.hex }
+        : prev
+    ), { immediate: true })
   }, [setSettings])
 
   const toggleTab = useCallback((id) => {
@@ -291,6 +313,7 @@ export default function App() {
               onUpdate={updateSetting}
               pickMode={pickMode}
               onPickColor={handlePickColor}
+              onPalette={handlePalette}
               selectedLayerId={selectedLayerId}
               onSelectLayer={setSelectedLayerId}
               onUpdateLayer={updateTextLayer}
@@ -324,6 +347,8 @@ export default function App() {
                   onUpdate={updateSetting}
                   pickMode={pickMode}
                   onPickMode={() => setPickMode(p => !p)}
+                  borderSuggestions={borderSuggestions}
+                  onApplyBorderColor={applyBorderColor}
                   selectedLayerId={selectedLayerId}
                   onSelectLayer={setSelectedLayerId}
                   onAddLayer={addTextLayer}
