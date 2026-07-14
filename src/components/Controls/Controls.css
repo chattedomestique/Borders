@@ -234,6 +234,22 @@
 }
 .controls__swatch--active .controls__swatch-label { color: var(--accent); }
 
+/* ── Hue / Saturation / Brightness fine-tune sliders ── */
+.controls__hsl {
+  margin: 6px 0 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.controls__hsl .controls__row { margin-top: 2px; }
+.controls__hsl input[type="range"] { margin-bottom: 6px; height: 6px; }
+/* Gradient tracks so the sliders read as colour, not just position. */
+.controls__slider--tint { background: var(--track, var(--border)) !important; }
+.controls__slider--hue {
+  background: linear-gradient(to right,
+    #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%,
+    #0000ff 67%, #ff00ff 83%, #ff0000 100%) !important;
+}
+
 .controls__color-row {
   display: flex;
   align-items: center;

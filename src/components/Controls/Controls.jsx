@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import './Controls.css'
+import { hexToHsl, hslCss } from '../../palette'
 
 const CROP_RATIOS = [
   { id: 'free', label: 'Free', alt: null  },
@@ -195,6 +196,94 @@ function EditableValue({ value, min, max, step = 1, onChange, format, suffix = '
     >
       {format ? format(value) : `${value}${suffix}`}
     </button>
+  )
+}
+
+// A labelled grid of tappable border-colour suggestions (one harmony group).
+function SwatchGroup({ title, hint, items, bgMode, bgColor, onApply }) {
+  if (!items?.length) return null
+  return (
+    <>
+      <div className="controls__fontlist-head" style={{ marginTop: 4 }}>
+        <span>{title}</span>{hint && <span className="controls__fontlist-count">{hint}</span>}
+      </div>
+      <div className="controls__swatches" role="radiogroup" aria-label={title}>
+        {items.map(s => {
+          const active = bgMode === 'color' && (bgColor || '').toLowerCase() === s.hex.toLowerCase()
+          return (
+            <button key={s.id} role="radio" aria-checked={active}
+              className={`controls__swatch${active ? ' controls__swatch--active' : ''}`}
+              onClick={() => onApply?.(s.hex)}
+              title={`${s.label} · ${s.hex}`} aria-label={`${s.label} border ${s.hex}`}>
+              <span className="controls__swatch-chip" style={{ background: s.hex }}>
+                {active && (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke={isLightHex(s.hex) ? '#111' : '#fff'} strokeWidth="3.2"
+                    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                )}
+              </span>
+              <span className="controls__swatch-label">{s.label}</span>
+            </button>
+          )
+        })}
+      </div>
+    </>
+  )
+}
+
+// Hue / Saturation / Brightness sliders that fine-tune the selected border
+// colour. Keeps a working HSL value so dragging a channel to an extreme (e.g.
+// saturation 0) doesn't lose the others to hex round-tripping. Re-syncs when the
+// colour changes from outside (a swatch tap, eyedropper, or undo). Double-tap a
+// handle resets that channel to the last externally-applied colour.
+function BorderColorSliders({ bgColor, onColor }) {
+  const initial = hexToHsl(bgColor || '#ffffff')
+  const [hsl, setHsl] = useState(initial)
+  const [base, setBase] = useState(initial)   // last externally-applied colour → slider reset target
+  const [emitted, setEmitted] = useState(null) // hex we last pushed out
+  const [seenBg, setSeenBg] = useState(bgColor)
+
+  // Derived-state sync during render (React-endorsed): when the colour arrives
+  // from outside our own slider edits (swatch tap, eyedropper, undo), reset the
+  // working HSL from it. Skipping our own emits avoids hex round-trip drift.
+  if (bgColor && bgColor !== seenBg) {
+    setSeenBg(bgColor)
+    if (bgColor.toLowerCase() !== emitted) {
+      const next = hexToHsl(bgColor)
+      setHsl(next); setBase(next)
+    }
+  }
+
+  const setChan = (k, v) => {
+    const next = { ...hsl, [k]: v }
+    setHsl(next)
+    const hex = hslCss(next.h, next.s, next.l)
+    setEmitted(hex.toLowerCase())
+    onColor(hex)
+  }
+  const h = Math.round(hsl.h), s = Math.round(hsl.s), l = Math.round(hsl.l)
+  const trackSat = `linear-gradient(to right, ${hslCss(hsl.h, 0, hsl.l)}, ${hslCss(hsl.h, 100, hsl.l)})`
+  const trackLit = `linear-gradient(to right, #000, ${hslCss(hsl.h, hsl.s, 50)}, #fff)`
+
+  return (
+    <div className="controls__hsl">
+      <div className="controls__row"><label className="controls__label">Hue</label>
+        <EditableValue value={h} min={0} max={360} suffix="°" onChange={v => setChan('h', v)} /></div>
+      <Slider className="controls__slider--hue" min={0} max={360} step={1}
+        def={Math.round(base.h)} value={h} on={v => setChan('h', v)} />
+
+      <div className="controls__row"><label className="controls__label">Saturation</label>
+        <EditableValue value={s} min={0} max={100} suffix="%" onChange={v => setChan('s', v)} /></div>
+      <Slider className="controls__slider--tint" style={{ '--track': trackSat }} min={0} max={100} step={1}
+        def={Math.round(base.s)} value={s} on={v => setChan('s', v)} />
+
+      <div className="controls__row"><label className="controls__label">Brightness</label>
+        <EditableValue value={l} min={0} max={100} suffix="%" onChange={v => setChan('l', v)} /></div>
+      <Slider className="controls__slider--tint" style={{ '--track': trackLit }} min={0} max={100} step={1}
+        def={Math.round(base.l)} value={l} on={v => setChan('l', v)} />
+    </div>
   )
 }
 
@@ -800,37 +889,19 @@ export default function Controls({
 
           {bgMode !== 'frosted' && (
             <>
-              {/* Suggested palette — harmonies pulled from the photo itself. */}
-              {borderSuggestions.length > 0 && (
-                <>
-                  <div className="controls__fontlist-head" style={{ marginTop: 4 }}>
-                    <span>From your photo</span>
-                    <span className="controls__fontlist-count">tap to apply</span>
-                  </div>
-                  <div className="controls__swatches" role="radiogroup" aria-label="Suggested border colors">
-                    {borderSuggestions.map(s => {
-                      const active = bgMode === 'color' && (bgColor || '').toLowerCase() === s.hex.toLowerCase()
-                      return (
-                        <button key={s.id} role="radio" aria-checked={active}
-                          className={`controls__swatch${active ? ' controls__swatch--active' : ''}`}
-                          onClick={() => onApplyBorderColor?.(s.hex)}
-                          title={`${s.label} · ${s.hex}`} aria-label={`${s.label} border ${s.hex}`}>
-                          <span className="controls__swatch-chip" style={{ background: s.hex }}>
-                            {active && (
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                stroke={isLightHex(s.hex) ? '#111' : '#fff'} strokeWidth="3.2"
-                                strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                <polyline points="20 6 9 17 4 12"/>
-                              </svg>
-                            )}
-                          </span>
-                          <span className="controls__swatch-label">{s.label}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </>
-              )}
+              {/* Suggested harmonies pulled from the photo — tones plus a range
+                  of complementary / split / triadic "pop" accents. */}
+              <SwatchGroup title="From your photo" hint="tap to apply"
+                items={borderSuggestions.filter(s => s.group === 'tone')}
+                bgMode={bgMode} bgColor={bgColor} onApply={onApplyBorderColor} />
+              <SwatchGroup title="Pop & accents"
+                items={borderSuggestions.filter(s => s.group === 'accent')}
+                bgMode={bgMode} bgColor={bgColor} onApply={onApplyBorderColor} />
+
+              {/* Fine-tune the selected colour. */}
+              <BorderColorSliders
+                bgColor={bgColor}
+                onColor={hex => { onUpdate('bgColor', hex); if (bgMode !== 'color') onUpdate('bgMode', 'color') }} />
 
               {/* Custom colour + eyedropper. */}
               <div className="controls__color-row controls__color-row--active">

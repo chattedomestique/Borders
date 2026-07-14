@@ -54,6 +54,14 @@ export function rgbToHex(r, g, b) {
   const h = n => clamp(Math.round(n), 0, 255).toString(16).padStart(2, '0')
   return `#${h(r)}${h(g)}${h(b)}`
 }
+export function hexToHsl(hex) {
+  const s = (hex || '#000000').replace('#', '')
+  const r = parseInt(s.slice(0, 2), 16) || 0
+  const g = parseInt(s.slice(2, 4), 16) || 0
+  const b = parseInt(s.slice(4, 6), 16) || 0
+  const [h, sat, l] = rgbToHsl(r, g, b)
+  return { h, s: sat, l }
+}
 
 // ── downsample the source into a flat pixel array ──
 function samplePixels(source, maxDim = 84) {
@@ -152,20 +160,29 @@ export function buildBorderSuggestions(source) {
   const heroL = clamp(hero.l, 22, 78)
 
   const out = []
-  const add = (id, label, h, s, l) => out.push({ id, label, hex: hslCss(h, s, l) })
+  const add = (group, id, label, h, s, l) => out.push({ group, id, label, hex: hslCss(h, s, l) })
 
-  // 1 · Drawn straight from the photo — guaranteed to belong.
-  out.push({ id: 'photo', label: 'Photo', hex: hslCss(heroH, heroS, heroL) })
+  // ── Tones drawn from the image (belong by construction) ──
+  // 1 · Drawn straight from the photo.
+  out.push({ group: 'tone', id: 'photo', label: 'Photo', hex: hslCss(heroH, heroS, heroL) })
   // 2 · Soft mat: near-white carrying the image's undertone (gallery matte).
-  add('soft', 'Soft', heroH, clamp(heroS * 0.18, 5, 14), 94)
+  add('tone', 'soft', 'Soft', heroH, clamp(heroS * 0.18, 5, 14), 94)
   // 3 · Deep frame: rich near-black with the same undertone.
-  add('deep', 'Deep', heroH, clamp(heroS * 0.5, 14, 32), 12)
-  // 4 · Pop: complementary accent, chroma boosted, mid-lightness.
-  add('pop', 'Pop', heroH + 180, clamp(Math.max(heroS, 58) * 1.05, 55, 92), clamp(heroL < 50 ? 58 : 52, 45, 62))
+  add('tone', 'deep', 'Deep', heroH, clamp(heroS * 0.5, 14, 32), 12)
+  // 4 · Muted: dusty tone-on-tone, understated.
+  add('tone', 'muted', 'Muted', heroH, clamp(heroS * 0.42, 12, 36), 66)
   // 5 · Blend: analogous neighbour, offset in lightness for gentle separation.
-  add('blend', 'Blend', heroH + 32, clamp(heroS * 0.9, 30, 80), clamp(heroL > 55 ? heroL - 20 : heroL + 20, 26, 76))
-  // 6 · Muted: dusty tone-on-tone, understated.
-  add('muted', 'Muted', heroH, clamp(heroS * 0.42, 12, 36), 66)
+  add('tone', 'blend', 'Blend', heroH + 32, clamp(heroS * 0.9, 30, 80), clamp(heroL > 55 ? heroL - 20 : heroL + 20, 26, 76))
+
+  // ── Pop & accents: several complementary / split / triadic options so there's
+  //    a range of "pop" to choose from, spanning hue AND tone. ──
+  const popS = clamp(Math.max(heroS, 58) * 1.05, 55, 92)
+  add('accent', 'comp',    'Comp',    heroH + 180, popS,                       clamp(heroL < 50 ? 56 : 50, 46, 60))
+  add('accent', 'comp-lt', 'Comp Lt', heroH + 180, clamp(popS * 0.72, 34, 70), 72)
+  add('accent', 'comp-dk', 'Comp Dk', heroH + 180, clamp(popS * 0.9, 40, 82),  32)
+  add('accent', 'split-a', 'Split A', heroH + 150, clamp(Math.max(heroS, 55), 50, 88), 54)
+  add('accent', 'split-b', 'Split B', heroH + 210, clamp(Math.max(heroS, 55), 50, 88), 54)
+  add('accent', 'triad',   'Triad',   heroH + 120, clamp(Math.max(heroS, 52), 48, 85), 56)
 
   // De-dup any collisions (e.g. grayscale images) so the strip stays varied.
   const seen = new Set()
