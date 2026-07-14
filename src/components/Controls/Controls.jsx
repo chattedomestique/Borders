@@ -288,6 +288,117 @@ function BorderColorSliders({ bgColor, onColor }) {
   )
 }
 
+// Border-fill controls, split into compact sub-tabs so each view fits the
+// bottom dock without scrolling and the photo stays large.
+const BG_SUBTABS = [
+  { id: 'photo',   label: 'Photo'   },
+  { id: 'accents', label: 'Accents' },
+  { id: 'adjust',  label: 'Adjust'  },
+  { id: 'frosted', label: 'Frosted' },
+]
+
+function BgControls({ settings, onUpdate, pickMode, onPickMode, borderSuggestions, onApplyBorderColor }) {
+  const { bgMode, bgColor = '#ffffff', blurAmount,
+          frostBrightness = -15, frostContrast = 0, frostSaturation = 60, frostVibrance = 0 } = settings
+  const [sub, setSub] = useState(bgMode === 'frosted' ? 'frosted' : 'photo')
+
+  // Selecting a colour sub-tab implies a flat-colour border; Frosted swaps the
+  // treatment. Keeps bgMode and the visible sub-tab in sync.
+  const pick = (id) => {
+    setSub(id)
+    if (id === 'frosted') { if (bgMode !== 'frosted') onUpdate('bgMode', 'frosted') }
+    else if (bgMode === 'frosted') onUpdate('bgMode', 'color')
+  }
+
+  const tones = borderSuggestions.filter(s => s.group === 'tone')
+  const accents = borderSuggestions.filter(s => s.group === 'accent')
+
+  const eyedrop = (
+    <button
+      className={`controls__eyedropper-mini${pickMode ? ' controls__eyedropper-mini--active' : ''}`}
+      onClick={onPickMode} aria-pressed={pickMode} aria-label="Pick a color from the photo">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
+        <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
+        <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
+        <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
+      </svg>
+      {pickMode ? 'Tap photo' : 'Eyedrop'}
+    </button>
+  )
+
+  return (
+    <section className="controls__section controls__section--dock" aria-label="Border fill">
+      <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }} role="tablist">
+        {BG_SUBTABS.map(t => {
+          const active = sub === t.id
+          return (
+            <button key={t.id} role="tab" aria-selected={active}
+              className={`controls__seg-btn${active ? ' controls__seg-btn--active' : ''}`}
+              onClick={() => pick(t.id)}>{t.label}</button>
+          )
+        })}
+      </div>
+
+      {sub === 'photo' && (
+        <SwatchGroup title="From your photo" hint="tap to apply" items={tones}
+          bgMode={bgMode} bgColor={bgColor} onApply={onApplyBorderColor} />
+      )}
+
+      {sub === 'accents' && (
+        <SwatchGroup title="Complementary & pop" action={eyedrop} items={accents}
+          bgMode={bgMode} bgColor={bgColor} onApply={onApplyBorderColor} />
+      )}
+
+      {sub === 'adjust' && (
+        <BorderColorSliders bgColor={bgColor}
+          onColor={hex => { onUpdate('bgColor', hex); if (bgMode !== 'color') onUpdate('bgMode', 'color') }} />
+      )}
+
+      {sub === 'frosted' && (
+        <div className="controls__frost">
+          <div className="controls__row"><label className="controls__label" htmlFor="blur-slider">Blur</label>
+            <EditableValue value={blurAmount} min={10} max={240} step={2} suffix="px"
+              onChange={v => onUpdate('blurAmount', v)} /></div>
+          <Slider id="blur-slider" min={10} max={240} step={2} def={60}
+            value={blurAmount} on={v => onUpdate('blurAmount', v)} />
+          <div className="controls__frost-grid">
+            <div className="controls__frost-cell">
+              <div className="controls__row"><label className="controls__label">Bright</label>
+                <EditableValue value={frostBrightness} min={-100} max={200}
+                  format={v => `${v > 0 ? `+${v}` : v}`} onChange={v => onUpdate('frostBrightness', v)} /></div>
+              <Slider min={-100} max={200} step={1} def={-15}
+                value={frostBrightness} on={v => onUpdate('frostBrightness', v)} />
+            </div>
+            <div className="controls__frost-cell">
+              <div className="controls__row"><label className="controls__label">Contrast</label>
+                <EditableValue value={frostContrast} min={-100} max={200}
+                  format={v => `${v > 0 ? `+${v}` : v}`} onChange={v => onUpdate('frostContrast', v)} /></div>
+              <Slider min={-100} max={200} step={1} def={0}
+                value={frostContrast} on={v => onUpdate('frostContrast', v)} />
+            </div>
+            <div className="controls__frost-cell">
+              <div className="controls__row"><label className="controls__label">Satur.</label>
+                <EditableValue value={frostSaturation} min={-100} max={300}
+                  format={v => `${v > 0 ? `+${v}` : v}`} onChange={v => onUpdate('frostSaturation', v)} /></div>
+              <Slider min={-100} max={300} step={1} def={60}
+                value={frostSaturation} on={v => onUpdate('frostSaturation', v)} />
+            </div>
+            <div className="controls__frost-cell">
+              <div className="controls__row"><label className="controls__label">Vibrance</label>
+                <EditableValue value={frostVibrance} min={0} max={200}
+                  format={v => v === 0 ? 'Off' : `+${v}`} onChange={v => onUpdate('frostVibrance', v)} /></div>
+              <Slider min={0} max={200} step={1} def={0}
+                value={frostVibrance} on={v => onUpdate('frostVibrance', v)} />
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
 const TEXT_SUBTABS = [
   { id: 'content', label: 'Content' },
   { id: 'style',   label: 'Style'   },
@@ -782,8 +893,7 @@ export default function Controls({
   if (!tab) return null
 
   const {
-    borderThickness, bgMode, bgColor = '#ffffff', blurAmount,
-    frostBrightness = -15, frostContrast = 0, frostSaturation = 60, frostVibrance = 0,
+    borderThickness,
     cornerRadius, cropRatio = 'free', showMedia,
     grainAmount, grainVariability, grainMonochrome = true, grainSpread = 0,
     textLayers = [],
@@ -875,102 +985,11 @@ export default function Controls({
         </section>
       )}
 
-      {/* ── Background ── */}
+      {/* ── Background / border fill (sub-tabbed, dock-compact) ── */}
       {tab === 'bg' && (
-        <section className="controls__section" aria-label="Background">
-          {/* Treatment: a flat colour, or a frosted-glass blur of the photo. */}
-          <div className="controls__seg" role="radiogroup" aria-label="Border treatment">
-            <button role="radio" aria-checked={bgMode !== 'frosted'}
-              className={`controls__seg-btn${bgMode !== 'frosted' ? ' controls__seg-btn--active' : ''}`}
-              onClick={() => onUpdate('bgMode', 'color')}>Color</button>
-            <button role="radio" aria-checked={bgMode === 'frosted'}
-              className={`controls__seg-btn${bgMode === 'frosted' ? ' controls__seg-btn--active' : ''}`}
-              onClick={() => onUpdate('bgMode', 'frosted')}>Frosted</button>
-          </div>
-
-          {bgMode !== 'frosted' && (
-            <>
-              {/* Suggested harmonies pulled from the photo — tones plus a range
-                  of complementary / split / triadic "pop" accents. */}
-              <SwatchGroup title="From your photo" hint="tap to apply"
-                items={borderSuggestions.filter(s => s.group === 'tone')}
-                bgMode={bgMode} bgColor={bgColor} onApply={onApplyBorderColor} />
-              <SwatchGroup title="Pop & accents"
-                items={borderSuggestions.filter(s => s.group === 'accent')}
-                bgMode={bgMode} bgColor={bgColor} onApply={onApplyBorderColor}
-                action={
-                  <button
-                    className={`controls__eyedropper-mini${pickMode ? ' controls__eyedropper-mini--active' : ''}`}
-                    onClick={onPickMode} aria-pressed={pickMode}
-                    aria-label="Pick a color from the photo">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
-                      <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
-                      <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
-                      <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
-                    </svg>
-                    {pickMode ? 'Tap photo' : 'Eyedrop'}
-                  </button>
-                } />
-
-              {/* Fine-tune the selected colour (Hue / Saturation / Brightness). */}
-              <BorderColorSliders
-                bgColor={bgColor}
-                onColor={hex => { onUpdate('bgColor', hex); if (bgMode !== 'color') onUpdate('bgMode', 'color') }} />
-            </>
-          )}
-
-          {bgMode === 'frosted' && (
-            <>
-              <div className="controls__row controls__row--spaced">
-                <label className="controls__label" htmlFor="blur-slider">Blur</label>
-                <EditableValue value={blurAmount} min={10} max={240} step={2} suffix="px"
-                  onChange={v => onUpdate('blurAmount', v)} />
-              </div>
-              <Slider id="blur-slider" min={10} max={240} step={2} def={60}
-                value={blurAmount} on={v => onUpdate('blurAmount', v)} />
-
-              <div className="controls__divider controls__divider--inset"/>
-
-              <div className="controls__row">
-                <label className="controls__label" htmlFor="frost-brightness">Brightness</label>
-                <EditableValue value={frostBrightness} min={-100} max={200}
-                  format={v => `${v > 0 ? `+${v}` : v}%`}
-                  onChange={v => onUpdate('frostBrightness', v)} />
-              </div>
-              <Slider id="frost-brightness" min={-100} max={200} step={1} def={-15}
-                value={frostBrightness} on={v => onUpdate('frostBrightness', v)} />
-
-              <div className="controls__row">
-                <label className="controls__label" htmlFor="frost-contrast">Contrast</label>
-                <EditableValue value={frostContrast} min={-100} max={200}
-                  format={v => `${v > 0 ? `+${v}` : v}%`}
-                  onChange={v => onUpdate('frostContrast', v)} />
-              </div>
-              <Slider id="frost-contrast" min={-100} max={200} step={1} def={0}
-                value={frostContrast} on={v => onUpdate('frostContrast', v)} />
-
-              <div className="controls__row">
-                <label className="controls__label" htmlFor="frost-saturation">Saturation</label>
-                <EditableValue value={frostSaturation} min={-100} max={300}
-                  format={v => `${v > 0 ? `+${v}` : v}%`}
-                  onChange={v => onUpdate('frostSaturation', v)} />
-              </div>
-              <Slider id="frost-saturation" min={-100} max={300} step={1} def={60}
-                value={frostSaturation} on={v => onUpdate('frostSaturation', v)} />
-
-              <div className="controls__row">
-                <label className="controls__label" htmlFor="frost-vibrance">Vibrance</label>
-                <EditableValue value={frostVibrance} min={0} max={200}
-                  format={v => v === 0 ? 'Off' : `+${v}%`}
-                  onChange={v => onUpdate('frostVibrance', v)} />
-              </div>
-              <Slider id="frost-vibrance" min={0} max={200} step={1} def={0}
-                value={frostVibrance} on={v => onUpdate('frostVibrance', v)} />
-            </>
-          )}
-        </section>
+        <BgControls settings={settings} onUpdate={onUpdate}
+          pickMode={pickMode} onPickMode={onPickMode}
+          borderSuggestions={borderSuggestions} onApplyBorderColor={onApplyBorderColor} />
       )}
 
       {/* ── Grain ── */}

@@ -12,6 +12,23 @@
   gap: 9px;
 }
 
+/* Border-fill dock: tighter so each sub-tab view fits without scrolling, and a
+   steady height so switching sub-tabs never resizes the photo above. */
+.controls__section--dock {
+  padding: 8px 16px 12px;
+  gap: 8px;
+  min-height: 188px;
+}
+.controls__frost { display: flex; flex-direction: column; gap: 2px; }
+.controls__frost-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 14px;
+  margin-top: 4px;
+}
+.controls__frost-cell { display: flex; flex-direction: column; }
+.controls__frost-cell input[type="range"] { margin: 2px 0 2px; height: 5px; }
+
 .controls__divider {
   height: 1px;
   background: var(--border);
