@@ -399,9 +399,175 @@ function BgControls({ settings, onUpdate, pickMode, onPickMode, borderSuggestion
   )
 }
 
+// Frame controls, sub-tabbed so each view fits the dock without scrolling.
+const FRAME_SUBTABS = [
+  { id: 'border', label: 'Border' },
+  { id: 'crop',   label: 'Crop'   },
+  { id: 'grid',   label: 'Grid'   },
+]
+
+function FrameControls({ borderThickness, cornerRadius, cropRatio = 'free', showMedia, onUpdate,
+                         snapEnabled, onSnapToggle, gridDivisions, onGridDivisions }) {
+  const [sub, setSub] = useState('border')
+  return (
+    <section className="controls__section controls__section--dock" aria-label="Frame">
+      <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }} role="tablist">
+        {FRAME_SUBTABS.map(t => (
+          <button key={t.id} role="tab" aria-selected={sub === t.id}
+            className={`controls__seg-btn${sub === t.id ? ' controls__seg-btn--active' : ''}`}
+            onClick={() => setSub(t.id)}>{t.label}</button>
+        ))}
+      </div>
+
+      {sub === 'border' && (
+        <>
+          <div className="controls__row">
+            <label className="controls__label" htmlFor="border-slider">Border</label>
+            <EditableValue value={borderThickness} min={0} max={400} suffix="px"
+              onChange={v => onUpdate('borderThickness', v)} />
+          </div>
+          <Slider id="border-slider" min={0} max={400} step={1} def={40}
+            value={borderThickness} on={v => onUpdate('borderThickness', v)} />
+
+          <div className="controls__row controls__row--spaced">
+            <label className="controls__label" htmlFor="radius-slider">Corners</label>
+            <EditableValue value={cornerRadius} min={0} max={100}
+              format={v => v === 0 ? 'Square' : v === 100 ? 'Round' : `${v}%`}
+              onChange={v => onUpdate('cornerRadius', v)} />
+          </div>
+          <Slider id="radius-slider" min={0} max={100} step={1} def={0}
+            value={cornerRadius} on={v => onUpdate('cornerRadius', v)} />
+
+          <div className="controls__row controls__row--spaced">
+            <label className="controls__label">Show photo</label>
+            <Toggle on={showMedia} onChange={v => onUpdate('showMedia', v)} label="Toggle photo visibility"/>
+          </div>
+        </>
+      )}
+
+      {sub === 'crop' && (
+        <>
+          <label className="controls__label" style={{ marginBottom: 2 }}>Aspect ratio</label>
+          <div className="controls__layer-strip">
+            {CROP_RATIOS.map(r => {
+              const isPortrait  = cropRatio === r.id
+              const isLandscape = r.alt !== null && cropRatio === r.alt
+              const isActive    = isPortrait || isLandscape
+              const displayLabel = isLandscape ? r.alt : r.id
+              const canFlip = r.alt !== null
+              const handleClick = () => {
+                if (!isActive) { onUpdate('cropRatio', r.id) }
+                else if (canFlip) { onUpdate('cropRatio', isPortrait ? r.alt : r.id) }
+              }
+              return (
+                <button key={r.id}
+                  className={`controls__ratio-chip${isActive ? ' controls__ratio-chip--active' : ''}`}
+                  onClick={handleClick} aria-pressed={isActive}>
+                  {displayLabel}
+                  {isActive && canFlip && (
+                    <svg className="controls__ratio-flip" width="11" height="11" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <polyline points="23 4 23 10 17 10"/>
+                      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                    </svg>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </>
+      )}
+
+      {sub === 'grid' && (
+        <>
+          <div className="controls__row">
+            <label className="controls__label">Snap to grid</label>
+            <Toggle on={!!snapEnabled} onChange={() => onSnapToggle?.()} label="Toggle snapping"/>
+          </div>
+          {snapEnabled && (
+            <>
+              <label className="controls__label" style={{ margin: '4px 0 2px' }}>Divisions</label>
+              <div className="controls__seg" role="radiogroup" aria-label="Grid divisions"
+                style={{ gridTemplateColumns: `repeat(${GRID_OPTIONS.length}, 1fr)` }}>
+                {GRID_OPTIONS.map(n => (
+                  <button key={n} role="radio" aria-checked={gridDivisions === n}
+                    className={`controls__seg-btn${gridDivisions === n ? ' controls__seg-btn--active' : ''}`}
+                    onClick={() => onGridDivisions?.(n)}>{n}×{n}</button>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </section>
+  )
+}
+
+// Grain controls, sub-tabbed for a compact, scroll-free dock.
+const GRAIN_SUBTABS = [
+  { id: 'amount',  label: 'Amount'  },
+  { id: 'texture', label: 'Texture' },
+]
+
+function GrainControls({ grainAmount, grainVariability, grainSpread, grainMonochrome, onUpdate }) {
+  const [sub, setSub] = useState('amount')
+  return (
+    <section className="controls__section controls__section--dock" aria-label="Grain">
+      <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }} role="tablist">
+        {GRAIN_SUBTABS.map(t => (
+          <button key={t.id} role="tab" aria-selected={sub === t.id}
+            className={`controls__seg-btn${sub === t.id ? ' controls__seg-btn--active' : ''}`}
+            onClick={() => setSub(t.id)}>{t.label}</button>
+        ))}
+      </div>
+
+      {sub === 'amount' && (
+        <>
+          <div className="controls__row">
+            <label className="controls__label" htmlFor="grain-slider">Amount</label>
+            <EditableValue value={grainAmount} min={0} max={100}
+              format={v => v === 0 ? 'Off' : `${v}%`}
+              onChange={v => onUpdate('grainAmount', v)} />
+          </div>
+          <Slider id="grain-slider" min={0} max={100} step={1} def={0}
+            value={grainAmount} on={v => onUpdate('grainAmount', v)} />
+
+          <div className="controls__row controls__row--spaced">
+            <label className="controls__label" htmlFor="variability-slider">Variability</label>
+            <EditableValue value={grainVariability} min={0} max={100}
+              format={v => v === 0 ? 'Uniform' : `${v}%`}
+              onChange={v => onUpdate('grainVariability', v)} />
+          </div>
+          <Slider id="variability-slider" min={0} max={100} step={1} def={0}
+            value={grainVariability} on={v => onUpdate('grainVariability', v)} />
+        </>
+      )}
+
+      {sub === 'texture' && (
+        <>
+          <div className="controls__row">
+            <label className="controls__label" htmlFor="spread-slider">Spread</label>
+            <EditableValue value={grainSpread} min={0} max={100}
+              format={v => v === 0 ? 'Off' : `${v}%`}
+              onChange={v => onUpdate('grainSpread', v)} />
+          </div>
+          <Slider id="spread-slider" min={0} max={100} step={1} def={0}
+            value={grainSpread} on={v => onUpdate('grainSpread', v)} />
+
+          <div className="controls__row controls__row--spaced">
+            <label className="controls__label">Monochrome</label>
+            <Toggle on={grainMonochrome} onChange={v => onUpdate('grainMonochrome', v)} label="Toggle monochrome grain"/>
+          </div>
+        </>
+      )}
+    </section>
+  )
+}
+
 const TEXT_SUBTABS = [
   { id: 'content', label: 'Content' },
-  { id: 'style',   label: 'Style'   },
+  { id: 'font',    label: 'Font'    },
+  { id: 'format',  label: 'Format'  },
   { id: 'fx',      label: 'FX'      },
 ]
 
@@ -415,7 +581,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
   )
 
   return (
-    <section className="controls__section" aria-label="Text layers">
+    <section className="controls__section controls__section--dock" aria-label="Text layers">
       {/* Layer strip — always visible */}
       <div className="controls__layer-strip">
         <button className="controls__layer-add" onClick={onAddLayer} aria-label="Add text layer">
@@ -438,7 +604,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
       </div>
 
       {/* Sub-tab bar */}
-      <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }} role="tablist">
+      <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }} role="tablist">
         {TEXT_SUBTABS.map(t => (
           <button key={t.id} role="tab" aria-selected={sub === t.id}
             className={`controls__seg-btn${sub === t.id ? ' controls__seg-btn--active' : ''}`}
@@ -466,14 +632,14 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
       )}
 
       {/* Style sub-tab */}
-      {sub === 'style' && (
+      {sub === 'font' && (
         selectedLayer ? (
           <>
             <div className="controls__fontlist-head">
               <span>Font</span>
               <span className="controls__fontlist-count">{FONTS.length} families · scroll</span>
             </div>
-            <div className="controls__fontlist" role="radiogroup" aria-label="Font family"
+            <div className="controls__fontlist controls__fontlist--solo" role="radiogroup" aria-label="Font family"
               onScroll={(e) => {
                 const el = e.currentTarget
                 const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 8
@@ -490,7 +656,13 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                 </div>
               ))}
             </div>
+          </>
+        ) : noLayerHint
+      )}
 
+      {sub === 'format' && (
+        selectedLayer ? (
+          <>
             <div className="controls__text-row">
               <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(2, 1fr)', flex: '0 0 auto', width: 80 }}>
                 <button className={`controls__seg-btn${selectedLayer.bold ? ' controls__seg-btn--active' : ''}`}
@@ -907,82 +1079,11 @@ export default function Controls({
 
       {/* ── Frame ── */}
       {tab === 'frame' && (
-        <section className="controls__section" aria-label="Frame">
-          <div className="controls__row">
-            <label className="controls__label" htmlFor="border-slider">Border</label>
-            <EditableValue value={borderThickness} min={0} max={400} suffix="px"
-              onChange={v => onUpdate('borderThickness', v)} />
-          </div>
-          <Slider id="border-slider" min={0} max={400} step={1} def={40}
-            value={borderThickness} on={v => onUpdate('borderThickness', v)} />
-
-          <div className="controls__row controls__row--spaced">
-            <label className="controls__label" htmlFor="radius-slider">Corners</label>
-            <EditableValue value={cornerRadius} min={0} max={100}
-              format={v => v === 0 ? 'Square' : v === 100 ? 'Round' : `${v}%`}
-              onChange={v => onUpdate('cornerRadius', v)} />
-          </div>
-          <Slider id="radius-slider" min={0} max={100} step={1} def={0}
-            value={cornerRadius} on={v => onUpdate('cornerRadius', v)} />
-
-          <div className="controls__divider controls__divider--inset"/>
-
-          <label className="controls__label" style={{ marginBottom: 4 }}>Crop</label>
-          <div className="controls__layer-strip">
-            {CROP_RATIOS.map(r => {
-              const isPortrait  = cropRatio === r.id
-              const isLandscape = r.alt !== null && cropRatio === r.alt
-              const isActive    = isPortrait || isLandscape
-              const displayLabel = isLandscape ? r.alt : r.id
-              const canFlip = r.alt !== null
-              const handleClick = () => {
-                if (!isActive) { onUpdate('cropRatio', r.id) }
-                else if (canFlip) { onUpdate('cropRatio', isPortrait ? r.alt : r.id) }
-              }
-              return (
-                <button key={r.id}
-                  className={`controls__ratio-chip${isActive ? ' controls__ratio-chip--active' : ''}`}
-                  onClick={handleClick} aria-pressed={isActive}>
-                  {displayLabel}
-                  {isActive && canFlip && (
-                    <svg className="controls__ratio-flip" width="11" height="11" viewBox="0 0 24 24" fill="none"
-                      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <polyline points="23 4 23 10 17 10"/>
-                      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                    </svg>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-
-          <div className="controls__row controls__row--spaced">
-            <label className="controls__label">Show photo</label>
-            <Toggle on={showMedia} onChange={v => onUpdate('showMedia', v)} label="Toggle photo visibility"/>
-          </div>
-
-          <div className="controls__divider controls__divider--inset"/>
-
-          {/* Snap to grid — applies to dragging text layers and panning the photo */}
-          <div className="controls__row controls__row--spaced">
-            <label className="controls__label">Snap to grid</label>
-            <Toggle on={!!snapEnabled} onChange={() => onSnapToggle?.()} label="Toggle snapping"/>
-          </div>
-
-          {snapEnabled && (
-            <>
-              <label className="controls__label" style={{ marginBottom: 4 }}>Grid</label>
-              <div className="controls__seg" role="radiogroup" aria-label="Grid divisions"
-                style={{ gridTemplateColumns: `repeat(${GRID_OPTIONS.length}, 1fr)` }}>
-                {GRID_OPTIONS.map(n => (
-                  <button key={n} role="radio" aria-checked={gridDivisions === n}
-                    className={`controls__seg-btn${gridDivisions === n ? ' controls__seg-btn--active' : ''}`}
-                    onClick={() => onGridDivisions?.(n)}>{n}×{n}</button>
-                ))}
-              </div>
-            </>
-          )}
-        </section>
+        <FrameControls
+          borderThickness={borderThickness} cornerRadius={cornerRadius}
+          cropRatio={cropRatio} showMedia={showMedia} onUpdate={onUpdate}
+          snapEnabled={snapEnabled} onSnapToggle={onSnapToggle}
+          gridDivisions={gridDivisions} onGridDivisions={onGridDivisions} />
       )}
 
       {/* ── Background / border fill (sub-tabbed, dock-compact) ── */}
@@ -994,41 +1095,9 @@ export default function Controls({
 
       {/* ── Grain ── */}
       {tab === 'grain' && (
-        <section className="controls__section" aria-label="Grain">
-          <div className="controls__row">
-            <label className="controls__label" htmlFor="grain-slider">Amount</label>
-            <EditableValue value={grainAmount} min={0} max={100}
-              format={v => v === 0 ? 'Off' : `${v}%`}
-              onChange={v => onUpdate('grainAmount', v)} />
-          </div>
-          <Slider id="grain-slider" min={0} max={100} step={1} def={0}
-            value={grainAmount} on={v => onUpdate('grainAmount', v)} />
-
-          <div className="controls__row controls__row--spaced">
-            <label className="controls__label" htmlFor="variability-slider">Variability</label>
-            <EditableValue value={grainVariability} min={0} max={100}
-              format={v => v === 0 ? 'Uniform' : `${v}%`}
-              onChange={v => onUpdate('grainVariability', v)} />
-          </div>
-          <Slider id="variability-slider" min={0} max={100} step={1} def={0}
-            value={grainVariability} on={v => onUpdate('grainVariability', v)} />
-
-          <div className="controls__row controls__row--spaced">
-            <label className="controls__label" htmlFor="spread-slider">Spread</label>
-            <EditableValue value={grainSpread} min={0} max={100}
-              format={v => v === 0 ? 'Off' : `${v}%`}
-              onChange={v => onUpdate('grainSpread', v)} />
-          </div>
-          <Slider id="spread-slider" min={0} max={100} step={1} def={0}
-            value={grainSpread} on={v => onUpdate('grainSpread', v)} />
-
-          <div className="controls__divider controls__divider--inset"/>
-
-          <div className="controls__row">
-            <label className="controls__label">Monochrome</label>
-            <Toggle on={grainMonochrome} onChange={v => onUpdate('grainMonochrome', v)} label="Toggle monochrome grain"/>
-          </div>
-        </section>
+        <GrainControls
+          grainAmount={grainAmount} grainVariability={grainVariability}
+          grainSpread={grainSpread} grainMonochrome={grainMonochrome} onUpdate={onUpdate} />
       )}
 
       {/* ── Type ── */}

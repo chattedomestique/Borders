@@ -122,10 +122,14 @@
   opacity: 0.75;
 }
 .controls__fontlist {
-  /* Sized to sit comfortably inside the bottom sheet (which itself caps at
-   * ~42dvh) — shows ~6 families at once and scrolls for the rest, without
-   * fighting the panel's own scroll. */
-  max-height: min(32dvh, 260px);
+  /* Compact internal scroller so the font picker never dominates the dock:
+   * shows ~5 families and scrolls for the rest, leaving the format controls
+   * below it reachable. */
+  max-height: min(24dvh, 186px);
+}
+/* In its own Font sub-tab the list is the only control, so give it more room. */
+.controls__fontlist--solo {
+  max-height: min(42dvh, 360px);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
