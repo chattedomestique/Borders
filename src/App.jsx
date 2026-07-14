@@ -341,6 +341,7 @@ export default function App() {
               {/* Sliding controls panel */}
               <div className={`app__panel${activeTab ? ' app__panel--open' : ''}`}>
                 <div className="app__panel-inner">
+                <div className="app__panel-grab" aria-hidden="true" />
                 <Controls
                   tab={activeTab}
                   settings={settings}

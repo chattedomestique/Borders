@@ -183,8 +183,30 @@
 
 .app__panel--open .app__panel-inner {
   overflow-y: auto;
-  max-height: 55vh;
+  /* Bounded bottom-sheet: the image above always stays large. Long tabs (e.g.
+     Fill) scroll inside the sheet rather than pushing the photo off-screen. */
+  max-height: min(42dvh, 430px);
   overscroll-behavior: contain;
+}
+
+/* Grabber — signals the sheet scrolls and gives it a proper bottom-sheet feel. */
+.app__panel-grab {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  padding: 7px 0 3px;
+  background: linear-gradient(var(--glass), color-mix(in srgb, var(--glass) 70%, transparent));
+  pointer-events: none;
+}
+.app__panel-grab::before {
+  content: '';
+  width: 36px;
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--border-strong);
+  opacity: 0.7;
 }
 
 /* Toolbar — always visible, flush with screen bottom */

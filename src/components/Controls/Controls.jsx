@@ -200,12 +200,13 @@ function EditableValue({ value, min, max, step = 1, onChange, format, suffix = '
 }
 
 // A labelled grid of tappable border-colour suggestions (one harmony group).
-function SwatchGroup({ title, hint, items, bgMode, bgColor, onApply }) {
+function SwatchGroup({ title, hint, action, items, bgMode, bgColor, onApply }) {
   if (!items?.length) return null
   return (
     <>
-      <div className="controls__fontlist-head" style={{ marginTop: 4 }}>
-        <span>{title}</span>{hint && <span className="controls__fontlist-count">{hint}</span>}
+      <div className="controls__fontlist-head controls__swatch-head">
+        <span>{title}</span>
+        {action || (hint && <span className="controls__fontlist-count">{hint}</span>)}
       </div>
       <div className="controls__swatches" role="radiogroup" aria-label={title}>
         {items.map(s => {
@@ -896,36 +897,27 @@ export default function Controls({
                 bgMode={bgMode} bgColor={bgColor} onApply={onApplyBorderColor} />
               <SwatchGroup title="Pop & accents"
                 items={borderSuggestions.filter(s => s.group === 'accent')}
-                bgMode={bgMode} bgColor={bgColor} onApply={onApplyBorderColor} />
+                bgMode={bgMode} bgColor={bgColor} onApply={onApplyBorderColor}
+                action={
+                  <button
+                    className={`controls__eyedropper-mini${pickMode ? ' controls__eyedropper-mini--active' : ''}`}
+                    onClick={onPickMode} aria-pressed={pickMode}
+                    aria-label="Pick a color from the photo">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
+                      <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
+                      <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
+                      <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
+                    </svg>
+                    {pickMode ? 'Tap photo' : 'Eyedrop'}
+                  </button>
+                } />
 
-              {/* Fine-tune the selected colour. */}
+              {/* Fine-tune the selected colour (Hue / Saturation / Brightness). */}
               <BorderColorSliders
                 bgColor={bgColor}
                 onColor={hex => { onUpdate('bgColor', hex); if (bgMode !== 'color') onUpdate('bgMode', 'color') }} />
-
-              {/* Custom colour + eyedropper. */}
-              <div className="controls__color-row controls__color-row--active">
-                <label className="controls__color-swatch" style={{ background: bgColor }}
-                  title="Choose custom color" aria-label="Custom border color">
-                  <input type="color" value={bgColor}
-                    onChange={e => { onUpdate('bgColor', e.target.value); onUpdate('bgMode', 'color') }} />
-                </label>
-                <button
-                  className={`controls__eyedropper${pickMode ? ' controls__eyedropper--active' : ''}`}
-                  onClick={onPickMode} aria-label="Pick color from image" aria-pressed={pickMode}
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
-                    <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
-                    <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
-                    <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
-                  </svg>
-                </button>
-                <span className="controls__color-hint">
-                  {pickMode ? 'Tap image to pick' : 'Custom'}
-                </span>
-              </div>
             </>
           )}
 
