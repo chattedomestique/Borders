@@ -33,6 +33,7 @@ jobs:
           cache: npm
       - run: npm ci               # requires the committed lockfile
       - run: npm run lint         # must be green
+      - run: npm test             # §12: Vitest on the pure engine
       - run: npm run build
       - run: test -s dist/index.html   # smoke: the bundle isn't empty
       - uses: actions/upload-artifact@v4

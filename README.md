@@ -33,7 +33,8 @@ This repo is being brought into line with the Playbook. Done:
 - **N3 / N4** — save via `navigator.share({ files })` first, `<a download>` desktop fallback; JPEG (0.92), not PNG; `AbortError` swallowed as a clean cancel.
 - **N8** — overlays (grid, guides, text bboxes) never export; the export renders a fresh frame with `overlay = null`.
 - **N5 / N6** — downscale on import to ~2048 px (also bakes EXIF orientation); two-stage intake validation (pick-time + decode-time) that reaches the UI, with a decoding state.
-- **N10** — `npm run lint` is green and a CI `verify` job (lint + build + smoke) gates `deploy`, with a concurrency guard.
+- **N10** — `npm run lint` is green and a CI `verify` job (lint + test + build + smoke) gates `deploy`, with a concurrency guard.
+- **§12** — Vitest on the pure color engine (`palette.js`): primaries, grey saturation, rgb↔hsl round-trip, hue wrap, hex↔hsl (the slider path) identity.
 - **N11 (tier 1)** — settings persisted to localStorage and restored onto the next photo.
 - **§3** — base-aware manifest `id`/`scope`/`start_url`; `theme_color` matches the HTML meta; separate `any` + `maskable` icons; `apple-touch-icon.png` (180); status-bar style `default` (not `black-translucent`).
 - **§7** — direct manipulation (pinch / drag / double-tap), one `{zoom, panX, panY}` model; **§5.3** source-space crop clamp.
@@ -49,5 +50,5 @@ This repo is being brought into line with the Playbook. Done:
 
 - **N9** — a protected `main` as the *sole* deploy trigger still needs repo-admin setup; the workflow currently also allows `claude/**` so the active work branch can preview. Moving to the OIDC Pages actions (least-privilege) likewise needs the Pages source switched to "GitHub Actions".
 - **N11 (tier 2)** — media + edits to IndexedDB for full session restore across a reload.
-- **Testing (§12)** — no Vitest suite on the pure engine (`palette.js`, render math) yet.
 - **TypeScript (§2.1)** — the app is JavaScript; a TS migration would add `tsc --noEmit` to the gate.
+- **Render-math tests (§12)** — the crop/pan clamp (§5.3) is inline in `renderFrame`; extracting it would let it be property-tested.
