@@ -5,7 +5,8 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // dist is built output; text-effects-pwa is a separate, gitignored spin-off.
+  globalIgnores(['dist', 'text-effects-pwa', 'dev']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [

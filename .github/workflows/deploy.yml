@@ -4,36 +4,53 @@ on:
   push:
     branches:
       - main
+      # Playbook N9: production should trigger on `main` ONLY. `claude/**` stays
+      # temporarily so the active work branch can preview; remove it once a
+      # protected `main` is the single source of truth (a repo-admin step).
       - claude/**
-  # Also allow manual trigger from the Actions tab
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: write   # peaceiris pushes the built site to the gh-pages branch
+
+# The user's history includes shared-gh-pages last-write-wins races; serialize
+# deploys and let an in-flight one finish rather than cancelling it.
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  # N10: a REAL gate. `npm run build` alone never runs ESLint — App C shipped
+  # 13 lint errors for exactly that reason. verify runs lint + build + a smoke
+  # check, and deploy has `needs: verify`.
+  verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
+      - run: npm ci               # requires the committed lockfile
+      - run: npm run lint         # must be green
+      - run: npm run build
+      - run: test -s dist/index.html   # smoke: the bundle isn't empty
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: dist
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      - name: Deploy to gh-pages
-        uses: peaceiris/actions-gh-pages@v4
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: dist
+      - uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
-          # Ensure the SPA works on direct URL loads
           enable_jekyll: false

@@ -1339,18 +1339,25 @@ const BorderCanvas = forwardRef(function BorderCanvas(
   const [ready, setReady] = useState(false)
   const [snapGuides, setSnapGuides] = useState({ x: null, y: null })  // active guide lines (normalized 0–1)
 
-  settingsRef.current      = settings
-  snapEnabledRef.current   = snapEnabled
-  gridDivisionsRef.current = gridDivisions
-  mediaRef.current         = media
-  onUpdateRef.current      = onUpdate
-  onPickColorRef.current   = onPickColor
-  onPaletteRef.current     = onPalette
-  onErrorRef.current       = onError
-  pickModeRef.current      = pickMode
-  onSelectLayerRef.current = onSelectLayer
-  onUpdateLayerRef.current = onUpdateLayer
-  selectedLayerIdRef.current = selectedLayerId
+  // Mirror the latest props/settings into refs so the rAF loop, pointer
+  // handlers, and the save path always read current values without re-binding.
+  // Synced in an effect (not during render) — and this is the FIRST effect, so
+  // every later effect (redraw on settings change, etc.) sees fresh refs. The
+  // refs are seeded with the initial props at declaration, so mount is correct.
+  useEffect(() => {
+    settingsRef.current      = settings
+    snapEnabledRef.current   = snapEnabled
+    gridDivisionsRef.current = gridDivisions
+    mediaRef.current         = media
+    onUpdateRef.current      = onUpdate
+    onPickColorRef.current   = onPickColor
+    onPaletteRef.current     = onPalette
+    onErrorRef.current       = onError
+    pickModeRef.current      = pickMode
+    onSelectLayerRef.current = onSelectLayer
+    onUpdateLayerRef.current = onUpdateLayer
+    selectedLayerIdRef.current = selectedLayerId
+  })
 
   const redraw = useCallback(() => {
     renderFrame(canvasRef.current, sourceRef.current, settingsRef.current, cacheRef.current, geoRef, textBBoxesRef.current)
@@ -1573,6 +1580,10 @@ const BorderCanvas = forwardRef(function BorderCanvas(
 
   // Load media
   useEffect(() => {
+    // Reset readiness while the new source loads (so the redraw effect doesn't
+    // paint the old source against new settings). This doesn't cascade — the
+    // effect's deps don't include `ready`.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setReady(false)
     stopLoop()
     cacheRef.current = {}  // clear blur cache when media changes
