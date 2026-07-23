@@ -96,6 +96,7 @@ export default function App() {
   const { settings, set: setSettings, undo, redo, reset: resetHistory, canUndo, canRedo } = useHistory(DEFAULT_SETTINGS)
   const [recordingProgress, setRecordingProgress] = useState(0)
   const [pickMode, setPickMode] = useState(false)
+  const [mediaError, setMediaError] = useState(null)
   const [borderSuggestions, setBorderSuggestions] = useState([])
   const [selectedLayerId, setSelectedLayerId] = useState(null)
   const [activeTab, setActiveTab] = useState(null)
@@ -141,6 +142,7 @@ export default function App() {
   }, [showHint, dismissHint])
 
   const handleMediaLoaded = useCallback((mediaObj) => {
+    setMediaError(null)
     setMedia(mediaObj)
     setBorderSuggestions([])   // recomputed once the new source decodes
     // N11: restore the last-used frame/grain/text setup for the new photo.
@@ -155,7 +157,18 @@ export default function App() {
     setMedia(prev => { if (prev?.url) URL.revokeObjectURL(prev.url); return null })
     setSelectedLayerId(null)
     setActiveTab(null)
+    setMediaError(null)
     setStep(STEPS.UPLOAD)
+  }, [])
+
+  // N6: a decode failure returns to the uploader carrying a visible message,
+  // rather than leaving the canvas idle behind a spinner.
+  const handleMediaError = useCallback((message) => {
+    setMedia(prev => { if (prev?.url) URL.revokeObjectURL(prev.url); return null })
+    setSelectedLayerId(null)
+    setActiveTab(null)
+    setStep(STEPS.UPLOAD)
+    setMediaError(message || "Couldn't load that file.")
   }, [])
 
   const handleSave = useCallback(async () => {
@@ -312,7 +325,7 @@ export default function App() {
       <main className="app__main">
         {step === STEPS.UPLOAD ? (
           <div className="app__upload">
-            <Uploader onMediaLoaded={handleMediaLoaded} />
+            <Uploader onMediaLoaded={handleMediaLoaded} initialError={mediaError} />
           </div>
         ) : media ? (
           <div className={`app__canvas-wrap${viewMode === 'fit' ? ' app__canvas-wrap--fit' : ''}`}>
@@ -324,6 +337,7 @@ export default function App() {
               pickMode={pickMode}
               onPickColor={handlePickColor}
               onPalette={handlePalette}
+              onError={handleMediaError}
               selectedLayerId={selectedLayerId}
               onSelectLayer={setSelectedLayerId}
               onUpdateLayer={updateTextLayer}

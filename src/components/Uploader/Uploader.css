@@ -79,6 +79,23 @@
   opacity: 0.7;
 }
 
+/* §4.4 "reading/decoding" state — the decode can take hundreds of ms and the
+   app looks frozen without it. */
+.uploader__drop--busy { cursor: progress; }
+.uploader__spinner {
+  width: 36px;
+  height: 36px;
+  margin-bottom: 20px;
+  border-radius: 50%;
+  border: 3px solid var(--accent-dim, rgba(201, 98, 44, 0.25));
+  border-top-color: var(--accent);
+  animation: uploader-spin 0.8s linear infinite;
+}
+@keyframes uploader-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .uploader__spinner { animation-duration: 1.6s; }
+}
+
 .uploader__title {
   font-family: var(--font-serif);
   font-size: 24px;

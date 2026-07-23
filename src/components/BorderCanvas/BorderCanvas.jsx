@@ -1308,12 +1308,13 @@ function snapTargets(divisions, siblingPositions) {
 }
 
 const BorderCanvas = forwardRef(function BorderCanvas(
-  { media, settings, onUpdate, pickMode, onPickColor, onPalette, selectedLayerId, onSelectLayer, onUpdateLayer,
+  { media, settings, onUpdate, pickMode, onPickColor, onPalette, onError, selectedLayerId, onSelectLayer, onUpdateLayer,
     snapEnabled = true, gridDivisions = 3 }, ref
 ) {
   const canvasRef    = useRef(null)
   const sourceRef    = useRef(null)
   const onPaletteRef = useRef(onPalette)
+  const onErrorRef   = useRef(onError)
   const settingsRef  = useRef(settings)
   const mediaRef     = useRef(media)
   const onUpdateRef      = useRef(onUpdate)
@@ -1345,6 +1346,7 @@ const BorderCanvas = forwardRef(function BorderCanvas(
   onUpdateRef.current      = onUpdate
   onPickColorRef.current   = onPickColor
   onPaletteRef.current     = onPalette
+  onErrorRef.current       = onError
   pickModeRef.current      = pickMode
   onSelectLayerRef.current = onSelectLayer
   onUpdateLayerRef.current = onUpdateLayer
@@ -1582,7 +1584,10 @@ const BorderCanvas = forwardRef(function BorderCanvas(
         sourceRef.current = img; redraw(); setReady(true)
         try { onPaletteRef.current?.(buildBorderSuggestions(img)) } catch { /* ignore */ }
       }
-      img.onerror = () => setReady(false)
+      // N6: a decode failure must reach the UI, not flip an internal flag and
+      // leave a spinner. (Images normally decode in the uploader now; this is
+      // the backstop.)
+      img.onerror = () => { setReady(false); onErrorRef.current?.("Couldn't read that image.") }
       img.src = media.url
     } else {
       const video = document.createElement('video')
@@ -1600,11 +1605,19 @@ const BorderCanvas = forwardRef(function BorderCanvas(
         startLoop()
         setReady(true)
       }
+      // N6: video containers/codecs that Photos plays may still fail in a
+      // <video> element — surface it instead of spinning forever.
+      const onVideoError = () => {
+        setReady(false)
+        onErrorRef.current?.("Couldn't play that video — the format may not be supported.")
+      }
       video.addEventListener('loadeddata', onLoaded, { once: true })
+      video.addEventListener('error', onVideoError, { once: true })
       video.load()
 
       return () => {
         video.removeEventListener('loadeddata', onLoaded)
+        video.removeEventListener('error', onVideoError)
         video.pause()
         stopLoop()
       }
