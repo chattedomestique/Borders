@@ -5,6 +5,13 @@
   background: var(--border);
 }
 
+/* Visible focus ring for the keyboard pan/zoom path (§10.1). */
+.border-canvas:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--r-sm, 6px);
+}
+
 .border-canvas__el {
   width: 100%;
   height: auto;

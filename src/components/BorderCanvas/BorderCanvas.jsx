@@ -1731,9 +1731,10 @@ const BorderCanvas = forwardRef(function BorderCanvas(
               if (navigator.canShare({ files: [shareFile] })) {
                 try {
                   await navigator.share({ files: [shareFile] })
-                  resolve(); return
+                  resolve({ status: 'shared' }); return
                 } catch (e) {
-                  if (e.name !== 'AbortError') console.warn('Share failed:', e)
+                  if (e.name === 'AbortError') { resolve({ status: 'cancelled' }); return }
+                  console.warn('Share failed:', e)
                 }
               }
             }
@@ -1742,8 +1743,9 @@ const BorderCanvas = forwardRef(function BorderCanvas(
             const a = document.createElement('a')
             a.href = url; a.download = filename
             document.body.appendChild(a); a.click()
-            document.body.removeChild(a); URL.revokeObjectURL(url)
-            resolve()
+            document.body.removeChild(a)
+            setTimeout(() => URL.revokeObjectURL(url), 1000)
+            resolve({ status: 'downloaded' })
           }
 
           const finishRecording = () => {
@@ -1801,9 +1803,9 @@ const BorderCanvas = forwardRef(function BorderCanvas(
         if (navigator.canShare({ files: [file] })) {
           try {
             await navigator.share({ files: [file] })
-            return
+            return { status: 'shared' }
           } catch (e) {
-            if (e.name === 'AbortError') return
+            if (e.name === 'AbortError') return { status: 'cancelled' }
             console.warn('Share failed:', e)
           }
         }
@@ -1817,8 +1819,32 @@ const BorderCanvas = forwardRef(function BorderCanvas(
       document.body.appendChild(a); a.click()
       document.body.removeChild(a)
       setTimeout(() => URL.revokeObjectURL(url), 1000)
+      return { status: 'downloaded' }
     }
   }), [startLoop, stopLoop])
+
+  const handleCanvasKeyDown = useCallback((e) => {
+    const s = settingsRef.current || {}
+    const zoom = s.zoom ?? 1, panX = s.panX ?? 0.5, panY = s.panY ?? 0.5
+    const c01 = v => Math.max(0, Math.min(1, v))
+    const step = 0.06 / Math.max(1, zoom)   // finer nudges the further you're zoomed in
+    let handled = true
+    switch (e.key) {
+      case 'ArrowLeft':  onUpdateRef.current?.('panX', c01(panX - step)); break
+      case 'ArrowRight': onUpdateRef.current?.('panX', c01(panX + step)); break
+      case 'ArrowUp':    onUpdateRef.current?.('panY', c01(panY - step)); break
+      case 'ArrowDown':  onUpdateRef.current?.('panY', c01(panY + step)); break
+      case '+': case '=': onUpdateRef.current?.('zoom', Math.min(MAX_ZOOM, zoom * 1.15)); break
+      case '-': case '_': onUpdateRef.current?.('zoom', Math.max(1, zoom / 1.15)); break
+      case '0':
+        onUpdateRef.current?.('zoom', 1)
+        onUpdateRef.current?.('panX', 0.5)
+        onUpdateRef.current?.('panY', 0.5)
+        break
+      default: handled = false
+    }
+    if (handled) e.preventDefault()
+  }, [])
 
   const cursor = pickMode ? 'crosshair' : (isDraggingText ? 'grabbing' : isDragging ? 'grabbing' : 'grab')
   return (
@@ -1829,11 +1855,18 @@ const BorderCanvas = forwardRef(function BorderCanvas(
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
+      // §10.1: a keyboard-adjustable equivalent for the pan/zoom gesture —
+      // arrows pan, +/- zoom, 0 resets. Feeds the same {zoom, panX, panY} model.
+      tabIndex={0}
+      role="group"
+      aria-label="Photo preview. Arrow keys pan, plus and minus zoom, 0 resets."
+      aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight + - 0"
+      onKeyDown={handleCanvasKeyDown}
     >
       <canvas
         ref={canvasRef}
         className={`border-canvas__el${ready ? ' border-canvas__el--ready' : ''}`}
-        aria-label="Preview of your bordered media"
+        aria-hidden="true"
       />
       {snapEnabled && isDragging && ready && (
         <svg className="border-canvas__grid" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">

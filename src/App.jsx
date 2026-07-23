@@ -96,6 +96,7 @@ export default function App() {
   const { settings, set: setSettings, undo, redo, reset: resetHistory, canUndo, canRedo } = useHistory(DEFAULT_SETTINGS)
   const [recordingProgress, setRecordingProgress] = useState(0)
   const [pickMode, setPickMode] = useState(false)
+  const [toast, setToast] = useState(null)
   const [mediaError, setMediaError] = useState(null)
   const [borderSuggestions, setBorderSuggestions] = useState([])
   const [selectedLayerId, setSelectedLayerId] = useState(null)
@@ -176,7 +177,13 @@ export default function App() {
     setStep(STEPS.SAVING)
     setRecordingProgress(0)
     try {
-      await canvasRef.current.save(setRecordingProgress)
+      const result = await canvasRef.current.save(setRecordingProgress)
+      // §6.3: on iOS a successful share looks like nothing happened — confirm it.
+      // "Saved" (not "saved to camera roll", which we can't verify). Dismissing
+      // the share sheet (cancelled) is not a save, so it gets no toast.
+      if (result?.status === 'shared' || result?.status === 'downloaded') {
+        setToast('Saved')
+      }
     } finally {
       setStep(STEPS.EDIT)
       setRecordingProgress(0)
@@ -244,6 +251,13 @@ export default function App() {
     const t = setTimeout(() => saveSettings(settings), 400)
     return () => clearTimeout(t)
   }, [settings, step])
+
+  // Auto-dismiss the status toast.
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 2400)
+    return () => clearTimeout(t)
+  }, [toast])
 
   // Keyboard undo/redo (desktop / hardware keyboards)
   useEffect(() => {
@@ -347,6 +361,20 @@ export default function App() {
           </div>
         ) : null}
       </main>
+
+      {/* §10.1 live region — a single persistent role=status the app writes
+          state changes into ("Saved"). Visible only when it has content. */}
+      <div className={`app__toast${toast ? ' app__toast--show' : ''}`} role="status" aria-live="polite">
+        {toast && (
+          <>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            {toast}
+          </>
+        )}
+      </div>
 
       {/* Gesture hint — shown once per session after first image load */}
       {showHint && (
