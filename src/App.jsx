@@ -3,6 +3,7 @@ import Uploader from './components/Uploader/Uploader'
 import BorderCanvas from './components/BorderCanvas/BorderCanvas'
 import Controls from './components/Controls/Controls'
 import { useHistory } from './useHistory'
+import { saveSettings, seedForNewMedia } from './persist'
 import './App.css'
 
 const STEPS = { UPLOAD: 'upload', EDIT: 'edit', SAVING: 'saving' }
@@ -142,7 +143,8 @@ export default function App() {
   const handleMediaLoaded = useCallback((mediaObj) => {
     setMedia(mediaObj)
     setBorderSuggestions([])   // recomputed once the new source decodes
-    resetHistory(DEFAULT_SETTINGS)
+    // N11: restore the last-used frame/grain/text setup for the new photo.
+    resetHistory(seedForNewMedia(DEFAULT_SETTINGS))
     setSelectedLayerId(null)
     setActiveTab(null)
     setStep(STEPS.EDIT)
@@ -221,6 +223,14 @@ export default function App() {
   const toggleTab = useCallback((id) => {
     setActiveTab(prev => prev === id ? null : id)
   }, [])
+
+  // N11: persist settings (debounced) so a reload / iOS tab eviction mid-edit
+  // doesn't lose the setup. Restored onto the next photo via seedForNewMedia.
+  useEffect(() => {
+    if (step !== STEPS.EDIT) return
+    const t = setTimeout(() => saveSettings(settings), 400)
+    return () => clearTimeout(t)
+  }, [settings, step])
 
   // Keyboard undo/redo (desktop / hardware keyboards)
   useEffect(() => {

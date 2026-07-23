@@ -7,17 +7,20 @@
     <title>Border Studio</title>
     <meta name="description" content="Add beautiful borders and frames to your photos and videos — save directly to your iOS Photos library." />
 
-    <!-- PWA -->
-    <link rel="manifest" href="/Borders/manifest.json" />
+    <!-- PWA — the manifest link + theme-color are injected by vite-plugin-pwa. -->
     <meta name="theme-color" content="#F2EDE6" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#181513" media="(prefers-color-scheme: dark)" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <!-- §3.4: `default`, not `black-translucent` — the translucent style forces
+         light status-bar text that is invisible over the pale light theme. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Border Studio" />
 
     <!-- Icons -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23C9622C'/><rect x='8' y='8' width='84' height='84' rx='14' fill='none' stroke='white' stroke-width='10'/><rect x='28' y='28' width='44' height='44' rx='8' fill='white'/></svg>" />
-    <link rel="apple-touch-icon" href="/Borders/icon-192.png" />
+    <!-- §3.3: a real 180×180 PNG — iOS substitutes a blurry screenshot for SVG. -->
+    <link rel="apple-touch-icon" href="/Borders/apple-touch-icon.png" />
 
     <!-- Open Graph -->
     <meta property="og:title" content="Border Studio" />

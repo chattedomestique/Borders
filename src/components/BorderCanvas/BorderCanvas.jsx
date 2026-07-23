@@ -1764,26 +1764,35 @@ const BorderCanvas = forwardRef(function BorderCanvas(
       // captures a fallback face.
       if (document.fonts) { try { await document.fonts.ready } catch { /* ignore */ } }
       renderFrame(canvas, source, settingsRef.current, cacheRef.current, geoRef, null)
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
+      // N4: JPEG, not PNG — a bordered photo is opaque, so there's no alpha to
+      // keep, and 0.92 JPEG is ~300 KB where the PNG is multiple MB.
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92))
       if (!blob) return
-      const url = URL.createObjectURL(blob)
 
+      // N3: Web Share first (the iOS "Save Image" path); AbortError means the
+      // user dismissed the sheet — a clean cancel, never fall through to a
+      // download that reopens the image in a tab.
       if (navigator.share && navigator.canShare) {
-        const file = new File([blob], 'border-studio.png', { type: 'image/png' })
+        const file = new File([blob], 'border-studio.jpg', { type: 'image/jpeg' })
         if (navigator.canShare({ files: [file] })) {
           try {
             await navigator.share({ files: [file] })
-            URL.revokeObjectURL(url); return
+            return
           } catch (e) {
-            if (e.name !== 'AbortError') console.warn('Share failed:', e)
+            if (e.name === 'AbortError') return
+            console.warn('Share failed:', e)
           }
         }
       }
 
+      // Desktop fallback: <a download>, revoked on a timeout (some browsers need
+      // the object URL alive briefly past the click).
+      const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = url; a.download = 'border-studio.png'
+      a.href = url; a.download = 'border-studio.jpg'
       document.body.appendChild(a); a.click()
-      document.body.removeChild(a); URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
     }
   }), [startLoop, stopLoop])
 
