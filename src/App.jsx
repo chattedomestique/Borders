@@ -3,7 +3,8 @@ import Uploader from './components/Uploader/Uploader'
 import BorderCanvas from './components/BorderCanvas/BorderCanvas'
 import Controls from './components/Controls/Controls'
 import { useHistory } from './useHistory'
-import { saveSettings, seedForNewMedia } from './persist'
+import { saveSettings, seedForNewMedia, loadSettings, loadPresets, savePreset, deletePreset, applyPresetLook } from './persist'
+import PresetSheet from './components/PresetSheet/PresetSheet'
 import './App.css'
 
 const STEPS = { UPLOAD: 'upload', EDIT: 'edit', SAVING: 'saving' }
@@ -98,6 +99,8 @@ export default function App() {
   const [recordingProgress, setRecordingProgress] = useState(0)
   const [pickMode, setPickMode] = useState(false)
   const [toast, setToast] = useState(null)
+  const [presetsOpen, setPresetsOpen] = useState(false)
+  const [presets, setPresets] = useState(() => loadPresets())
   const [mediaError, setMediaError] = useState(null)
   const [borderSuggestions, setBorderSuggestions] = useState([])
   const [selectedLayerId, setSelectedLayerId] = useState(null)
@@ -190,6 +193,31 @@ export default function App() {
       setRecordingProgress(0)
     }
   }, [])
+
+  const handleSavePreset = useCallback((name) => {
+    savePreset(name, settings)
+    setPresets(loadPresets())
+    setToast('Preset saved')
+  }, [settings])
+
+  const handleLoadPreset = useCallback((preset) => {
+    setSettings(prev => applyPresetLook(prev, preset), { immediate: true })
+    setPresetsOpen(false)
+    setToast('Preset applied')
+  }, [setSettings])
+
+  const handleDeletePreset = useCallback((id) => {
+    deletePreset(id)
+    setPresets(loadPresets())
+  }, [])
+
+  const handleApplyLast = useCallback(() => {
+    const last = loadSettings()
+    if (!last) return
+    setSettings(prev => ({ ...last, zoom: prev.zoom, panX: prev.panX, panY: prev.panY }), { immediate: true })
+    setPresetsOpen(false)
+    setToast('Last look applied')
+  }, [setSettings])
 
   const updateSetting = useCallback((key, value) => {
     setSettings(prev => ({ ...prev, [key]: value }))
@@ -288,6 +316,11 @@ export default function App() {
           </div>
           {step !== STEPS.UPLOAD && (
             <div className="app__header-actions">
+              <button className="app__icon-btn" onClick={() => setPresetsOpen(true)} aria-label="Presets">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                </svg>
+              </button>
               <button className="app__icon-btn" onClick={undo} disabled={!canUndo} aria-label="Undo">
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M3 7v6h6"/>
@@ -362,6 +395,18 @@ export default function App() {
           </div>
         ) : null}
       </main>
+
+      {presetsOpen && (
+        <PresetSheet
+          presets={presets}
+          hasLast={!!loadSettings()}
+          onSave={handleSavePreset}
+          onLoad={handleLoadPreset}
+          onDelete={handleDeletePreset}
+          onApplyLast={handleApplyLast}
+          onClose={() => setPresetsOpen(false)}
+        />
+      )}
 
       {/* §10.1 live region — a single persistent role=status the app writes
           state changes into ("Saved"). Visible only when it has content. */}

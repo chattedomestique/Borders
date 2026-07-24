@@ -1,13 +1,15 @@
-// N11 (tier 1): persist the user's frame settings so a reload or an iOS tab
-// eviction doesn't wipe the setup. Settings only — the media blob is not stored
-// here (that's tier 2 / IndexedDB, noted in the README as a follow-up).
+// Persistence & presets.
+//
+// By default only the FRAME BASICS carry over to the next photo (border size,
+// corners, crop, aspect mode) — not the text, effects, colours, or fill, which
+// reset so each photo starts clean. The full look can be carried explicitly via
+// "Apply last look" or saved/loaded as a named preset.
 
-const KEY = 'border-studio:settings:v1'
+const KEY = 'border-studio:settings:v1'          // last full settings (for "apply last")
+const PRESETS_KEY = 'border-studio:presets:v1'   // named presets
 
-// Fields that must re-derive per photo rather than carry over from the last one:
-// the border colour is keyed to the image by the palette engine, and the
-// zoom/pan transform is meaningless against a different photo.
-const PER_IMAGE = { bgMode: 'average', bgColor: '#ffffff', zoom: 1, panX: 0.5, panY: 0.5 }
+// The only fields auto-carried to a new photo.
+const FRAME_KEYS = ['borderThickness', 'cornerRadius', 'cropRatio', 'aspectMode']
 
 export function loadSettings() {
   try {
@@ -21,9 +23,52 @@ export function saveSettings(settings) {
   catch { /* quota exceeded or Private Mode — persistence is best-effort */ }
 }
 
-// Seed a freshly-loaded photo with the last-used frame/grain/text setup, but
-// reset the per-image fields so the palette re-keys the border to the new photo.
+// Seed a freshly-loaded photo. Only the frame basics carry from last time; the
+// rest comes from `defaults` (so text/effects/fill start clean and the border
+// colour re-keys to the new photo via the palette engine).
 export function seedForNewMedia(defaults) {
   const saved = loadSettings()
-  return saved ? { ...defaults, ...saved, ...PER_IMAGE } : defaults
+  if (!saved) return defaults
+  const frame = {}
+  for (const k of FRAME_KEYS) if (k in saved) frame[k] = saved[k]
+  return { ...defaults, ...frame }
+}
+
+// ── Named presets: full-look snapshots the user opts into ──
+export function loadPresets() {
+  try {
+    const raw = localStorage.getItem(PRESETS_KEY)
+    const arr = raw ? JSON.parse(raw) : []
+    return Array.isArray(arr) ? arr : []
+  } catch { return [] }
+}
+
+function writePresets(list) {
+  try { localStorage.setItem(PRESETS_KEY, JSON.stringify(list)) }
+  catch { /* best-effort */ }
+}
+
+// Snapshot the "look" — everything except the per-photo transform, which is
+// meaningless against a different image.
+function lookOf(settings) {
+  const { zoom, panX, panY, ...look } = settings   // eslint-disable-line no-unused-vars
+  return look
+}
+
+export function savePreset(name, settings) {
+  const list = loadPresets()
+  const preset = { id: `p${Date.now()}`, name: (name || 'Preset').slice(0, 40), look: lookOf(settings) }
+  list.push(preset)
+  writePresets(list)
+  return preset
+}
+
+export function deletePreset(id) {
+  writePresets(loadPresets().filter(p => p.id !== id))
+}
+
+// Merge a preset's look onto the current settings, keeping the current photo's
+// transform (zoom/pan) so applying a look never moves the photo.
+export function applyPresetLook(current, preset) {
+  return { ...current, ...preset.look, zoom: current.zoom, panX: current.panX, panY: current.panY }
 }
