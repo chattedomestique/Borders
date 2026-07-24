@@ -1167,7 +1167,7 @@ function drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache, animate) {
 function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
   if (!canvas || !source) return
   const { borderThickness, bgMode, bgColor = '#ffffff', blurAmount = 60, cornerRadius, cropRatio = 'free',
-          zoom = 1, panX = 0.5, panY = 0.5,
+          aspectMode = 'crop', zoom = 1, panX = 0.5, panY = 0.5,
           showMedia = true, grainAmount = 0, grainVariability = 0, grainMonochrome = true, grainSpread = 0,
           frostBrightness = -15, frostContrast = 0, frostSaturation = 60, frostVibrance = 0,
           textLayers = [] } = settings
@@ -1176,8 +1176,16 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
   const srcW = source.videoWidth ?? source.naturalWidth ?? source.width ?? 1
   const srcH = source.videoHeight ?? source.naturalHeight ?? source.height ?? 1
 
+  const border = borderThickness
+  const hasRatio = cropRatio && cropRatio !== 'free'
+  // "fit": the chosen ratio shapes the OUTPUT frame; the photo keeps its own
+  // aspect and is matted (not cropped) inside, inset by >= the border.
+  const fitMode = aspectMode === 'fit' && hasRatio
+
+  // The media rectangle in source pixels. In fit mode (and free) it's the photo's
+  // natural aspect; in crop mode it's cropped to the chosen ratio.
   let mediaW, mediaH
-  if (!cropRatio || cropRatio === 'free') {
+  if (fitMode || !hasRatio) {
     mediaW = srcW; mediaH = srcH
   } else {
     const [tw, th] = cropRatio.split(':').map(Number)
@@ -1190,17 +1198,36 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
     }
   }
 
-  // Scale inner media so its longest side = OUT_SIZE
-  const mediaScale = OUT_SIZE / Math.max(mediaW, mediaH)
-  const scaledW = Math.round(mediaW * mediaScale)
-  const scaledH = Math.round(mediaH * mediaScale)
-
-  // Canvas = scaled media + uniform border on all four sides
-  const border = borderThickness
-  const totalW = scaledW + border * 2
-  const totalH = scaledH + border * 2
-  const offsetX = border
-  const offsetY = border
+  let totalW, totalH, scaledW, scaledH, offsetX, offsetY
+  if (fitMode) {
+    // Output canvas takes the chosen aspect ratio (longest side = OUT_SIZE).
+    const [tw, th] = cropRatio.split(':').map(Number)
+    const frameRatio = tw / th
+    if (frameRatio >= 1) { totalW = OUT_SIZE; totalH = Math.round(OUT_SIZE / frameRatio) }
+    else { totalH = OUT_SIZE; totalW = Math.round(OUT_SIZE * frameRatio) }
+    // Contain-fit the photo (natural aspect) inside the frame minus the border on
+    // every side — so the matte is >= border everywhere and exactly border on the
+    // tight axis. If the border is too thick to leave room, the photo shrinks to 0.
+    const innerW = Math.max(0, totalW - border * 2)
+    const innerH = Math.max(0, totalH - border * 2)
+    const mediaAspect = mediaW / mediaH
+    if (innerW / innerH > mediaAspect) {
+      scaledH = innerH; scaledW = Math.round(innerH * mediaAspect)
+    } else {
+      scaledW = innerW; scaledH = Math.round(innerW / mediaAspect)
+    }
+    offsetX = Math.round((totalW - scaledW) / 2)
+    offsetY = Math.round((totalH - scaledH) / 2)
+  } else {
+    // Crop / free: scale media so its longest side = OUT_SIZE, add a uniform border.
+    const mediaScale = OUT_SIZE / Math.max(mediaW, mediaH)
+    scaledW = Math.round(mediaW * mediaScale)
+    scaledH = Math.round(mediaH * mediaScale)
+    totalW = scaledW + border * 2
+    totalH = scaledH + border * 2
+    offsetX = border
+    offsetY = border
+  }
 
   if (canvas.width !== totalW || canvas.height !== totalH) {
     canvas.width = totalW

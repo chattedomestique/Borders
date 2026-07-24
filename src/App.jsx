@@ -37,6 +37,7 @@ const DEFAULT_SETTINGS = {
   frostBrightness: -15, frostContrast: 0, frostSaturation: 60, frostVibrance: 0,
   cornerRadius: 0,
   cropRatio: 'free',
+  aspectMode: 'crop',   // 'crop' = trim photo to ratio · 'fit' = matte photo into ratio
   zoom: 1, panX: 0.5, panY: 0.5,
   showMedia: true,
   grainAmount: 0, grainVariability: 0, grainMonochrome: true, grainSpread: 0,

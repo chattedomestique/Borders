@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import './Controls.css'
 import { hexToHsl, hslCss } from '../../palette'
 
@@ -144,58 +145,106 @@ function Slider({ def, on, ...rest }) {
   )
 }
 
-/**
- * The value pill next to every slider. Tap it to type an exact amount; on
- * commit the entry is clamped to [min, max] and snapped to `step`. `format`
- * keeps the pretty display labels (e.g. "Normal", "Square", "+20%") while the
- * editor always works on the raw number.
- */
-function EditableValue({ value, min, max, step = 1, onChange, format, suffix = '', style }) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState('')
-  const ref = useRef(null)
+// A centered dialog for precise value entry. Replaces the old inline number
+// input, which on iOS auto-zoomed onto the field and never zoomed back out.
+// The backdrop dims + blurs; the input is >=17px so iOS never auto-zooms.
+function ValueModal({ label, value, min, max, step, suffix, format, onCommit, onClose }) {
+  const [draft, setDraft] = useState(String(value))
+  const inputRef = useRef(null)
+  const triggerRef = useRef(null)
 
   useEffect(() => {
-    if (editing && ref.current) { ref.current.focus(); ref.current.select() }
-  }, [editing])
+    triggerRef.current = document.activeElement
+    const el = inputRef.current
+    if (el) { el.focus(); el.select() }
+    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); onClose() } }
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      try { triggerRef.current?.focus?.() } catch { /* trigger gone */ }
+    }
+  }, [onClose])
 
-  const commit = () => {
-    setEditing(false)
+  const submit = () => {
     const n = parseFloat(draft)
-    if (Number.isNaN(n)) return
+    if (Number.isNaN(n)) { onClose(); return }
+    onCommit(n)
+  }
+  const bump = (dir) => {
+    const base = parseFloat(draft)
+    const from = Number.isNaN(base) ? value : base
+    setDraft(String(Math.min(max, Math.max(min, from + dir * step))))
+  }
+
+  return createPortal(
+    <div className="valuemodal" role="dialog" aria-modal="true"
+      aria-label={label ? `Edit ${label}` : 'Edit value'}
+      onPointerDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="valuemodal__card">
+        <div className="valuemodal__title">{label || 'Value'}</div>
+        <div className="valuemodal__field">
+          <button type="button" className="valuemodal__step" aria-label="Decrease" onClick={() => bump(-1)}>−</button>
+          <input
+            ref={inputRef} className="valuemodal__input"
+            type="number" inputMode={min < 0 ? 'text' : 'decimal'}
+            value={draft} min={min} max={max} step={step}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit() } }}
+            aria-label={label || 'Value'}
+          />
+          <button type="button" className="valuemodal__step" aria-label="Increase" onClick={() => bump(1)}>+</button>
+        </div>
+        <div className="valuemodal__range">
+          {format ? `${format(min)} – ${format(max)}` : `${min}${suffix} – ${max}${suffix}`}
+        </div>
+        <div className="valuemodal__actions">
+          <button type="button" className="valuemodal__btn" onClick={onClose}>Cancel</button>
+          <button type="button" className="valuemodal__btn valuemodal__btn--primary" onClick={submit}>OK</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+/**
+ * The value control next to every slider: a `[− value +]` stepper. The ± nudge
+ * by `step` for quick one-at-a-time changes; tapping the value opens a modal for
+ * precise entry. `format` keeps pretty labels (e.g. "Normal", "Square", "+20%")
+ * while the editor always works on the raw number.
+ */
+function EditableValue({ value, min, max, step = 1, onChange, format, suffix = '', style, label }) {
+  const [editing, setEditing] = useState(false)
+
+  const clampSnap = (n) => {
     let v = Math.min(max, Math.max(min, n))
     if (step) v = Math.round((v - min) / step) * step + min
-    v = Math.round(v * 1000) / 1000
+    return Math.round(v * 1000) / 1000
+  }
+  const nudge = (dir) => {
+    const v = clampSnap(value + dir * step)
     if (v !== value) onChange(v)
   }
-
-  if (editing) {
-    return (
-      <input
-        ref={ref}
-        className="controls__value controls__value--input"
-        style={style}
-        type="number" inputMode="numeric"
-        value={draft} min={min} max={max} step={step}
-        onChange={e => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={e => {
-          if (e.key === 'Enter') { e.preventDefault(); ref.current?.blur() }
-          else if (e.key === 'Escape') { e.preventDefault(); setEditing(false) }
-        }}
-        aria-label="Edit value"
-      />
-    )
-  }
+  const display = format ? format(value) : `${value}${suffix}`
 
   return (
-    <button
-      type="button" className="controls__value controls__value--btn" style={style}
-      onClick={() => { setDraft(String(value)); setEditing(true) }}
-      aria-label="Tap to type a value"
-    >
-      {format ? format(value) : `${value}${suffix}`}
-    </button>
+    <div className="controls__valuectl" style={style}>
+      <button type="button" className="controls__stepbtn" onClick={() => nudge(-1)}
+        disabled={value <= min} aria-label={`Decrease ${label || 'value'}`}>−</button>
+      <button type="button" className="controls__value controls__value--btn"
+        onClick={() => setEditing(true)} aria-label={`${label || 'Value'} ${display}, tap to type`}>
+        {display}
+      </button>
+      <button type="button" className="controls__stepbtn" onClick={() => nudge(1)}
+        disabled={value >= max} aria-label={`Increase ${label || 'value'}`}>+</button>
+      {editing && (
+        <ValueModal
+          label={label} value={value} min={min} max={max} step={step} suffix={suffix} format={format}
+          onCommit={(n) => { const v = clampSnap(n); if (v !== value) onChange(v); setEditing(false) }}
+          onClose={() => setEditing(false)}
+        />
+      )}
+    </div>
   )
 }
 
@@ -271,17 +320,17 @@ function BorderColorSliders({ bgColor, onColor }) {
   return (
     <div className="controls__hsl">
       <div className="controls__row"><label className="controls__label">Hue</label>
-        <EditableValue value={h} min={0} max={360} suffix="°" onChange={v => setChan('h', v)} /></div>
+        <EditableValue value={h} min={0} max={360} suffix="°" label="Hue" onChange={v => setChan('h', v)} /></div>
       <Slider className="controls__slider--hue" min={0} max={360} step={1}
         def={Math.round(base.h)} value={h} on={v => setChan('h', v)} />
 
       <div className="controls__row"><label className="controls__label">Saturation</label>
-        <EditableValue value={s} min={0} max={100} suffix="%" onChange={v => setChan('s', v)} /></div>
+        <EditableValue value={s} min={0} max={100} suffix="%" label="Saturation" onChange={v => setChan('s', v)} /></div>
       <Slider className="controls__slider--tint" style={{ '--track': trackSat }} min={0} max={100} step={1}
         def={Math.round(base.s)} value={s} on={v => setChan('s', v)} />
 
       <div className="controls__row"><label className="controls__label">Brightness</label>
-        <EditableValue value={l} min={0} max={100} suffix="%" onChange={v => setChan('l', v)} /></div>
+        <EditableValue value={l} min={0} max={100} suffix="%" label="Brightness" onChange={v => setChan('l', v)} /></div>
       <Slider className="controls__slider--tint" style={{ '--track': trackLit }} min={0} max={100} step={1}
         def={Math.round(base.l)} value={l} on={v => setChan('l', v)} />
     </div>
@@ -359,35 +408,35 @@ function BgControls({ settings, onUpdate, pickMode, onPickMode, borderSuggestion
       {sub === 'frosted' && (
         <div className="controls__frost">
           <div className="controls__row"><label className="controls__label" htmlFor="blur-slider">Blur</label>
-            <EditableValue value={blurAmount} min={10} max={240} step={2} suffix="px"
+            <EditableValue value={blurAmount} min={10} max={240} step={2} suffix="px" label="Blur"
               onChange={v => onUpdate('blurAmount', v)} /></div>
           <Slider id="blur-slider" min={10} max={240} step={2} def={60}
             value={blurAmount} on={v => onUpdate('blurAmount', v)} />
           <div className="controls__frost-grid">
             <div className="controls__frost-cell">
               <div className="controls__row"><label className="controls__label">Bright</label>
-                <EditableValue value={frostBrightness} min={-100} max={200}
+                <EditableValue value={frostBrightness} min={-100} max={200} label="Brightness"
                   format={v => `${v > 0 ? `+${v}` : v}`} onChange={v => onUpdate('frostBrightness', v)} /></div>
               <Slider min={-100} max={200} step={1} def={-15}
                 value={frostBrightness} on={v => onUpdate('frostBrightness', v)} />
             </div>
             <div className="controls__frost-cell">
               <div className="controls__row"><label className="controls__label">Contrast</label>
-                <EditableValue value={frostContrast} min={-100} max={200}
+                <EditableValue value={frostContrast} min={-100} max={200} label="Contrast"
                   format={v => `${v > 0 ? `+${v}` : v}`} onChange={v => onUpdate('frostContrast', v)} /></div>
               <Slider min={-100} max={200} step={1} def={0}
                 value={frostContrast} on={v => onUpdate('frostContrast', v)} />
             </div>
             <div className="controls__frost-cell">
               <div className="controls__row"><label className="controls__label">Satur.</label>
-                <EditableValue value={frostSaturation} min={-100} max={300}
+                <EditableValue value={frostSaturation} min={-100} max={300} label="Saturation"
                   format={v => `${v > 0 ? `+${v}` : v}`} onChange={v => onUpdate('frostSaturation', v)} /></div>
               <Slider min={-100} max={300} step={1} def={60}
                 value={frostSaturation} on={v => onUpdate('frostSaturation', v)} />
             </div>
             <div className="controls__frost-cell">
               <div className="controls__row"><label className="controls__label">Vibrance</label>
-                <EditableValue value={frostVibrance} min={0} max={200}
+                <EditableValue value={frostVibrance} min={0} max={200} label="Vibrance"
                   format={v => v === 0 ? 'Off' : `+${v}`} onChange={v => onUpdate('frostVibrance', v)} /></div>
               <Slider min={0} max={200} step={1} def={0}
                 value={frostVibrance} on={v => onUpdate('frostVibrance', v)} />
@@ -406,7 +455,7 @@ const FRAME_SUBTABS = [
   { id: 'grid',   label: 'Grid'   },
 ]
 
-function FrameControls({ borderThickness, cornerRadius, cropRatio = 'free', showMedia, onUpdate,
+function FrameControls({ borderThickness, cornerRadius, cropRatio = 'free', aspectMode = 'crop', showMedia, onUpdate,
                          snapEnabled, onSnapToggle, gridDivisions, onGridDivisions }) {
   const [sub, setSub] = useState('border')
   return (
@@ -423,7 +472,7 @@ function FrameControls({ borderThickness, cornerRadius, cropRatio = 'free', show
         <>
           <div className="controls__row">
             <label className="controls__label" htmlFor="border-slider">Border</label>
-            <EditableValue value={borderThickness} min={0} max={400} suffix="px"
+            <EditableValue value={borderThickness} min={0} max={400} suffix="px" label="Border"
               onChange={v => onUpdate('borderThickness', v)} />
           </div>
           <Slider id="border-slider" min={0} max={400} step={1} def={40}
@@ -431,7 +480,7 @@ function FrameControls({ borderThickness, cornerRadius, cropRatio = 'free', show
 
           <div className="controls__row controls__row--spaced">
             <label className="controls__label" htmlFor="radius-slider">Corners</label>
-            <EditableValue value={cornerRadius} min={0} max={100}
+            <EditableValue value={cornerRadius} min={0} max={100} label="Corners"
               format={v => v === 0 ? 'Square' : v === 100 ? 'Round' : `${v}%`}
               onChange={v => onUpdate('cornerRadius', v)} />
           </div>
@@ -447,7 +496,25 @@ function FrameControls({ borderThickness, cornerRadius, cropRatio = 'free', show
 
       {sub === 'crop' && (
         <>
-          <label className="controls__label" style={{ marginBottom: 2 }}>Aspect ratio</label>
+          {/* What the chosen ratio applies to: trim the photo, or matte it into
+              a frame of that ratio (photo keeps its own aspect, uncropped). */}
+          <div className="controls__seg" role="radiogroup" aria-label="Aspect mode"
+            style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+            <button role="radio" aria-checked={aspectMode !== 'fit'}
+              className={`controls__seg-btn${aspectMode !== 'fit' ? ' controls__seg-btn--active' : ''}`}
+              onClick={() => onUpdate('aspectMode', 'crop')}>Crop photo</button>
+            <button role="radio" aria-checked={aspectMode === 'fit'}
+              className={`controls__seg-btn${aspectMode === 'fit' ? ' controls__seg-btn--active' : ''}`}
+              onClick={() => onUpdate('aspectMode', 'fit')}>Fit photo</button>
+          </div>
+          <p className="controls__hint" style={{ margin: '0 0 2px' }}>
+            {aspectMode === 'fit'
+              ? 'Frame takes this ratio; photo is matted inside, uncropped.'
+              : 'Photo is trimmed to this ratio.'}
+          </p>
+          <label className="controls__label" style={{ marginBottom: 2 }}>
+            {cropRatio === 'free' ? 'Aspect ratio' : (aspectMode === 'fit' ? 'Frame ratio' : 'Crop ratio')}
+          </label>
           <div className="controls__layer-strip">
             {CROP_RATIOS.map(r => {
               const isPortrait  = cropRatio === r.id
@@ -525,7 +592,7 @@ function GrainControls({ grainAmount, grainVariability, grainSpread, grainMonoch
         <>
           <div className="controls__row">
             <label className="controls__label" htmlFor="grain-slider">Amount</label>
-            <EditableValue value={grainAmount} min={0} max={100}
+            <EditableValue value={grainAmount} min={0} max={100} label="Amount"
               format={v => v === 0 ? 'Off' : `${v}%`}
               onChange={v => onUpdate('grainAmount', v)} />
           </div>
@@ -534,7 +601,7 @@ function GrainControls({ grainAmount, grainVariability, grainSpread, grainMonoch
 
           <div className="controls__row controls__row--spaced">
             <label className="controls__label" htmlFor="variability-slider">Variability</label>
-            <EditableValue value={grainVariability} min={0} max={100}
+            <EditableValue value={grainVariability} min={0} max={100} label="Variability"
               format={v => v === 0 ? 'Uniform' : `${v}%`}
               onChange={v => onUpdate('grainVariability', v)} />
           </div>
@@ -547,7 +614,7 @@ function GrainControls({ grainAmount, grainVariability, grainSpread, grainMonoch
         <>
           <div className="controls__row">
             <label className="controls__label" htmlFor="spread-slider">Spread</label>
-            <EditableValue value={grainSpread} min={0} max={100}
+            <EditableValue value={grainSpread} min={0} max={100} label="Spread"
               format={v => v === 0 ? 'Off' : `${v}%`}
               onChange={v => onUpdate('grainSpread', v)} />
           </div>
@@ -683,7 +750,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
 
             <div className="controls__row">
               <label className="controls__label" htmlFor="text-size-slider">Size</label>
-              <EditableValue value={selectedLayer.size} min={20} max={300} step={2}
+              <EditableValue value={selectedLayer.size} min={20} max={300} step={2} label="Size"
                 onChange={v => ul('size', v)} />
             </div>
             <Slider id="text-size-slider" min={20} max={300} step={2} def={80}
@@ -691,7 +758,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
 
             <div className="controls__row">
               <label className="controls__label" htmlFor="text-opacity-slider">Opacity</label>
-              <EditableValue value={selectedLayer.opacity} min={10} max={100} suffix="%"
+              <EditableValue value={selectedLayer.opacity} min={10} max={100} suffix="%" label="Opacity"
                 onChange={v => ul('opacity', v)} />
             </div>
             <Slider id="text-opacity-slider" min={10} max={100} step={1} def={100}
@@ -699,7 +766,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
 
             <div className="controls__row">
               <label className="controls__label" htmlFor="text-letter-spacing">Letter spacing</label>
-              <EditableValue value={selectedLayer.letterSpacing} min={-5} max={40}
+              <EditableValue value={selectedLayer.letterSpacing} min={-5} max={40} label="Letter spacing"
                 format={v => v === 0 ? 'Normal' : `${v}px`}
                 onChange={v => ul('letterSpacing', v)} />
             </div>
@@ -708,7 +775,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
 
             <div className="controls__row">
               <label className="controls__label" htmlFor="text-word-spacing">Word spacing</label>
-              <EditableValue value={selectedLayer.wordSpacing ?? 0} min={-10} max={80}
+              <EditableValue value={selectedLayer.wordSpacing ?? 0} min={-10} max={80} label="Word spacing"
                 format={v => v === 0 ? 'Normal' : `${v}px`}
                 onChange={v => ul('wordSpacing', v)} />
             </div>
@@ -1066,7 +1133,7 @@ export default function Controls({
 
   const {
     borderThickness,
-    cornerRadius, cropRatio = 'free', showMedia,
+    cornerRadius, cropRatio = 'free', aspectMode = 'crop', showMedia,
     grainAmount, grainVariability, grainMonochrome = true, grainSpread = 0,
     textLayers = [],
   } = settings
@@ -1081,7 +1148,7 @@ export default function Controls({
       {tab === 'frame' && (
         <FrameControls
           borderThickness={borderThickness} cornerRadius={cornerRadius}
-          cropRatio={cropRatio} showMedia={showMedia} onUpdate={onUpdate}
+          cropRatio={cropRatio} aspectMode={aspectMode} showMedia={showMedia} onUpdate={onUpdate}
           snapEnabled={snapEnabled} onSnapToggle={onSnapToggle}
           gridDivisions={gridDivisions} onGridDivisions={onGridDivisions} />
       )}
