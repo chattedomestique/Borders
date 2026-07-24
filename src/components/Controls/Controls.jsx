@@ -288,31 +288,56 @@ function SwatchGroup({ title, hint, action, items, bgMode, bgColor, onApply }) {
 // saturation 0) doesn't lose the others to hex round-tripping. Re-syncs when the
 // colour changes from outside (a swatch tap, eyedropper, or undo). Double-tap a
 // handle resets that channel to the last externally-applied colour.
-function BorderColorSliders({ bgColor, onColor }) {
-  const initial = hexToHsl(bgColor || '#ffffff')
-  const [hsl, setHsl] = useState(initial)
-  const [base, setBase] = useState(initial)   // last externally-applied colour → slider reset target
-  const [emitted, setEmitted] = useState(null) // hex we last pushed out
-  const [seenBg, setSeenBg] = useState(bgColor)
+// Normalize any hex-ish string to '#rrggbb' (or null). Accepts 3- or 6-digit,
+// with or without '#'. Used by the hex input / paste path.
+function normalizeHex(str) {
+  if (!str) return null
+  let s = String(str).trim().replace(/^#/, '')
+  if (/^[0-9a-fA-F]{3}$/.test(s)) s = s.split('').map(c => c + c).join('')
+  return /^[0-9a-fA-F]{6}$/.test(s) ? '#' + s.toLowerCase() : null
+}
 
-  // Derived-state sync during render (React-endorsed): when the colour arrives
-  // from outside our own slider edits (swatch tap, eyedropper, undo), reset the
-  // working HSL from it. Skipping our own emits avoids hex round-trip drift.
-  if (bgColor && bgColor !== seenBg) {
-    setSeenBg(bgColor)
-    if (bgColor.toLowerCase() !== emitted) {
-      const next = hexToHsl(bgColor)
-      setHsl(next); setBase(next)
+// The shared colour editor used EVERYWHERE a colour is chosen: Hue / Saturation
+// / Brightness sliders plus a hex field (type, paste, copy). `hex` in, `onColor`
+// out. Keeps a working HSL so dragging to an extreme doesn't lose the other
+// channels to hex round-tripping, and re-syncs on external changes (undo, etc).
+function ColorSliders({ hex, onColor }) {
+  const safe = normalizeHex(hex) || '#ffffff'
+  const initial = hexToHsl(safe)
+  const [hsl, setHsl] = useState(initial)
+  const [base, setBase] = useState(initial)      // slider reset target
+  const [emitted, setEmitted] = useState(null)   // hex we last pushed out
+  const [seen, setSeen] = useState(hex)
+  const [hexDraft, setHexDraft] = useState(safe.slice(1))  // input shows without '#'
+  const [copied, setCopied] = useState(false)
+
+  if (hex && hex !== seen) {
+    setSeen(hex)
+    const norm = normalizeHex(hex) || '#ffffff'
+    if (norm.toLowerCase() !== emitted) {
+      const next = hexToHsl(norm)
+      setHsl(next); setBase(next); setHexDraft(norm.slice(1))
     }
   }
 
+  const emit = (nextHex) => { setEmitted(nextHex.toLowerCase()); onColor(nextHex) }
   const setChan = (k, v) => {
     const next = { ...hsl, [k]: v }
     setHsl(next)
-    const hex = hslCss(next.h, next.s, next.l)
-    setEmitted(hex.toLowerCase())
-    onColor(hex)
+    const nh = hslCss(next.h, next.s, next.l)
+    setHexDraft(nh.slice(1))
+    emit(nh)
   }
+  const onHexInput = (v) => {
+    setHexDraft(v.replace(/[^0-9a-fA-F]/g, '').slice(0, 6))
+    const norm = normalizeHex(v)
+    if (norm) { setHsl(hexToHsl(norm)); emit(norm) }
+  }
+  const copy = () => {
+    try { navigator.clipboard?.writeText('#' + (normalizeHex(hexDraft) || safe).slice(1)) } catch { /* denied */ }
+    setCopied(true); setTimeout(() => setCopied(false), 1100)
+  }
+
   const h = Math.round(hsl.h), s = Math.round(hsl.s), l = Math.round(hsl.l)
   const trackSat = `linear-gradient(to right, ${hslCss(hsl.h, 0, hsl.l)}, ${hslCss(hsl.h, 100, hsl.l)})`
   const trackLit = `linear-gradient(to right, #000, ${hslCss(hsl.h, hsl.s, 50)}, #fff)`
@@ -333,7 +358,56 @@ function BorderColorSliders({ bgColor, onColor }) {
         <EditableValue value={l} min={0} max={100} suffix="%" label="Brightness" onChange={v => setChan('l', v)} /></div>
       <Slider className="controls__slider--tint" style={{ '--track': trackLit }} min={0} max={100} step={1}
         def={Math.round(base.l)} value={l} on={v => setChan('l', v)} />
+
+      <div className="controls__hexrow">
+        <span className="controls__hexhash" aria-hidden="true">#</span>
+        <input className="controls__hexinput" value={hexDraft} onChange={e => onHexInput(e.target.value)}
+          spellCheck={false} autoCapitalize="none" autoCorrect="off" inputMode="text" maxLength={6}
+          aria-label="Hex color" />
+        <button type="button" className="controls__hexcopy" onClick={copy}
+          aria-label="Copy hex color">{copied ? 'Copied' : 'Copy'}</button>
+      </div>
     </div>
+  )
+}
+
+// A colour swatch that opens the shared editor in a modal — used for text /
+// outline / background / blob colours.
+function ColorField({ value, onChange, label }) {
+  const [open, setOpen] = useState(false)
+  const v = normalizeHex(value) || '#000000'
+  return (
+    <>
+      <button type="button" className="controls__color-swatch controls__color-swatch--btn"
+        style={{ background: v }} onClick={() => setOpen(true)}
+        aria-label={`${label || 'Color'} ${v}, tap to change`} />
+      {open && <ColorModal label={label} value={v} onChange={onChange} onClose={() => setOpen(false)} />}
+    </>
+  )
+}
+
+function ColorModal({ label, value, onChange, onClose }) {
+  const triggerRef = useRef(null)
+  useEffect(() => {
+    triggerRef.current = document.activeElement
+    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); onClose() } }
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('keydown', onKey); try { triggerRef.current?.focus?.() } catch { /* gone */ } }
+  }, [onClose])
+
+  return createPortal(
+    <div className="valuemodal" role="dialog" aria-modal="true" aria-label={label ? `Edit ${label}` : 'Edit color'}
+      onPointerDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="valuemodal__card colormodal__card">
+        <div className="valuemodal__title">{label || 'Color'}</div>
+        <div className="colormodal__preview" style={{ background: normalizeHex(value) || '#000000' }} />
+        <ColorSliders hex={value} onColor={onChange} />
+        <div className="valuemodal__actions" style={{ gridTemplateColumns: '1fr' }}>
+          <button type="button" className="valuemodal__btn valuemodal__btn--primary" onClick={onClose}>Done</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -401,7 +475,7 @@ function BgControls({ settings, onUpdate, pickMode, onPickMode, borderSuggestion
       )}
 
       {sub === 'adjust' && (
-        <BorderColorSliders bgColor={bgColor}
+        <ColorSliders hex={bgColor}
           onColor={hex => { onUpdate('bgColor', hex); if (bgMode !== 'color') onUpdate('bgMode', 'color') }} />
       )}
 
@@ -790,10 +864,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
         selectedLayer ? (
           <>
             <div className="controls__text-row">
-              <label className="controls__color-swatch" style={{ background: selectedLayer.color }}
-                title="Text color" aria-label="Text color">
-                <input type="color" value={selectedLayer.color} onChange={e => ul('color', e.target.value)} />
-              </label>
+              <ColorField value={selectedLayer.color} label="Text color" onChange={v => ul('color', v)} />
               <div className="controls__effects-row">
                 <button
                   className={`controls__effect-btn${selectedLayer.shadow ? ' controls__effect-btn--active' : ''}`}
@@ -809,9 +880,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
             {selectedLayer.stroke && (
               <>
                 <div className="controls__color-row controls__color-row--active">
-                  <label className="controls__color-swatch" style={{ background: selectedLayer.strokeColor }}>
-                    <input type="color" value={selectedLayer.strokeColor} onChange={e => ul('strokeColor', e.target.value)} />
-                  </label>
+                  <ColorField value={selectedLayer.strokeColor} label="Outline color" onChange={v => ul('strokeColor', v)} />
                   <span className="controls__color-hint">Outline color</span>
                 </div>
                 <div className="controls__row controls__row--spaced">
@@ -838,9 +907,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
             {selectedLayer.bg !== 'none' && (
               <>
                 <div className="controls__color-row controls__color-row--active">
-                  <label className="controls__color-swatch" style={{ background: selectedLayer.bgColor }}>
-                    <input type="color" value={selectedLayer.bgColor} onChange={e => ul('bgColor', e.target.value)} />
-                  </label>
+                  <ColorField value={selectedLayer.bgColor} label="Background color" onChange={v => ul('bgColor', v)} />
                   <span className="controls__color-hint" style={{ flex: 1 }}>BG color</span>
                   <EditableValue value={selectedLayer.bgOpacity} min={10} max={100} suffix="%"
                     style={{ fontSize: 11 }} onChange={v => ul('bgOpacity', v)} />
@@ -877,10 +944,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                   value={selectedLayer.blobCurve ?? 30} on={v => ul('blobCurve', v)} />
 
                 <div className="controls__color-row controls__color-row--active">
-                  <label className="controls__color-swatch" style={{ background: selectedLayer.blobColor ?? '#000000' }}>
-                    <input type="color" value={selectedLayer.blobColor ?? '#000000'}
-                      onChange={e => ul('blobColor', e.target.value)} />
-                  </label>
+                  <ColorField value={selectedLayer.blobColor ?? '#000000'} label="Blob color" onChange={v => ul('blobColor', v)} />
                   <span className="controls__color-hint">Blob color</span>
                 </div>
 
