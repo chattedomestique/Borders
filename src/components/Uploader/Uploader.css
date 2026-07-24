@@ -82,6 +82,18 @@
 /* §4.4 "reading/decoding" state — the decode can take hundreds of ms and the
    app looks frozen without it. */
 .uploader__drop--busy { cursor: progress; }
+
+/* Build stamp — the running version at a glance (Playbook ui-mono stamp). */
+.uploader__buildstamp {
+  margin-top: 18px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+  opacity: 0.65;
+  text-align: center;
+  user-select: text;
+}
 .uploader__spinner {
   width: 36px;
   height: 36px;

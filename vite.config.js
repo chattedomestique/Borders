@@ -1,15 +1,23 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { execSync } from 'node:child_process'
 
 // Deployed to GitHub Pages at user.github.io/Borders/, so the app lives at a
 // sub-path. base is threaded into the manifest and Workbox navigateFallback
 // below — the two spots the Playbook (§3.5) flags as most-often-wrong.
 const base = '/Borders/'
 
+// A build stamp (short SHA · date) so the running version is never ambiguous —
+// the Playbook's ui-mono "build stamp" idea. Shown on the upload screen.
+let sha = 'dev'
+try { sha = execSync('git rev-parse --short HEAD').toString().trim() } catch { /* not a git checkout */ }
+const buildId = `${sha} · ${new Date().toISOString().slice(0, 10)}`
+
 // https://vite.dev/config/
 export default defineConfig({
   base,
+  define: { __BUILD_ID__: JSON.stringify(buildId) },
   plugins: [
     react(),
     // N1: the build owns the service worker. Workbox precaches the real

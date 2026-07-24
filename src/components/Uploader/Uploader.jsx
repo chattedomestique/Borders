@@ -107,6 +107,8 @@ export default function Uploader({ onMediaLoaded, initialError = null }) {
         tabIndex={-1}
       />
 
+      <div className="uploader__buildstamp" aria-label={`Build ${__BUILD_ID__}`}>{__BUILD_ID__}</div>
+
       <div className="uploader__features">
         {['Border & grain', 'Custom text', 'Pinch to zoom', 'Save to Photos'].map(f => (
           <span key={f} className="uploader__feature-chip">{f}</span>
