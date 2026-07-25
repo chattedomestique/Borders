@@ -55,12 +55,43 @@ export function rgbToHex(r, g, b) {
   return `#${h(r)}${h(g)}${h(b)}`
 }
 export function hexToHsl(hex) {
-  const s = (hex || '#000000').replace('#', '')
-  const r = parseInt(s.slice(0, 2), 16) || 0
-  const g = parseInt(s.slice(2, 4), 16) || 0
-  const b = parseInt(s.slice(4, 6), 16) || 0
+  const [r, g, b] = hexToRgb(hex)
   const [h, sat, l] = rgbToHsl(r, g, b)
   return { h, s: sat, l }
+}
+export function hexToRgb(hex) {
+  const s = (hex || '#000000').replace('#', '')
+  return [parseInt(s.slice(0, 2), 16) || 0, parseInt(s.slice(2, 4), 16) || 0, parseInt(s.slice(4, 6), 16) || 0]
+}
+
+// ── OKLCH: perceptually-uniform colour space, so rotating hue for a
+// complementary/analogous/triadic accent preserves the *perceived* lightness
+// and chroma instead of the muddy, uneven results HSL rotation gives. This is
+// how modern colour tools (Adobe, OKLCH pickers) actually derive harmonies. ──
+function srgbToLinear(c) { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4) }
+function linearToSrgb(c) { const v = c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055; return clamp(Math.round(v * 255), 0, 255) }
+
+function rgbToOklch(r, g, b) {
+  const lr = srgbToLinear(r), lg = srgbToLinear(g), lb = srgbToLinear(b)
+  const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb)
+  const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb)
+  const s = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb)
+  const L = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s
+  const a = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s
+  const bb = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
+  return { L, C: Math.hypot(a, bb), H: (Math.atan2(bb, a) * 180 / Math.PI + 360) % 360 }
+}
+function oklchToHex(L, C, H) {
+  const h = H * Math.PI / 180, a = C * Math.cos(h), bb = C * Math.sin(h)
+  const l_ = L + 0.3963377774 * a + 0.2158037573 * bb
+  const m_ = L - 0.1055613458 * a - 0.0638541728 * bb
+  const s_ = L - 0.0894841775 * a - 1.2914855480 * bb
+  const l = l_ ** 3, m = m_ ** 3, s = s_ ** 3
+  return rgbToHex(
+    linearToSrgb(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+    linearToSrgb(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+    linearToSrgb(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s),
+  )
 }
 
 // ── downsample the source into a flat pixel array ──
@@ -143,48 +174,57 @@ function photogenic(c) {
   return area * chroma * midness
 }
 
+// Accents via OKLCH harmony — balanced, usable companions to ANY base colour.
+// Hue is rotated in a perceptual space at a normalised lightness/chroma, so the
+// results read as designed accents rather than the garish HSL rotations before.
+function accents(heroHex) {
+  const [r, g, b] = hexToRgb(heroHex)
+  const { C, H } = rgbToOklch(r, g, b)
+  // sRGB OKLCH chroma tops out ~0.37; ~0.13 reads rich but not neon. Normalise
+  // so a dark or washed-out hero still yields clean mid accents.
+  const base = clamp(C * 0.9 + 0.03, 0.10, 0.16)
+  const mk = (id, label, dH, L = 0.64, Cx = base) => ({ group: 'accent', id, label, hex: oklchToHex(L, Cx, H + dH) })
+  return [
+    mk('comp',      'Comp',      180),
+    mk('comp-lt',   'Comp Lt',   180, 0.83, clamp(base * 0.6, 0.05, 0.11)),
+    mk('comp-dk',   'Comp Dk',   180, 0.42, clamp(base * 0.95, 0.07, 0.15)),
+    mk('analogous', 'Analogous', 34),
+    mk('split',     'Split',     150),
+    mk('triadic',   'Triadic',   120),
+  ]
+}
+
+// Tones + accents for a given base colour. `undertoneHue` seeds a grayscale base.
+function suggestionsFor(heroHex, undertoneHue) {
+  const { h: heroH0, s: heroS, l: heroL0 } = hexToHsl(heroHex)
+  const heroH = heroS < 6 ? undertoneHue : heroH0
+  const heroL = clamp(heroL0, 22, 78)
+  const tones = [
+    { group: 'tone', id: 'photo', label: 'Photo', hex: hslCss(heroH, heroS, heroL) },
+    { group: 'tone', id: 'soft',  label: 'Soft',  hex: hslCss(heroH, clamp(heroS * 0.18, 5, 14), 94) },
+    { group: 'tone', id: 'deep',  label: 'Deep',  hex: hslCss(heroH, clamp(heroS * 0.5, 14, 32), 12) },
+    { group: 'tone', id: 'muted', label: 'Muted', hex: hslCss(heroH, clamp(heroS * 0.42, 12, 36), 66) },
+  ]
+  const out = [...tones, ...accents(heroHex)]
+  const seen = new Set()
+  return out.filter(s => { const k = s.hex.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true })
+}
+
 // ── the curated border suggestions ──
 export function buildBorderSuggestions(source) {
   const pal = extractPalette(source)
   if (!pal) return []
-
   // Population-weighted average (image temperature / undertone).
   let ar = 0, ag = 0, ab = 0, w = 0
   for (const c of pal) { ar += c.r * c.pop; ag += c.g * c.pop; ab += c.b * c.pop; w += c.pop }
   const [avgH] = rgbToHsl(ar / w, ag / w, ab / w)
-
-  // "From photo": the most frame-worthy real colour, nudged into a usable range.
   const hero = pal.slice().sort((a, b) => photogenic(b) - photogenic(a))[0]
-  const heroH = hero.s < 6 ? avgH : hero.h        // grayscale hero → borrow avg hue
-  const heroS = hero.s
-  const heroL = clamp(hero.l, 22, 78)
+  return suggestionsFor(hero.hex, avgH)
+}
 
-  const out = []
-  const add = (group, id, label, h, s, l) => out.push({ group, id, label, hex: hslCss(h, s, l) })
-
-  // ── Tones drawn from the image (belong by construction) ──
-  // 1 · Drawn straight from the photo.
-  out.push({ group: 'tone', id: 'photo', label: 'Photo', hex: hslCss(heroH, heroS, heroL) })
-  // 2 · Soft mat: near-white carrying the image's undertone (gallery matte).
-  add('tone', 'soft', 'Soft', heroH, clamp(heroS * 0.18, 5, 14), 94)
-  // 3 · Deep frame: rich near-black with the same undertone.
-  add('tone', 'deep', 'Deep', heroH, clamp(heroS * 0.5, 14, 32), 12)
-  // 4 · Muted: dusty tone-on-tone, understated.
-  add('tone', 'muted', 'Muted', heroH, clamp(heroS * 0.42, 12, 36), 66)
-  // 5 · Blend: analogous neighbour, offset in lightness for gentle separation.
-  add('tone', 'blend', 'Blend', heroH + 32, clamp(heroS * 0.9, 30, 80), clamp(heroL > 55 ? heroL - 20 : heroL + 20, 26, 76))
-
-  // ── Pop & accents: several complementary / split / triadic options so there's
-  //    a range of "pop" to choose from, spanning hue AND tone. ──
-  const popS = clamp(Math.max(heroS, 58) * 1.05, 55, 92)
-  add('accent', 'comp',    'Comp',    heroH + 180, popS,                       clamp(heroL < 50 ? 56 : 50, 46, 60))
-  add('accent', 'comp-lt', 'Comp Lt', heroH + 180, clamp(popS * 0.72, 34, 70), 72)
-  add('accent', 'comp-dk', 'Comp Dk', heroH + 180, clamp(popS * 0.9, 40, 82),  32)
-  add('accent', 'split-a', 'Split A', heroH + 150, clamp(Math.max(heroS, 55), 50, 88), 54)
-  add('accent', 'split-b', 'Split B', heroH + 210, clamp(Math.max(heroS, 55), 50, 88), 54)
-  add('accent', 'triad',   'Triad',   heroH + 120, clamp(Math.max(heroS, 52), 48, 85), 56)
-
-  // De-dup any collisions (e.g. grayscale images) so the strip stays varied.
-  const seen = new Set()
-  return out.filter(s => { const k = s.hex.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true })
+// Eyedropper "re-roll": treat the picked colour as the base and regenerate the
+// whole palette (tones + OKLCH harmonies) around it.
+export function buildSuggestionsFromColor(hex) {
+  const { h } = hexToHsl(hex)
+  return suggestionsFor(hex, h)
 }

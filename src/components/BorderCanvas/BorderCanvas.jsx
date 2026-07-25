@@ -369,7 +369,7 @@ function measureBlock(ctx, layer) {
   const {
     content, font = 'system-ui, sans-serif', size = 80,
     align = 'center', bold = false, italic = false,
-    letterSpacing = 0, wordSpacing = 0,
+    letterSpacing = 0, wordSpacing = 0, lineHeight: lineHeightMul = 1.3,
   } = layer
 
   ctx.font = `${italic ? 'italic ' : ''}${bold ? 'bold ' : ''}${size}px ${font}`
@@ -378,7 +378,7 @@ function measureBlock(ctx, layer) {
   if (canWordSpace)           ctx.wordSpacing = `${wordSpacing}px`
 
   const lines = content.split('\n')
-  const lineHeight = size * 1.3
+  const lineHeight = size * lineHeightMul
   const blockH = lines.length * lineHeight
   const isJustify = align === 'justify' && canWordSpace
   const lineWidths = lines.map(l => ctx.measureText(l).width)  // at base spacing

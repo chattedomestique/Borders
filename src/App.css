@@ -346,6 +346,62 @@
   .app__toast--show { transform: translateX(-50%); }
 }
 
+/* ── New-photo choice modal ── */
+.app__choice {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(20, 16, 12, 0.34);
+  backdrop-filter: blur(4px) saturate(115%);
+  -webkit-backdrop-filter: blur(4px) saturate(115%);
+}
+.app__choice-card {
+  width: min(320px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg, 18px);
+  box-shadow: var(--shadow-lg);
+  padding: 20px 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: choice-pop 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes choice-pop { from { transform: scale(0.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.app__choice-title {
+  font-family: var(--font-serif, serif);
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--ink);
+  text-align: center;
+}
+.app__choice-note {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink-3);
+  text-align: center;
+  margin: 0 0 4px;
+}
+.app__choice-btn {
+  height: 46px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--seg-track, var(--bg));
+  border: none;
+  border-radius: var(--r-md, 12px);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.15s ease, filter 0.12s ease;
+}
+.app__choice-btn--primary { color: #fff; background: var(--accent); }
+.app__choice-btn--ghost { background: none; color: var(--ink-3); height: 40px; font-weight: 600; }
+.app__choice-btn:active { transform: scale(0.98); }
+@media (prefers-reduced-motion: reduce) { .app__choice-card { animation: none; } }
+
 /* ── Gesture hint toast ── */
 .app__gesture-hint {
   position: fixed;

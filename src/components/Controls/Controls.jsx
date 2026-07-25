@@ -855,6 +855,15 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
             </div>
             <Slider id="text-word-spacing" min={-10} max={80} step={1} def={0}
               value={selectedLayer.wordSpacing ?? 0} on={v => ul('wordSpacing', v)} />
+
+            <div className="controls__row">
+              <label className="controls__label" htmlFor="text-line-height">Line height</label>
+              <EditableValue value={selectedLayer.lineHeight ?? 1.3} min={0.8} max={2.5} step={0.05} label="Line height"
+                format={v => v.toFixed(2)}
+                onChange={v => ul('lineHeight', v)} />
+            </div>
+            <Slider id="text-line-height" min={0.8} max={2.5} step={0.05} def={1.3}
+              value={selectedLayer.lineHeight ?? 1.3} on={v => ul('lineHeight', v)} />
           </>
         ) : noLayerHint
       )}

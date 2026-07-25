@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { rgbToHsl, hslToRgb, rgbToHex, hexToHsl, hslCss } from './palette'
+import { rgbToHsl, hslToRgb, rgbToHex, hexToHsl, hslCss, buildSuggestionsFromColor } from './palette'
 
 // §12: unit-test the pure engine — the tricky, non-obvious invariants. The
 // palette color math has no DOM dependency, so it's testable without a browser.
@@ -68,5 +68,28 @@ describe('hex <-> hsl round-trip (the slider path)', () => {
     expect(hexToHsl('ff0000')).toEqual(hexToHsl('#ff0000'))
     const bad = hexToHsl('')
     expect(bad).toEqual({ h: 0, s: 0, l: 0 })
+  })
+})
+
+describe('buildSuggestionsFromColor (eyedropper re-roll)', () => {
+  const sugg = buildSuggestionsFromColor('#c9622c')
+
+  it('returns tones + accents, all valid 6-digit hex', () => {
+    expect(sugg.length).toBeGreaterThanOrEqual(8)
+    expect(sugg.some(s => s.group === 'tone')).toBe(true)
+    expect(sugg.some(s => s.group === 'accent')).toBe(true)
+    for (const s of sugg) expect(s.hex).toMatch(/^#[0-9a-f]{6}$/)
+  })
+
+  it('the complementary accent lands on roughly the opposite hue', () => {
+    const base = hexToHsl('#c9622c').h
+    const comp = sugg.find(s => s.id === 'comp')
+    const raw = (((hexToHsl(comp.hex).h - base) % 360) + 360) % 360   // [0,360)
+    expect(Math.abs(raw - 180)).toBeLessThan(60)   // OKLCH↔HSL differ, but ~opposite
+  })
+
+  it('accents are distinct colours', () => {
+    const accents = sugg.filter(s => s.group === 'accent').map(s => s.hex)
+    expect(new Set(accents).size).toBe(accents.length)
   })
 })

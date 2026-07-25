@@ -1,8 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import Uploader from './components/Uploader/Uploader'
 import BorderCanvas from './components/BorderCanvas/BorderCanvas'
 import Controls from './components/Controls/Controls'
 import { useHistory } from './useHistory'
+import { buildSuggestionsFromColor } from './palette'
 import { saveSettings, seedForNewMedia, loadSettings, loadPresets, savePreset, deletePreset, applyPresetLook } from './persist'
 import PresetSheet from './components/PresetSheet/PresetSheet'
 import './App.css'
@@ -20,7 +22,7 @@ const DEFAULT_LAYER = (id, index = 0) => ({
   y: Math.min(0.88, 0.4 + index * 0.18),
   bold: false, italic: false, opacity: 100,
   shadow: false, stroke: false, strokeColor: '#000000', strokeWidth: 35,
-  letterSpacing: 0, wordSpacing: 0, bg: 'none', bgColor: '#000000', bgOpacity: 50,
+  letterSpacing: 0, wordSpacing: 0, lineHeight: 1.3, bg: 'none', bgColor: '#000000', bgOpacity: 50,
   motionBlur: false, motionAngle: 0, motionLength: 60, motionSpeed: 60,
   trailGrain: 0, trailGrainSize: 30, trailGrainVariability: 0, trailGrainMono: true,
   trailGrainSpread: 0, trailGrainDissolve: false,
@@ -31,13 +33,13 @@ const DEFAULT_LAYER = (id, index = 0) => ({
 })
 
 const DEFAULT_SETTINGS = {
-  borderThickness: 40,
+  borderThickness: 150,          // a generous default frame
   bgMode: 'average',
   bgColor: '#ffffff',
   blurAmount: 60,
   frostBrightness: -15, frostContrast: 0, frostSaturation: 60, frostVibrance: 0,
   cornerRadius: 0,
-  cropRatio: 'free',
+  cropRatio: '9:16',             // vertical 16:9 (story) by default
   aspectMode: 'crop',   // 'crop' = trim photo to ratio · 'fit' = matte photo into ratio
   zoom: 1, panX: 0.5, panY: 0.5,
   showMedia: true,
@@ -101,6 +103,8 @@ export default function App() {
   const [toast, setToast] = useState(null)
   const [presetsOpen, setPresetsOpen] = useState(false)
   const [presets, setPresets] = useState(() => loadPresets())
+  const [newChoiceOpen, setNewChoiceOpen] = useState(false)
+  const nextSeedRef = useRef(null)   // 'full' | 'default' | null (frame-only) for the next photo
   const [mediaError, setMediaError] = useState(null)
   const [borderSuggestions, setBorderSuggestions] = useState([])
   const [selectedLayerId, setSelectedLayerId] = useState(null)
@@ -150,19 +154,33 @@ export default function App() {
     setMediaError(null)
     setMedia(mediaObj)
     setBorderSuggestions([])   // recomputed once the new source decodes
-    // N11: restore the last-used frame/grain/text setup for the new photo.
-    resetHistory(seedForNewMedia(DEFAULT_SETTINGS))
+    // Seed mode chosen at "New": keep the full look, reset to defaults, or (the
+    // default path) carry only the frame basics.
+    const seed = nextSeedRef.current
+    nextSeedRef.current = null
+    let base
+    if (seed === 'full') {
+      const saved = loadSettings() || DEFAULT_SETTINGS
+      base = { ...saved, zoom: 1, panX: 0.5, panY: 0.5 }   // keep the look, reset transform
+    } else if (seed === 'default') {
+      base = DEFAULT_SETTINGS
+    } else {
+      base = seedForNewMedia(DEFAULT_SETTINGS)
+    }
+    resetHistory(base)
     setSelectedLayerId(null)
     setActiveTab(null)
     setStep(STEPS.EDIT)
     if (!sessionStorage.getItem('bs-hint-seen')) setShowHint(true)
   }, [resetHistory])
 
-  const handleReset = useCallback(() => {
+  const handleReset = useCallback((seedMode) => {
+    nextSeedRef.current = seedMode ?? null
     setMedia(prev => { if (prev?.url) URL.revokeObjectURL(prev.url); return null })
     setSelectedLayerId(null)
     setActiveTab(null)
     setMediaError(null)
+    setNewChoiceOpen(false)
     setStep(STEPS.UPLOAD)
   }, [])
 
@@ -246,7 +264,10 @@ export default function App() {
 
   const handlePickColor = useCallback((hex) => {
     setSettings(prev => ({ ...prev, bgColor: hex, bgMode: 'color' }), { immediate: true })
+    // Re-roll the suggested tones + accents around the picked colour.
+    setBorderSuggestions(buildSuggestionsFromColor(hex))
     setPickMode(false)
+    setToast('Palette re-rolled')
   }, [setSettings])
 
   // Apply a border colour (custom picker or a suggested swatch). Discrete choice
@@ -362,7 +383,7 @@ export default function App() {
                   </svg>
                 )}
               </button>
-              <button className="app__reset-btn" onClick={handleReset} aria-label="Start over">
+              <button className="app__reset-btn" onClick={() => setNewChoiceOpen(true)} aria-label="Start over">
                 New
               </button>
             </div>
@@ -395,6 +416,26 @@ export default function App() {
           </div>
         ) : null}
       </main>
+
+      {newChoiceOpen && createPortal(
+        <div className="app__choice" role="dialog" aria-modal="true" aria-label="Start a new photo"
+          onPointerDown={(e) => { if (e.target === e.currentTarget) setNewChoiceOpen(false) }}>
+          <div className="app__choice-card">
+            <div className="app__choice-title">Start a new photo</div>
+            <p className="app__choice-note">Keep your current border, colors, text &amp; effects — or start clean.</p>
+            <button className="app__choice-btn app__choice-btn--primary" onClick={() => handleReset('full')}>
+              Keep my settings
+            </button>
+            <button className="app__choice-btn" onClick={() => handleReset('default')}>
+              Reset to defaults
+            </button>
+            <button className="app__choice-btn app__choice-btn--ghost" onClick={() => setNewChoiceOpen(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {presetsOpen && (
         <PresetSheet
