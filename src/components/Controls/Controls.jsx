@@ -705,6 +705,233 @@ function GrainControls({ grainAmount, grainVariability, grainSpread, grainMonoch
   )
 }
 
+const MARK_SUBTABS = [
+  { id: 'shape',   label: 'Shape'   },
+  { id: 'ink',     label: 'Ink'     },
+  { id: 'edge',    label: 'Edge'    },
+  { id: 'texture', label: 'Riso'    },
+]
+
+// A highlighter only ever darkens in the real world (multiply / darken /
+// colour-burn). The rest are here for graphic effect, and labelled plainly.
+const MARK_BLENDS = [
+  { id: 'multiply',   label: 'Multiply' },
+  { id: 'darken',     label: 'Darken'   },
+  { id: 'color-burn', label: 'Burn'     },
+  { id: 'normal',     label: 'Normal'   },
+  { id: 'screen',     label: 'Screen'   },
+  { id: 'overlay',    label: 'Overlay'  },
+]
+
+const MARK_EDGES = [
+  { id: 'clean',  label: 'Clean'  },
+  { id: 'marker', label: 'Marker' },
+  { id: 'noisy',  label: 'Noisy'  },
+  { id: 'torn',   label: 'Torn'   },
+]
+
+const EDGE_HINT = {
+  clean:  'Hard rectangle.',
+  marker: 'Soft ink bleed with a denser rim, like a chisel tip.',
+  noisy:  'Feathered edge dithered into grain — diffuse and speckled.',
+  torn:   'Contour displaced by layered noise, with a fibre fringe.',
+}
+
+function MarkControls({ layers, selectedId, selected, ul, onAdd, onRemove, onSelect }) {
+  const [sub, setSub] = useState('shape')
+
+  const noneHint = (
+    <p className="controls__hint" style={{ textAlign: 'center', padding: '4px 0 2px' }}>
+      {layers.length === 0 ? 'Tap Add to lay down a highlight.' : 'Tap a mark above to edit it.'}
+    </p>
+  )
+
+  return (
+    <section className="controls__section controls__section--dock" aria-label="Highlight marks">
+      <div className="controls__layer-strip">
+        <button className="controls__layer-add" onClick={onAdd} aria-label="Add highlight">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M7 2v10M2 7h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+          <span>Add</span>
+        </button>
+        {layers.map((l, i) => (
+          <div key={l.id}
+            className={`controls__layer-chip${l.id === selectedId ? ' controls__layer-chip--active' : ''}`}>
+            <button className="controls__layer-chip__label"
+              onClick={() => onSelect(l.id)} aria-pressed={l.id === selectedId}>
+              <span className="controls__markdot" style={{ background: l.color }} aria-hidden="true" />
+              Mark {i + 1}
+            </button>
+            <button className="controls__layer-chip__remove"
+              onClick={() => onRemove(l.id)} aria-label={`Remove mark ${i + 1}`}>×</button>
+          </div>
+        ))}
+      </div>
+
+      <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }} role="tablist">
+        {MARK_SUBTABS.map(t => (
+          <button key={t.id} role="tab" aria-selected={sub === t.id}
+            className={`controls__seg-btn${sub === t.id ? ' controls__seg-btn--active' : ''}`}
+            onClick={() => setSub(t.id)}>{t.label}</button>
+        ))}
+      </div>
+
+      {!selected ? noneHint : (<>
+        {sub === 'shape' && (
+          <>
+            <p className="controls__hint" style={{ margin: '0 0 2px' }}>Drag the mark on the photo to move it.</p>
+            <div className="controls__row">
+              <label className="controls__label" htmlFor="mark-w">Width</label>
+              <EditableValue value={Math.round((selected.w ?? 0.62) * 100)} min={4} max={100} suffix="%"
+                label="Width" onChange={v => ul('w', v / 100)} />
+            </div>
+            <Slider id="mark-w" min={4} max={100} step={1} def={62}
+              value={Math.round((selected.w ?? 0.62) * 100)} on={v => ul('w', v / 100)} />
+
+            <div className="controls__row">
+              <label className="controls__label" htmlFor="mark-h">Height</label>
+              <EditableValue value={Math.round((selected.h ?? 0.075) * 1000) / 10} min={0.5} max={60} step={0.5}
+                suffix="%" label="Height" onChange={v => ul('h', v / 100)} />
+            </div>
+            <Slider id="mark-h" min={0.5} max={60} step={0.5} def={7.5}
+              value={Math.round((selected.h ?? 0.075) * 1000) / 10} on={v => ul('h', v / 100)} />
+
+            <div className="controls__row">
+              <label className="controls__label" htmlFor="mark-angle">Angle</label>
+              <EditableValue value={selected.angle ?? 0} min={-45} max={45} suffix="°"
+                label="Angle" onChange={v => ul('angle', v)} />
+            </div>
+            <Slider id="mark-angle" min={-45} max={45} step={1} def={0}
+              value={selected.angle ?? 0} on={v => ul('angle', v)} />
+          </>
+        )}
+
+        {sub === 'ink' && (
+          <>
+            <div className="controls__color-row controls__color-row--active">
+              <ColorField value={selected.color} label="Highlight color" onChange={v => ul('color', v)} />
+              <span className="controls__color-hint" style={{ flex: 1 }}>Ink color</span>
+              <EditableValue value={selected.opacity ?? 85} min={5} max={100} suffix="%"
+                style={{ fontSize: 11 }} label="Opacity" onChange={v => ul('opacity', v)} />
+            </div>
+            <Slider min={5} max={100} step={1} def={85}
+              value={selected.opacity ?? 85} on={v => ul('opacity', v)} aria-label="Highlight opacity" />
+
+            <label className="controls__label" style={{ margin: '4px 0 2px' }}>Blend</label>
+            <div className="controls__seg" role="radiogroup" aria-label="Blend mode"
+              style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+              {MARK_BLENDS.map(m => (
+                <button key={m.id} role="radio" aria-checked={(selected.blend ?? 'multiply') === m.id}
+                  className={`controls__seg-btn${(selected.blend ?? 'multiply') === m.id ? ' controls__seg-btn--active' : ''}`}
+                  onClick={() => ul('blend', m.id)}>{m.label}</button>
+              ))}
+            </div>
+            <p className="controls__hint" style={{ margin: '2px 0 0' }}>
+              Multiply is how real highlighter ink behaves — it only darkens.
+            </p>
+          </>
+        )}
+
+        {sub === 'edge' && (
+          <>
+            <div className="controls__seg" role="radiogroup" aria-label="Edge style"
+              style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+              {MARK_EDGES.map(m => (
+                <button key={m.id} role="radio" aria-checked={(selected.edge ?? 'marker') === m.id}
+                  className={`controls__seg-btn${(selected.edge ?? 'marker') === m.id ? ' controls__seg-btn--active' : ''}`}
+                  onClick={() => ul('edge', m.id)}>{m.label}</button>
+              ))}
+            </div>
+            <p className="controls__hint" style={{ margin: '0 0 2px' }}>{EDGE_HINT[selected.edge ?? 'marker']}</p>
+
+            {(selected.edge ?? 'marker') !== 'clean' && (
+              <>
+                <div className="controls__row">
+                  <label className="controls__label" htmlFor="mark-edge-amt">Amount</label>
+                  <EditableValue value={selected.edgeAmount ?? 45} min={0} max={100} suffix="%"
+                    label="Edge amount" onChange={v => ul('edgeAmount', v)} />
+                </div>
+                <Slider id="mark-edge-amt" min={0} max={100} step={1} def={45}
+                  value={selected.edgeAmount ?? 45} on={v => ul('edgeAmount', v)} />
+              </>
+            )}
+
+            <div className="controls__divider controls__divider--inset"/>
+
+            <div className="controls__row">
+              <label className="controls__label" htmlFor="mark-grain">Grain</label>
+              <EditableValue value={selected.grain ?? 0} min={0} max={100}
+                format={v => v === 0 ? 'Off' : `${v}%`} label="Grain" onChange={v => ul('grain', v)} />
+            </div>
+            <Slider id="mark-grain" min={0} max={100} step={1} def={0}
+              value={selected.grain ?? 0} on={v => ul('grain', v)} />
+
+            {(selected.grain ?? 0) > 0 && (
+              <>
+                <div className="controls__row">
+                  <label className="controls__label" htmlFor="mark-grain-size">Grain size</label>
+                  <EditableValue value={selected.grainSize ?? 30} min={0} max={100}
+                    label="Grain size" onChange={v => ul('grainSize', v)} />
+                </div>
+                <Slider id="mark-grain-size" min={0} max={100} step={1} def={30}
+                  value={selected.grainSize ?? 30} on={v => ul('grainSize', v)} />
+                <div className="controls__row controls__row--spaced">
+                  <label className="controls__label">Dissolve</label>
+                  <Toggle on={!!selected.grainDissolve} onChange={v => ul('grainDissolve', v)}
+                    label="Toggle dissolve grain"/>
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {sub === 'texture' && (
+          <>
+            <div className="controls__row controls__row--spaced">
+              <label className="controls__label">Riso print</label>
+              <Toggle on={(selected.texture ?? 'none') === 'riso'}
+                onChange={v => ul('texture', v ? 'riso' : 'none')} label="Toggle riso texture"/>
+            </div>
+            <p className="controls__hint" style={{ margin: '0 0 2px' }}>
+              Rotated halftone screen, uneven drum coverage, and a misregistered pass.
+            </p>
+
+            {(selected.texture ?? 'none') === 'riso' && (
+              <>
+                <div className="controls__row">
+                  <label className="controls__label" htmlFor="riso-scale">Dot size</label>
+                  <EditableValue value={selected.risoScale ?? 40} min={0} max={100}
+                    label="Dot size" onChange={v => ul('risoScale', v)} />
+                </div>
+                <Slider id="riso-scale" min={0} max={100} step={1} def={40}
+                  value={selected.risoScale ?? 40} on={v => ul('risoScale', v)} />
+
+                <div className="controls__row">
+                  <label className="controls__label" htmlFor="riso-angle">Screen angle</label>
+                  <EditableValue value={selected.risoAngle ?? 45} min={0} max={90} suffix="°"
+                    label="Screen angle" onChange={v => ul('risoAngle', v)} />
+                </div>
+                <Slider id="riso-angle" min={0} max={90} step={1} def={45}
+                  value={selected.risoAngle ?? 45} on={v => ul('risoAngle', v)} />
+
+                <div className="controls__row">
+                  <label className="controls__label" htmlFor="riso-offset">Misregister</label>
+                  <EditableValue value={selected.risoOffset ?? 30} min={0} max={100}
+                    format={v => v === 0 ? 'Aligned' : `${v}%`} label="Misregister"
+                    onChange={v => ul('risoOffset', v)} />
+                </div>
+                <Slider id="riso-offset" min={0} max={100} step={1} def={30}
+                  value={selected.risoOffset ?? 30} on={v => ul('risoOffset', v)} />
+              </>
+            )}
+          </>
+        )}
+      </>)}
+    </section>
+  )
+}
+
 const TEXT_SUBTABS = [
   { id: 'content', label: 'Content' },
   { id: 'font',    label: 'Font'    },
@@ -1200,6 +1427,7 @@ export default function Controls({
   tab, settings, onUpdate, pickMode, onPickMode,
   borderSuggestions = [], onApplyBorderColor,
   selectedLayerId, onSelectLayer, onAddLayer, onRemoveLayer, onUpdateLayer,
+  selectedHighlightId, onSelectHighlight, onAddHighlight, onRemoveHighlight,
   snapEnabled = true, onSnapToggle, gridDivisions = 3, onGridDivisions,
 }) {
   if (!tab) return null
@@ -1208,11 +1436,14 @@ export default function Controls({
     borderThickness,
     cornerRadius, cropRatio = 'free', aspectMode = 'crop', showMedia,
     grainAmount, grainVariability, grainMonochrome = true, grainSpread = 0,
-    textLayers = [],
+    textLayers = [], highlightLayers = [],
   } = settings
 
   const selectedLayer = textLayers.find(l => l.id === selectedLayerId) ?? null
   const ul = (key, value) => selectedLayer && onUpdateLayer(selectedLayer.id, key, value)
+
+  const selectedHighlight = highlightLayers.find(l => l.id === selectedHighlightId) ?? null
+  const ulHl = (key, value) => selectedHighlight && onUpdateLayer(selectedHighlight.id, key, value)
 
   return (
     <div className="controls">
@@ -1241,6 +1472,12 @@ export default function Controls({
       )}
 
       {/* ── Type ── */}
+      {tab === 'mark' && <MarkControls
+        layers={highlightLayers} selectedId={selectedHighlightId}
+        selected={selectedHighlight} ul={ulHl}
+        onAdd={onAddHighlight} onRemove={onRemoveHighlight} onSelect={onSelectHighlight}
+      />}
+
       {tab === 'text' && <TextControls
         textLayers={textLayers} selectedLayerId={selectedLayerId}
         selectedLayer={selectedLayer} ul={ul}

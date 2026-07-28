@@ -3,6 +3,7 @@ import {
 } from 'react'
 import './BorderCanvas.css'
 import { buildBorderSuggestions } from '../../palette'
+import { hashNoise, fbm, seedFromId } from '../../noise'
 
 // The inner media (without border) is scaled so its longest side = OUT_SIZE.
 // The border pixels are then ADDED around it, so the border is always uniform
@@ -1116,6 +1117,175 @@ function drawTextBlob(ctx, layer, geom, px, blockCenterY, cache, animate) {
   ctx.restore()
 }
 
+/**
+ * Signed distance to a rounded box, in the box's local space. Negative inside,
+ * 0 on the edge, positive outside. Every edge style below is just a different
+ * way of turning this one number into alpha — which is why they stay consistent
+ * with each other and why the rect can be feathered, dithered or torn without
+ * three separate rasterisers.
+ */
+// Peak ink coverage of a riso pass. Below 1 on purpose — see the halftone note.
+const RISO_COVERAGE = 0.8
+
+function roundedBoxSDF(lx, ly, hw, hh, r) {
+  const rr = Math.min(r, hw, hh)
+  const dx = Math.abs(lx) - (hw - rr)
+  const dy = Math.abs(ly) - (hh - rr)
+  const ox = Math.max(dx, 0), oy = Math.max(dy, 0)
+  return Math.sqrt(ox * ox + oy * oy) + Math.min(Math.max(dx, dy), 0) - rr
+}
+
+/**
+ * A highlighter mark: a translucent block of ink laid over the photo.
+ *
+ * Authenticity notes —
+ *  • A real highlighter only ever DARKENS what's under it (transparent ink over
+ *    paper), which is exactly `multiply`. That's the default blend; the others
+ *    are there for graphic effect, not realism.
+ *  • Chisel-tip markers leave rounded ends and pool slightly darker at the
+ *    stroke boundary where the ink wicks and dries — the 'marker' edge models
+ *    both.
+ *  • The mark is drawn into its own buffer and composited once, so the blend
+ *    mode applies to the whole mark rather than to each internal step.
+ *
+ * Edge styles, all from the same SDF:
+ *   clean  — hard rectangle, 1px antialiased.
+ *   marker — feathered bleed + a denser rim (ink pooling).
+ *   noisy  — the feathered edge stochastically dithered: each pixel survives
+ *            with probability = its soft alpha. Diffuse, grainy dissolve.
+ *   torn   — the contour displaced by coherent fBm noise, so it wanders like a
+ *            paper tear, plus a sparse fibre fringe just past the edge.
+ */
+function drawHighlightLayer(ctx, W, H, layer, bboxMap, cache) {
+  const {
+    id, x = 0.5, y = 0.5, w = 0.6, h = 0.08, angle = 0,
+    color = '#ffe14d', opacity = 85, blend = 'multiply',
+    edge = 'marker', edgeAmount = 45,
+    grain = 0, grainSize = 30, grainVariability = 0, grainMono = true, grainDissolve = false,
+    texture = 'none', risoScale = 40, risoAngle = 45, risoOffset = 30,
+  } = layer
+
+  const rw = Math.max(2, w * W)
+  const rh = Math.max(2, h * H)
+  const hw = rw / 2, hh = rh / 2
+  const seed = seedFromId(id)
+  const eAmt = Math.max(0, Math.min(100, edgeAmount)) / 100
+  const riso = texture === 'riso'
+
+  // How far past the rect the edge can reach, so the buffer never clips it.
+  const feather = edge === 'clean' ? 1 : 1 + eAmt * rh * (edge === 'noisy' ? 0.34 : 0.24)
+  const tearAmp = eAmt * rh * 0.5
+  const reach = edge === 'torn' ? tearAmp * 0.75 : feather
+  const P = Math.ceil(reach + 6)
+  const bw = Math.ceil(rw) + P * 2, bh = Math.ceil(rh) + P * 2
+  if (bw <= 0 || bh <= 0 || bw > 6000 || bh > 6000) return
+
+  if (!cache.hlBuf) cache.hlBuf = document.createElement('canvas')
+  const buf = cache.hlBuf
+  if (buf.width !== bw || buf.height !== bh) { buf.width = bw; buf.height = bh }
+  const bc = buf.getContext('2d', { willReadFrequently: true })
+  bc.clearRect(0, 0, bw, bh)
+
+  const [cr, cg, cb] = hexToRgbTriple(color)
+  const img = bc.createImageData(bw, bh)
+  const d = img.data
+  const cxB = bw / 2, cyB = bh / 2
+  // Corner rounding: chisel-tip markers and torn scraps both read wrong with
+  // perfectly square ends.
+  const round = edge === 'clean' ? 0 : rh * 0.34
+  const ns = Math.max(4, rh * 0.5)             // tear lattice ~ half the mark's height
+  const rPitch = Math.max(3, risoScale / 100 * rh * 0.55 + 3)
+  const rca = Math.cos(risoAngle * Math.PI / 180), rsa = Math.sin(risoAngle * Math.PI / 180)
+
+  for (let py = 0; py < bh; py++) {
+    const ly = py + 0.5 - cyB
+    for (let px = 0; px < bw; px++) {
+      const lx = px + 0.5 - cxB
+      const sd = roundedBoxSDF(lx, ly, hw, hh, round)
+      let a
+
+      if (edge === 'clean') {
+        a = Math.max(0, Math.min(1, 0.5 - sd))
+      } else if (edge === 'marker') {
+        a = Math.max(0, Math.min(1, 0.5 - sd / feather))
+        // Ink pools just inside the boundary — a subtle darker rim.
+        if (a > 0 && sd > -feather * 1.6) {
+          const t = (sd + feather * 0.5) / (feather * 0.9)
+          a = Math.min(1, a * (1 + 0.22 * Math.exp(-t * t)))
+        }
+      } else if (edge === 'noisy') {
+        const soft = Math.max(0, Math.min(1, 0.5 - sd / feather))
+        // Stochastic dither of the feathered edge: solid core, grainy fade.
+        a = hashNoise(px, py, seed) < soft ? 1 : 0
+      } else { // torn
+        const n = fbm(px / ns, py / ns, seed, 3) - 0.5
+        const dd = sd + n * tearAmp
+        a = Math.max(0, Math.min(1, 0.5 - dd))
+        if (a < 1 && dd > 0 && dd < tearAmp * 0.55) {
+          // Sparse fibres clinging past the tear line.
+          const fib = fbm(px / (ns * 0.26), py / (ns * 0.26), seed + 991, 2)
+          if (fib > 0.63) a = Math.max(a, 0.5)
+        }
+      }
+
+      if (a > 0 && riso) {
+        // Amplitude-modulated halftone on a rotated screen — the single most
+        // recognisable riso tell. The dot grows with ink density, so the
+        // feathered edge naturally breaks into shrinking dots.
+        //
+        // Coverage is capped below 1: a duplicator lays a thin, uneven film, so
+        // even a "solid" fill keeps visible screen structure. Without the cap
+        // the interior fills in completely and the screen disappears.
+        const u = (px * rca - py * rsa) * Math.PI / rPitch
+        const v = (px * rsa + py * rca) * Math.PI / rPitch
+        const cell = (Math.sin(u) * Math.sin(v) + 1) / 2
+        const mottle = 0.86 + 0.28 * fbm(px / 26, py / 26, seed + 77, 2)
+        a = Math.min(1, a * mottle) * RISO_COVERAGE > cell ? 1 : 0
+      }
+
+      if (a <= 0) continue
+      const i = (py * bw + px) * 4
+      d[i] = cr; d[i + 1] = cg; d[i + 2] = cb; d[i + 3] = Math.round(a * 255)
+    }
+  }
+  bc.putImageData(img, 0, 0)
+
+  // Grain rides on the mark itself, reusing the trail-grain engine (soft
+  // luminance grain, or a true binary dissolve).
+  if (grain > 0) {
+    applyTrailGrain(buf, cache, {
+      amount: grain, size: grainSize, variability: grainVariability,
+      mono: grainMono, dissolve: grainDissolve, spread: 0,
+    })
+  }
+
+  // Riso misregistration: each colour is a separate pass on a flexible master,
+  // so layers land a hair off. Offset direction is seeded per layer.
+  let mx = 0, my = 0
+  if (riso && risoOffset > 0) {
+    const ang = hashNoise(seed, 3, 17) * Math.PI * 2
+    const mag = risoOffset / 100 * rh * 0.09
+    mx = Math.cos(ang) * mag; my = Math.sin(ang) * mag
+  }
+
+  const cx = x * W, cy = y * H
+  const rad = angle * Math.PI / 180
+  ctx.save()
+  ctx.globalAlpha = Math.max(0, Math.min(100, opacity)) / 100
+  ctx.globalCompositeOperation = blend === 'normal' ? 'source-over' : blend
+  ctx.translate(cx + mx, cy + my)
+  if (rad) ctx.rotate(rad)
+  ctx.drawImage(buf, -bw / 2, -bh / 2)
+  ctx.restore()
+
+  // Axis-aligned bounds of the (possibly rotated) mark, for tap/drag hit-tests.
+  if (bboxMap) {
+    const ca = Math.abs(Math.cos(rad)), sa = Math.abs(Math.sin(rad))
+    const ew = hw * ca + hh * sa, eh = hw * sa + hh * ca
+    bboxMap.set(id, { x: cx - ew, y: cy - eh, w: ew * 2, h: eh * 2, kind: 'highlight' })
+  }
+}
+
 function drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache, animate) {
   const {
     id, content, align = 'center', x = 0.5, y = 0.88, opacity = 100,
@@ -1170,7 +1340,7 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
           aspectMode = 'crop', zoom = 1, panX = 0.5, panY = 0.5,
           showMedia = true, grainAmount = 0, grainVariability = 0, grainMonochrome = true, grainSpread = 0,
           frostBrightness = -15, frostContrast = 0, frostSaturation = 60, frostVibrance = 0,
-          textLayers = [] } = settings
+          textLayers = [], highlightLayers = [] } = settings
 
   const isVideo = typeof source.videoWidth === 'number'
   const srcW = source.videoWidth ?? source.naturalWidth ?? source.width ?? 1
@@ -1301,8 +1471,13 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
   //    grain in shadow/midtone regions (Fuji T-grain behaviour).
   applyGrain(ctx, totalW, totalH, grainAmount, grainVariability, grainMonochrome, isVideo, cache, grainSpread)
 
-  // 4. Text layers (drawn last, on top of everything)
   if (bboxMap) bboxMap.clear()
+
+  // 4. Highlight marks — over the photo, under the type. That order is the
+  //    physical one: you highlight the page, then write on top of it.
+  highlightLayers.forEach(layer => drawHighlightLayer(ctx, totalW, totalH, layer, bboxMap, cache))
+
+  // 5. Text layers (drawn last, on top of everything)
   textLayers.forEach(layer => drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache, isVideo))
 }
 
@@ -1428,8 +1603,12 @@ const BorderCanvas = forwardRef(function BorderCanvas(
       const geo = geoRef.current
       const canvasX = (e.clientX - rect.left) * geo.totalW / rect.width
       const canvasY = (e.clientY - rect.top)  * geo.totalH / rect.height
-      // Iterate in reverse so the last-rendered (topmost) layer wins
-      const layers = settingsRef.current.textLayers ?? []
+      // Iterate in reverse so the last-rendered (topmost) layer wins. Highlights
+      // render under the type, so they come first and lose ties to text.
+      const layers = [
+        ...(settingsRef.current.highlightLayers ?? []),
+        ...(settingsRef.current.textLayers ?? []),
+      ]
       let hitLayer = null
       for (let i = layers.length - 1; i >= 0; i--) {
         const bb = textBBoxesRef.current.get(layers[i].id)

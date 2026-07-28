@@ -45,7 +45,20 @@ const DEFAULT_SETTINGS = {
   showMedia: true,
   grainAmount: 0, grainVariability: 0, grainMonochrome: true, grainSpread: 0,
   textLayers: [],
+  highlightLayers: [],
 }
+
+// A highlighter mark. Defaults are a classic chisel-tip yellow on multiply —
+// the only blend that behaves like real transparent ink over paper.
+const DEFAULT_HIGHLIGHT = (id, index = 0) => ({
+  id,
+  x: 0.5, y: Math.min(0.85, 0.42 + index * 0.13),
+  w: 0.62, h: 0.075, angle: 0,
+  color: '#ffe14d', opacity: 85, blend: 'multiply',
+  edge: 'marker', edgeAmount: 45,
+  grain: 0, grainSize: 30, grainVariability: 0, grainMono: true, grainDissolve: false,
+  texture: 'none', risoScale: 40, risoAngle: 45, risoOffset: 30,
+})
 
 const TABS = [
   {
@@ -83,6 +96,17 @@ const TABS = [
     ),
   },
   {
+    id: 'mark', label: 'Mark',
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <path d="M3.5 12.5 11 5a2 2 0 0 1 2.8 0l.7.7a2 2 0 0 1 0 2.8L7 16H4a.5.5 0 0 1-.5-.5z"
+          stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
+        <path d="M10.5 5.5 14 9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" opacity="0.55"/>
+        <path d="M3 18h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" opacity="0.4"/>
+      </svg>
+    ),
+  },
+  {
     id: 'text', label: 'Text',
     icon: (
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -108,6 +132,7 @@ export default function App() {
   const [mediaError, setMediaError] = useState(null)
   const [borderSuggestions, setBorderSuggestions] = useState([])
   const [selectedLayerId, setSelectedLayerId] = useState(null)
+  const [selectedHighlightId, setSelectedHighlightId] = useState(null)
   const [activeTab, setActiveTab] = useState(null)
   const [viewMode, setViewMode] = useState('fit')
   const [showHint, setShowHint] = useState(false)
@@ -255,11 +280,34 @@ export default function App() {
     setSelectedLayerId(prev => prev === id ? null : prev)
   }, [setSettings])
 
+  // One updater for both layer kinds: the canvas drag handler doesn't care which
+  // array an id lives in, so route by whichever holds it.
   const updateTextLayer = useCallback((id, key, value) => {
+    setSettings(prev => (
+      (prev.highlightLayers ?? []).some(l => l.id === id)
+        ? { ...prev, highlightLayers: prev.highlightLayers.map(l => l.id === id ? { ...l, [key]: value } : l) }
+        : { ...prev, textLayers: prev.textLayers.map(l => l.id === id ? { ...l, [key]: value } : l) }
+    ))
+  }, [setSettings])
+
+  // Tapping a mark on the canvas selects it in whichever list it belongs to.
+  const selectLayerFromCanvas = useCallback((id) => {
+    if (String(id).startsWith('hl-')) { setSelectedHighlightId(id); setSelectedLayerId(null) }
+    else { setSelectedLayerId(id); setSelectedHighlightId(null) }
+  }, [])
+
+  const addHighlightLayer = useCallback(() => {
+    const id = `hl-${Date.now()}`
     setSettings(prev => ({
       ...prev,
-      textLayers: prev.textLayers.map(l => l.id === id ? { ...l, [key]: value } : l),
-    }))
+      highlightLayers: [...(prev.highlightLayers ?? []), DEFAULT_HIGHLIGHT(id, (prev.highlightLayers ?? []).length)],
+    }), { immediate: true })
+    setSelectedHighlightId(id)
+  }, [setSettings])
+
+  const removeHighlightLayer = useCallback((id) => {
+    setSettings(prev => ({ ...prev, highlightLayers: (prev.highlightLayers ?? []).filter(l => l.id !== id) }), { immediate: true })
+    setSelectedHighlightId(prev => prev === id ? null : prev)
   }, [setSettings])
 
   const handlePickColor = useCallback((hex) => {
@@ -408,7 +456,7 @@ export default function App() {
               onPalette={handlePalette}
               onError={handleMediaError}
               selectedLayerId={selectedLayerId}
-              onSelectLayer={setSelectedLayerId}
+              onSelectLayer={selectLayerFromCanvas}
               onUpdateLayer={updateTextLayer}
               snapEnabled={snapEnabled}
               gridDivisions={gridDivisions}
@@ -494,6 +542,10 @@ export default function App() {
                   onAddLayer={addTextLayer}
                   onRemoveLayer={removeTextLayer}
                   onUpdateLayer={updateTextLayer}
+                  selectedHighlightId={selectedHighlightId}
+                  onSelectHighlight={setSelectedHighlightId}
+                  onAddHighlight={addHighlightLayer}
+                  onRemoveHighlight={removeHighlightLayer}
                   snapEnabled={snapEnabled}
                   onSnapToggle={() => setSnapEnabled(s => !s)}
                   gridDivisions={gridDivisions}

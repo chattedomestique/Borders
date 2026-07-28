@@ -321,6 +321,17 @@
 }
 
 /* ── Custom Color Row ── */
+/* Ink dot on a highlight layer chip, so marks are identifiable at a glance. */
+.controls__markdot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: baseline;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+}
+
 /* ── Suggested border swatches (palette from the photo) ── */
 .controls__swatch-head { padding-bottom: 0; align-items: center; }
 /* Compact "pick from photo" tool that lives in the accents header. */
