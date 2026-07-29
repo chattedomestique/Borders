@@ -154,7 +154,11 @@ export default function App() {
     const root = appRef.current
     if (!el || !root) return
     const ro = new ResizeObserver(entries => {
-      root.style.setProperty('--overlay-h', `${Math.round(entries[0].contentRect.height)}px`)
+      const h = `${Math.round(entries[0].contentRect.height)}px`
+      root.style.setProperty('--overlay-h', h)
+      // Also on :root — portalled overlays (the parameter picker) live outside
+      // .app and would otherwise fall back to a wrong default and overrun the dock.
+      document.documentElement.style.setProperty('--overlay-h', h)
     })
     ro.observe(el)
     return () => ro.disconnect()

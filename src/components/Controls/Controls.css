@@ -17,17 +17,10 @@
 .controls__section--dock {
   padding: 8px 16px 12px;
   gap: 8px;
-  min-height: 188px;
+  /* Sized for the one-line parameter strip. Kept as a floor (not a fixed
+     height) so switching sub-tabs never resizes the photo above. */
+  min-height: 132px;
 }
-.controls__frost { display: flex; flex-direction: column; gap: 2px; }
-.controls__frost-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2px 14px;
-  margin-top: 4px;
-}
-.controls__frost-cell { display: flex; flex-direction: column; }
-.controls__frost-cell input[type="range"] { margin: 2px 0 2px; height: 5px; }
 
 .controls__divider {
   height: 1px;
@@ -395,57 +388,89 @@
 .addsheet__btn--ghost { background: none; color: var(--ink-3); font-weight: 600; }
 .addsheet__btn:active { transform: scale(0.98); }
 
-/* ── Parameter list: one slider open at a time (Snapseed model) ── */
-.controls__params {
-  display: flex;
-  flex-direction: column;
-  /* The collapsed list scrolls internally rather than growing the dock, so the
-     photo above keeps its height no matter how many parameters a panel has. */
-  max-height: min(31dvh, 260px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-/* One parameter open → only it is rendered, so no scroller is needed. */
-.controls__params--focused { max-height: none; overflow: visible; }
-.controls__param + .controls__param { border-top: 1px solid var(--border); }
-.controls__param-head {
-  width: 100%;
-  min-height: var(--touch-min, 44px);
+/* ── Parameter control strip: one parameter, one line (Snapseed model) ── */
+.paramstrip { display: flex; flex-direction: column; }
+.paramstrip__head {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 2px 2px;
+  min-height: var(--touch-min, 44px);
+}
+.paramstrip__pick {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--touch-min, 44px);
+  padding: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
   background: none;
   border: none;
   text-align: left;
   -webkit-tap-highlight-color: transparent;
 }
-.controls__param-label {
+.paramstrip__pick svg { color: var(--accent); flex: 0 0 auto; }
+.paramstrip__pick:active { opacity: 0.6; }
+.paramstrip__name {
   flex: 1 1 auto;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
   color: var(--ink);
 }
-.controls__param-value {
-  flex: 0 0 auto;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--accent);
-  background: var(--accent-subtle);
-  padding: 3px 10px;
-  border-radius: var(--r-pill);
-  letter-spacing: 0.02em;
+
+/* ── Parameter picker: floats over the photo, costs no layout ── */
+.parampick {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  /* Sit above the dock, over the image — never pushing it. */
+  bottom: var(--overlay-h, 96px);
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: stretch;
+  padding: 0 0 8px;
+  /* Dark enough for the row labels to clear contrast over a busy photo,
+     light enough that you still see what you're adjusting. */
+  background: linear-gradient(to bottom, rgba(20, 16, 12, 0.38), rgba(20, 16, 12, 0.66));
+  animation: parampick-in 0.14s ease;
 }
-.controls__param-chev {
-  flex: 0 0 auto;
-  color: var(--ink-3);
-  transition: transform var(--dur, 0.22s) var(--ease, ease);
+@keyframes parampick-in { from { opacity: 0; } to { opacity: 1; } }
+.parampick__rows {
+  width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  touch-action: none;   /* let a vertical drag pick a row instead of scrolling */
 }
-.controls__param--open .controls__param-chev { transform: rotate(180deg); color: var(--accent); }
-.controls__param--open .controls__param-label { color: var(--accent); }
-.controls__param-body { padding: 0 0 8px; }
-.controls__param-edit { display: flex; justify-content: flex-end; margin: -2px 0 6px; }
-@media (prefers-reduced-motion: reduce) { .controls__param-chev { transition: none; } }
+.parampick__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--touch-min, 44px);
+  padding: 10px 20px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  background: none;
+  border: none;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  -webkit-tap-highlight-color: transparent;
+}
+.parampick__row--on {
+  background: var(--accent);
+  color: #fff;
+  text-shadow: none;
+}
+.parampick__val { font-variant-numeric: tabular-nums; opacity: 0.95; }
+@media (prefers-reduced-motion: reduce) { .parampick { animation: none; } }
 
 /* Ink dot on a highlight layer chip, so marks are identifiable at a glance. */
 .controls__markdot {

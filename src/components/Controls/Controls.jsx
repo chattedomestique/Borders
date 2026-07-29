@@ -285,59 +285,123 @@ function AddLayerSheet({ title, layers, labelFor, dotFor, onDefault, onCopy, onC
 }
 
 /**
- * A Snapseed-style parameter list: every parameter is a compact row showing its
- * name and current value, and only the row you tap reveals a slider.
+ * The parameter picker overlay — Snapseed's list, floating over the photo.
  *
- * Snapseed's own model is vertical-swipe-to-pick-parameter, horizontal-drag-to-
- * set-value, precisely so sliders never cover the photo. Tapping a row is the
- * touch-web equivalent: discoverable, a real 44px target, and it keeps at most
- * ONE slider on screen — which is what actually buys back the image area.
+ * The whole point is that it costs ZERO permanent layout: it appears above the
+ * dock, over the image, only while you're choosing, then vanishes. That is the
+ * structural difference from a dock-resident list, and it's where the image area
+ * actually comes from.
  *
- * The open row's body carries the full EditableValue (± steppers + tap-to-type),
- * so nothing is lost by collapsing the rest.
+ * Selection works by tap OR by dragging through the rows and releasing on one
+ * (pointer capture keeps the drag alive across rows), mirroring Snapseed's
+ * vertical-swipe pick.
  */
-function ParamRows({ params, initialOpen = null }) {
-  const [openKey, setOpenKey] = useState(initialOpen)
-  const all = params.filter(Boolean)
-  // Once a parameter is open, the others fold away entirely: the dock shrinks to
-  // a single row plus its slider, which is where the image area actually comes
-  // back. Tapping the open row returns to the list.
-  const shown = openKey && all.some(p => p.key === openKey)
-    ? all.filter(p => p.key === openKey)
-    : all
-  return (
-    <div className={`controls__params${openKey ? ' controls__params--focused' : ''}`}>
-      {shown.map(p => {
-        const open = openKey === p.key
-        const display = p.format ? p.format(p.value) : `${p.value}${p.suffix ?? ''}`
-        return (
-          <div key={p.key} className={`controls__param${open ? ' controls__param--open' : ''}`}>
-            <button type="button" className="controls__param-head"
-              onClick={() => setOpenKey(open ? null : p.key)}
-              aria-expanded={open}>
-              <span className="controls__param-label">{p.label}</span>
-              {!open && <span className="controls__param-value">{display}</span>}
-              <svg className="controls__param-chev" width="13" height="13" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="6 9 12 15 18 9"/>
-              </svg>
+function ParamPicker({ params, currentKey, onPick, onClose }) {
+  const [hover, setHover] = useState(currentKey)
+  const rowsRef = useRef(null)
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); onClose() } }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  // Which row is under a given clientY (used while dragging through the list).
+  const keyAt = (clientY) => {
+    const el = rowsRef.current
+    if (!el) return null
+    for (const child of el.children) {
+      const r = child.getBoundingClientRect()
+      if (clientY >= r.top && clientY <= r.bottom) return child.dataset.key
+    }
+    return null
+  }
+
+  return createPortal(
+    <div className="parampick" role="dialog" aria-modal="true" aria-label="Choose parameter"
+      onPointerDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="parampick__rows" ref={rowsRef}
+        onPointerMove={(e) => { if (e.buttons) { const k = keyAt(e.clientY); if (k) setHover(k) } }}
+        onPointerUp={(e) => { const k = keyAt(e.clientY); if (k) { onPick(k); onClose() } }}>
+        {params.map(p => {
+          const on = hover === p.key
+          return (
+            <button key={p.key} data-key={p.key} type="button"
+              className={`parampick__row${on ? ' parampick__row--on' : ''}`}
+              aria-current={p.key === currentKey}
+              onClick={() => { onPick(p.key); onClose() }}>
+              <span className="parampick__label">{p.label}</span>
+              <span className="parampick__val">{p.format ? p.format(p.value) : `${p.value}${p.suffix ?? ''}`}</span>
             </button>
-            {open && (
-              <div className="controls__param-body">
-                <div className="controls__param-edit">
-                  <EditableValue value={p.value} min={p.min} max={p.max} step={p.step ?? 1}
-                    suffix={p.suffix} format={p.format} label={p.label} onChange={p.onChange} />
-                </div>
-                <Slider min={p.min} max={p.max} step={p.step ?? 1} def={p.def}
-                  value={p.value} on={p.onChange} aria-label={p.label} />
-              </div>
-            )}
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+/**
+ * One parameter, one line — Snapseed's control strip.
+ *
+ * Permanently on screen: the parameter's name (with an up/down chevron marking
+ * it as the picker affordance), its value with ± steppers and tap-to-type, and
+ * the slider beneath. Every OTHER parameter lives in a transient overlay that
+ * costs no layout, so the dock stays the same small height no matter how many
+ * parameters a panel has — which is what keeps the photo visible.
+ *
+ * The picker is opened by tapping the name, or by swiping up from it. The strip
+ * is the gesture surface rather than the image, so the canvas keeps pan, pinch,
+ * layer-drag and eyedropper untouched.
+ */
+function ParamStrip({ params }) {
+  const all = params.filter(Boolean)
+  const [key, setKey] = useState(all[0]?.key)
+  const [pickOpen, setPickOpen] = useState(false)
+  const swipe = useRef(null)
+
+  const cur = all.find(p => p.key === key) ?? all[0]
+  if (!cur) return null
+  const multi = all.length > 1
+
+  return (
+    <div className="paramstrip">
+      <div className="paramstrip__head">
+        {multi ? (
+          <button type="button" className="paramstrip__pick"
+            onPointerDown={(e) => { swipe.current = { y: e.clientY, fired: false } }}
+            onPointerMove={(e) => {
+              const s = swipe.current
+              if (s && !s.fired && s.y - e.clientY > 8) { s.fired = true; setPickOpen(true) }
+            }}
+            onPointerUp={() => { swipe.current = null }}
+            onClick={() => { if (!pickOpen) setPickOpen(true) }}
+            aria-haspopup="dialog" aria-expanded={pickOpen}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="7 14 12 19 17 14"/><polyline points="7 10 12 5 17 10"/>
+            </svg>
+            {cur.label}
+          </button>
+        ) : (
+          <span className="paramstrip__name">{cur.label}</span>
+        )}
+        <EditableValue value={cur.value} min={cur.min} max={cur.max} step={cur.step ?? 1}
+          suffix={cur.suffix} format={cur.format} label={cur.label} onChange={cur.onChange} />
+      </div>
+      <Slider min={cur.min} max={cur.max} step={cur.step ?? 1} def={cur.def}
+        value={cur.value} on={cur.onChange} aria-label={cur.label} />
+
+      {pickOpen && (
+        <ParamPicker params={all} currentKey={key}
+          onPick={setKey} onClose={() => setPickOpen(false)} />
+      )}
     </div>
   )
 }
+
+// Call sites pass `params`; the strip is a drop-in for the old row list.
+const ParamRows = ParamStrip
 
 // A labelled grid of tappable border-colour suggestions (one harmony group).
 function SwatchGroup({ title, hint, action, items, bgMode, bgColor, onApply }) {
@@ -571,43 +635,22 @@ function BgControls({ settings, onUpdate, pickMode, onPickMode, borderSuggestion
       )}
 
       {sub === 'frosted' && (
-        <div className="controls__frost">
-          <div className="controls__row"><label className="controls__label" htmlFor="blur-slider">Blur</label>
-            <EditableValue value={blurAmount} min={10} max={240} step={2} suffix="px" label="Blur"
-              onChange={v => onUpdate('blurAmount', v)} /></div>
-          <Slider id="blur-slider" min={10} max={240} step={2} def={60}
-            value={blurAmount} on={v => onUpdate('blurAmount', v)} />
-          <div className="controls__frost-grid">
-            <div className="controls__frost-cell">
-              <div className="controls__row"><label className="controls__label">Bright</label>
-                <EditableValue value={frostBrightness} min={-100} max={200} label="Brightness"
-                  format={v => `${v > 0 ? `+${v}` : v}`} onChange={v => onUpdate('frostBrightness', v)} /></div>
-              <Slider min={-100} max={200} step={1} def={-15}
-                value={frostBrightness} on={v => onUpdate('frostBrightness', v)} />
-            </div>
-            <div className="controls__frost-cell">
-              <div className="controls__row"><label className="controls__label">Contrast</label>
-                <EditableValue value={frostContrast} min={-100} max={200} label="Contrast"
-                  format={v => `${v > 0 ? `+${v}` : v}`} onChange={v => onUpdate('frostContrast', v)} /></div>
-              <Slider min={-100} max={200} step={1} def={0}
-                value={frostContrast} on={v => onUpdate('frostContrast', v)} />
-            </div>
-            <div className="controls__frost-cell">
-              <div className="controls__row"><label className="controls__label">Satur.</label>
-                <EditableValue value={frostSaturation} min={-100} max={300} label="Saturation"
-                  format={v => `${v > 0 ? `+${v}` : v}`} onChange={v => onUpdate('frostSaturation', v)} /></div>
-              <Slider min={-100} max={300} step={1} def={60}
-                value={frostSaturation} on={v => onUpdate('frostSaturation', v)} />
-            </div>
-            <div className="controls__frost-cell">
-              <div className="controls__row"><label className="controls__label">Vibrance</label>
-                <EditableValue value={frostVibrance} min={0} max={200} label="Vibrance"
-                  format={v => v === 0 ? 'Off' : `+${v}`} onChange={v => onUpdate('frostVibrance', v)} /></div>
-              <Slider min={0} max={200} step={1} def={0}
-                value={frostVibrance} on={v => onUpdate('frostVibrance', v)} />
-            </div>
-          </div>
-        </div>
+        <ParamRows params={[
+          { key: 'blur', label: 'Blur', suffix: 'px', min: 10, max: 240, step: 2, def: 60,
+            value: blurAmount, onChange: v => onUpdate('blurAmount', v) },
+          { key: 'bright', label: 'Brightness', min: -100, max: 200, step: 1, def: -15,
+            format: v => `${v > 0 ? `+${v}` : v}`,
+            value: frostBrightness, onChange: v => onUpdate('frostBrightness', v) },
+          { key: 'contrast', label: 'Contrast', min: -100, max: 200, step: 1, def: 0,
+            format: v => `${v > 0 ? `+${v}` : v}`,
+            value: frostContrast, onChange: v => onUpdate('frostContrast', v) },
+          { key: 'satur', label: 'Saturation', min: -100, max: 300, step: 1, def: 60,
+            format: v => `${v > 0 ? `+${v}` : v}`,
+            value: frostSaturation, onChange: v => onUpdate('frostSaturation', v) },
+          { key: 'vibrance', label: 'Vibrance', min: 0, max: 200, step: 1, def: 0,
+            format: v => v === 0 ? 'Off' : `+${v}`,
+            value: frostVibrance, onChange: v => onUpdate('frostVibrance', v) },
+        ]} />
       )}
     </section>
   )
