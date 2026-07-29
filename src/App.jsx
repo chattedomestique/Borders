@@ -266,13 +266,20 @@ export default function App() {
     setSettings(prev => ({ ...prev, [key]: value }))
   }, [setSettings])
 
-  const addTextLayer = useCallback(() => {
+  // `sourceId` clones an existing layer's settings (everything but its identity,
+  // its words, and its exact position — a clone stacked pixel-perfectly on the
+  // original just looks broken).
+  const addTextLayer = useCallback((sourceId) => {
     const id = `text-${Date.now()}`
-    setSettings(prev => ({
-      ...prev,
-      textLayers: [...prev.textLayers, DEFAULT_LAYER(id, prev.textLayers.length)],
-    }), { immediate: true })
+    setSettings(prev => {
+      const src = sourceId ? prev.textLayers.find(l => l.id === sourceId) : null
+      const layer = src
+        ? { ...src, id, content: '', y: Math.min(0.95, (src.y ?? 0.5) + 0.08) }
+        : DEFAULT_LAYER(id, prev.textLayers.length)
+      return { ...prev, textLayers: [...prev.textLayers, layer] }
+    }, { immediate: true })
     setSelectedLayerId(id)
+    setSelectedHighlightId(null)
   }, [setSettings])
 
   const removeTextLayer = useCallback((id) => {
@@ -296,13 +303,18 @@ export default function App() {
     else { setSelectedLayerId(id); setSelectedHighlightId(null) }
   }, [])
 
-  const addHighlightLayer = useCallback(() => {
+  const addHighlightLayer = useCallback((sourceId) => {
     const id = `hl-${Date.now()}`
-    setSettings(prev => ({
-      ...prev,
-      highlightLayers: [...(prev.highlightLayers ?? []), DEFAULT_HIGHLIGHT(id, (prev.highlightLayers ?? []).length)],
-    }), { immediate: true })
+    setSettings(prev => {
+      const list = prev.highlightLayers ?? []
+      const src = sourceId ? list.find(l => l.id === sourceId) : null
+      const layer = src
+        ? { ...src, id, y: Math.min(0.95, (src.y ?? 0.5) + 0.09) }
+        : DEFAULT_HIGHLIGHT(id, list.length)
+      return { ...prev, highlightLayers: [...list, layer] }
+    }, { immediate: true })
     setSelectedHighlightId(id)
+    setSelectedLayerId(null)
   }, [setSettings])
 
   const removeHighlightLayer = useCallback((id) => {

@@ -248,6 +248,97 @@ function EditableValue({ value, min, max, step = 1, onChange, format, suffix = '
   )
 }
 
+/**
+ * Asked when adding a layer while others already exist: start from defaults, or
+ * clone an existing layer's settings. Cloning is the common case once you've
+ * dialled a look in — retyping a dozen sliders to match is the tedious path.
+ */
+function AddLayerSheet({ title, layers, labelFor, dotFor, onDefault, onCopy, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); onClose() } }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return createPortal(
+    <div className="addsheet" role="dialog" aria-modal="true" aria-label={title}
+      onPointerDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="addsheet__card">
+        <div className="addsheet__title">{title}</div>
+        <button className="addsheet__btn addsheet__btn--primary" onClick={onDefault}>
+          Default settings
+        </button>
+        <div className="addsheet__sep">or copy settings from</div>
+        <div className="addsheet__list">
+          {layers.map((l, i) => (
+            <button key={l.id} className="addsheet__item" onClick={() => onCopy(l.id)}>
+              {dotFor && <span className="controls__markdot" style={{ background: dotFor(l) }} aria-hidden="true" />}
+              {labelFor(l, i)}
+            </button>
+          ))}
+        </div>
+        <button className="addsheet__btn addsheet__btn--ghost" onClick={onClose}>Cancel</button>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+/**
+ * A Snapseed-style parameter list: every parameter is a compact row showing its
+ * name and current value, and only the row you tap reveals a slider.
+ *
+ * Snapseed's own model is vertical-swipe-to-pick-parameter, horizontal-drag-to-
+ * set-value, precisely so sliders never cover the photo. Tapping a row is the
+ * touch-web equivalent: discoverable, a real 44px target, and it keeps at most
+ * ONE slider on screen — which is what actually buys back the image area.
+ *
+ * The open row's body carries the full EditableValue (± steppers + tap-to-type),
+ * so nothing is lost by collapsing the rest.
+ */
+function ParamRows({ params, initialOpen = null }) {
+  const [openKey, setOpenKey] = useState(initialOpen)
+  const all = params.filter(Boolean)
+  // Once a parameter is open, the others fold away entirely: the dock shrinks to
+  // a single row plus its slider, which is where the image area actually comes
+  // back. Tapping the open row returns to the list.
+  const shown = openKey && all.some(p => p.key === openKey)
+    ? all.filter(p => p.key === openKey)
+    : all
+  return (
+    <div className={`controls__params${openKey ? ' controls__params--focused' : ''}`}>
+      {shown.map(p => {
+        const open = openKey === p.key
+        const display = p.format ? p.format(p.value) : `${p.value}${p.suffix ?? ''}`
+        return (
+          <div key={p.key} className={`controls__param${open ? ' controls__param--open' : ''}`}>
+            <button type="button" className="controls__param-head"
+              onClick={() => setOpenKey(open ? null : p.key)}
+              aria-expanded={open}>
+              <span className="controls__param-label">{p.label}</span>
+              {!open && <span className="controls__param-value">{display}</span>}
+              <svg className="controls__param-chev" width="13" height="13" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+            {open && (
+              <div className="controls__param-body">
+                <div className="controls__param-edit">
+                  <EditableValue value={p.value} min={p.min} max={p.max} step={p.step ?? 1}
+                    suffix={p.suffix} format={p.format} label={p.label} onChange={p.onChange} />
+                </div>
+                <Slider min={p.min} max={p.max} step={p.step ?? 1} def={p.def}
+                  value={p.value} on={p.onChange} aria-label={p.label} />
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // A labelled grid of tappable border-colour suggestions (one harmony group).
 function SwatchGroup({ title, hint, action, items, bgMode, bgColor, onApply }) {
   if (!items?.length) return null
@@ -544,22 +635,13 @@ function FrameControls({ borderThickness, cornerRadius, cropRatio = 'free', aspe
 
       {sub === 'border' && (
         <>
-          <div className="controls__row">
-            <label className="controls__label" htmlFor="border-slider">Border</label>
-            <EditableValue value={borderThickness} min={0} max={400} suffix="px" label="Border"
-              onChange={v => onUpdate('borderThickness', v)} />
-          </div>
-          <Slider id="border-slider" min={0} max={400} step={1} def={40}
-            value={borderThickness} on={v => onUpdate('borderThickness', v)} />
-
-          <div className="controls__row controls__row--spaced">
-            <label className="controls__label" htmlFor="radius-slider">Corners</label>
-            <EditableValue value={cornerRadius} min={0} max={100} label="Corners"
-              format={v => v === 0 ? 'Square' : v === 100 ? 'Round' : `${v}%`}
-              onChange={v => onUpdate('cornerRadius', v)} />
-          </div>
-          <Slider id="radius-slider" min={0} max={100} step={1} def={0}
-            value={cornerRadius} on={v => onUpdate('cornerRadius', v)} />
+          <ParamRows params={[
+            { key: 'border', label: 'Border', suffix: 'px', min: 0, max: 400, step: 1, def: 150,
+              value: borderThickness, onChange: v => onUpdate('borderThickness', v) },
+            { key: 'corners', label: 'Corners', min: 0, max: 100, step: 1, def: 0,
+              format: v => v === 0 ? 'Square' : v === 100 ? 'Round' : `${v}%`,
+              value: cornerRadius, onChange: v => onUpdate('cornerRadius', v) },
+          ]} />
 
           <div className="controls__row controls__row--spaced">
             <label className="controls__label">Show photo</label>
@@ -664,23 +746,14 @@ function GrainControls({ grainAmount, grainVariability, grainSpread, grainMonoch
 
       {sub === 'amount' && (
         <>
-          <div className="controls__row">
-            <label className="controls__label" htmlFor="grain-slider">Amount</label>
-            <EditableValue value={grainAmount} min={0} max={100} label="Amount"
-              format={v => v === 0 ? 'Off' : `${v}%`}
-              onChange={v => onUpdate('grainAmount', v)} />
-          </div>
-          <Slider id="grain-slider" min={0} max={100} step={1} def={0}
-            value={grainAmount} on={v => onUpdate('grainAmount', v)} />
-
-          <div className="controls__row controls__row--spaced">
-            <label className="controls__label" htmlFor="variability-slider">Variability</label>
-            <EditableValue value={grainVariability} min={0} max={100} label="Variability"
-              format={v => v === 0 ? 'Uniform' : `${v}%`}
-              onChange={v => onUpdate('grainVariability', v)} />
-          </div>
-          <Slider id="variability-slider" min={0} max={100} step={1} def={0}
-            value={grainVariability} on={v => onUpdate('grainVariability', v)} />
+          <ParamRows params={[
+            { key: 'amount', label: 'Amount', min: 0, max: 100, step: 1, def: 0,
+              format: v => v === 0 ? 'Off' : `${v}%`,
+              value: grainAmount, onChange: v => onUpdate('grainAmount', v) },
+            { key: 'variability', label: 'Variability', min: 0, max: 100, step: 1, def: 0,
+              format: v => v === 0 ? 'Uniform' : `${v}%`,
+              value: grainVariability, onChange: v => onUpdate('grainVariability', v) },
+          ]} />
         </>
       )}
 
@@ -739,6 +812,7 @@ const EDGE_HINT = {
 
 function MarkControls({ layers, selectedId, selected, ul, onAdd, onRemove, onSelect }) {
   const [sub, setSub] = useState('shape')
+  const [addOpen, setAddOpen] = useState(false)
 
   const noneHint = (
     <p className="controls__hint" style={{ textAlign: 'center', padding: '4px 0 2px' }}>
@@ -749,7 +823,8 @@ function MarkControls({ layers, selectedId, selected, ul, onAdd, onRemove, onSel
   return (
     <section className="controls__section controls__section--dock" aria-label="Highlight marks">
       <div className="controls__layer-strip">
-        <button className="controls__layer-add" onClick={onAdd} aria-label="Add highlight">
+        <button className="controls__layer-add"
+          onClick={() => layers.length ? setAddOpen(true) : onAdd()} aria-label="Add highlight">
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
             <path d="M7 2v10M2 7h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
           </svg>
@@ -780,30 +855,19 @@ function MarkControls({ layers, selectedId, selected, ul, onAdd, onRemove, onSel
       {!selected ? noneHint : (<>
         {sub === 'shape' && (
           <>
-            <p className="controls__hint" style={{ margin: '0 0 2px' }}>Drag the mark on the photo to move it.</p>
-            <div className="controls__row">
-              <label className="controls__label" htmlFor="mark-w">Width</label>
-              <EditableValue value={Math.round((selected.w ?? 0.62) * 100)} min={4} max={100} suffix="%"
-                label="Width" onChange={v => ul('w', v / 100)} />
-            </div>
-            <Slider id="mark-w" min={4} max={100} step={1} def={62}
-              value={Math.round((selected.w ?? 0.62) * 100)} on={v => ul('w', v / 100)} />
-
-            <div className="controls__row">
-              <label className="controls__label" htmlFor="mark-h">Height</label>
-              <EditableValue value={Math.round((selected.h ?? 0.075) * 1000) / 10} min={0.5} max={60} step={0.5}
-                suffix="%" label="Height" onChange={v => ul('h', v / 100)} />
-            </div>
-            <Slider id="mark-h" min={0.5} max={60} step={0.5} def={7.5}
-              value={Math.round((selected.h ?? 0.075) * 1000) / 10} on={v => ul('h', v / 100)} />
-
-            <div className="controls__row">
-              <label className="controls__label" htmlFor="mark-angle">Angle</label>
-              <EditableValue value={selected.angle ?? 0} min={-45} max={45} suffix="°"
-                label="Angle" onChange={v => ul('angle', v)} />
-            </div>
-            <Slider id="mark-angle" min={-45} max={45} step={1} def={0}
-              value={selected.angle ?? 0} on={v => ul('angle', v)} />
+            <p className="controls__hint" style={{ margin: '0 0 2px' }}>Drag the mark on the photo, or tap a value.</p>
+            <ParamRows params={[
+              { key: 'w', label: 'Width', suffix: '%', min: 4, max: 100, step: 1, def: 62,
+                value: Math.round((selected.w ?? 0.62) * 100), onChange: v => ul('w', v / 100) },
+              { key: 'h', label: 'Height', suffix: '%', min: 0.5, max: 60, step: 0.5, def: 7.5,
+                value: Math.round((selected.h ?? 0.075) * 1000) / 10, onChange: v => ul('h', v / 100) },
+              { key: 'x', label: 'Position X', suffix: '%', min: 0, max: 100, step: 1, def: 50,
+                value: Math.round((selected.x ?? 0.5) * 100), onChange: v => ul('x', v / 100) },
+              { key: 'y', label: 'Position Y', suffix: '%', min: 0, max: 100, step: 1, def: 50,
+                value: Math.round((selected.y ?? 0.5) * 100), onChange: v => ul('y', v / 100) },
+              { key: 'angle', label: 'Angle', suffix: '°', min: -45, max: 45, step: 1, def: 0,
+                value: selected.angle ?? 0, onChange: v => ul('angle', v) },
+            ]} />
           </>
         )}
 
@@ -845,43 +909,24 @@ function MarkControls({ layers, selectedId, selected, ul, onAdd, onRemove, onSel
             </div>
             <p className="controls__hint" style={{ margin: '0 0 2px' }}>{EDGE_HINT[selected.edge ?? 'marker']}</p>
 
-            {(selected.edge ?? 'marker') !== 'clean' && (
-              <>
-                <div className="controls__row">
-                  <label className="controls__label" htmlFor="mark-edge-amt">Amount</label>
-                  <EditableValue value={selected.edgeAmount ?? 45} min={0} max={100} suffix="%"
-                    label="Edge amount" onChange={v => ul('edgeAmount', v)} />
-                </div>
-                <Slider id="mark-edge-amt" min={0} max={100} step={1} def={45}
-                  value={selected.edgeAmount ?? 45} on={v => ul('edgeAmount', v)} />
-              </>
-            )}
-
-            <div className="controls__divider controls__divider--inset"/>
-
-            <div className="controls__row">
-              <label className="controls__label" htmlFor="mark-grain">Grain</label>
-              <EditableValue value={selected.grain ?? 0} min={0} max={100}
-                format={v => v === 0 ? 'Off' : `${v}%`} label="Grain" onChange={v => ul('grain', v)} />
-            </div>
-            <Slider id="mark-grain" min={0} max={100} step={1} def={0}
-              value={selected.grain ?? 0} on={v => ul('grain', v)} />
+            <ParamRows params={[
+              (selected.edge ?? 'marker') !== 'clean' && {
+                key: 'edgeAmount', label: 'Edge amount', suffix: '%', min: 0, max: 100, step: 1, def: 45,
+                value: selected.edgeAmount ?? 45, onChange: v => ul('edgeAmount', v) },
+              { key: 'grain', label: 'Grain', min: 0, max: 100, step: 1, def: 0,
+                format: v => v === 0 ? 'Off' : `${v}%`,
+                value: selected.grain ?? 0, onChange: v => ul('grain', v) },
+              (selected.grain ?? 0) > 0 && {
+                key: 'grainSize', label: 'Grain size', min: 0, max: 100, step: 1, def: 30,
+                value: selected.grainSize ?? 30, onChange: v => ul('grainSize', v) },
+            ]} />
 
             {(selected.grain ?? 0) > 0 && (
-              <>
-                <div className="controls__row">
-                  <label className="controls__label" htmlFor="mark-grain-size">Grain size</label>
-                  <EditableValue value={selected.grainSize ?? 30} min={0} max={100}
-                    label="Grain size" onChange={v => ul('grainSize', v)} />
-                </div>
-                <Slider id="mark-grain-size" min={0} max={100} step={1} def={30}
-                  value={selected.grainSize ?? 30} on={v => ul('grainSize', v)} />
-                <div className="controls__row controls__row--spaced">
-                  <label className="controls__label">Dissolve</label>
-                  <Toggle on={!!selected.grainDissolve} onChange={v => ul('grainDissolve', v)}
-                    label="Toggle dissolve grain"/>
-                </div>
-              </>
+              <div className="controls__row controls__row--spaced">
+                <label className="controls__label">Dissolve</label>
+                <Toggle on={!!selected.grainDissolve} onChange={v => ul('grainDissolve', v)}
+                  label="Toggle dissolve grain"/>
+              </div>
             )}
           </>
         )}
@@ -898,36 +943,29 @@ function MarkControls({ layers, selectedId, selected, ul, onAdd, onRemove, onSel
             </p>
 
             {(selected.texture ?? 'none') === 'riso' && (
-              <>
-                <div className="controls__row">
-                  <label className="controls__label" htmlFor="riso-scale">Dot size</label>
-                  <EditableValue value={selected.risoScale ?? 40} min={0} max={100}
-                    label="Dot size" onChange={v => ul('risoScale', v)} />
-                </div>
-                <Slider id="riso-scale" min={0} max={100} step={1} def={40}
-                  value={selected.risoScale ?? 40} on={v => ul('risoScale', v)} />
-
-                <div className="controls__row">
-                  <label className="controls__label" htmlFor="riso-angle">Screen angle</label>
-                  <EditableValue value={selected.risoAngle ?? 45} min={0} max={90} suffix="°"
-                    label="Screen angle" onChange={v => ul('risoAngle', v)} />
-                </div>
-                <Slider id="riso-angle" min={0} max={90} step={1} def={45}
-                  value={selected.risoAngle ?? 45} on={v => ul('risoAngle', v)} />
-
-                <div className="controls__row">
-                  <label className="controls__label" htmlFor="riso-offset">Misregister</label>
-                  <EditableValue value={selected.risoOffset ?? 30} min={0} max={100}
-                    format={v => v === 0 ? 'Aligned' : `${v}%`} label="Misregister"
-                    onChange={v => ul('risoOffset', v)} />
-                </div>
-                <Slider id="riso-offset" min={0} max={100} step={1} def={30}
-                  value={selected.risoOffset ?? 30} on={v => ul('risoOffset', v)} />
-              </>
+              <ParamRows params={[
+                { key: 'risoScale', label: 'Dot size', min: 0, max: 100, step: 1, def: 40,
+                  value: selected.risoScale ?? 40, onChange: v => ul('risoScale', v) },
+                { key: 'risoAngle', label: 'Screen angle', suffix: '°', min: 0, max: 90, step: 1, def: 45,
+                  value: selected.risoAngle ?? 45, onChange: v => ul('risoAngle', v) },
+                { key: 'risoOffset', label: 'Misregister', min: 0, max: 100, step: 1, def: 30,
+                  format: v => v === 0 ? 'Aligned' : `${v}%`,
+                  value: selected.risoOffset ?? 30, onChange: v => ul('risoOffset', v) },
+              ]} />
             )}
           </>
         )}
       </>)}
+
+      {addOpen && (
+        <AddLayerSheet
+          title="New highlight" layers={layers}
+          labelFor={(l, i) => `Mark ${i + 1}`} dotFor={l => l.color}
+          onDefault={() => { setAddOpen(false); onAdd() }}
+          onCopy={(id) => { setAddOpen(false); onAdd(id) }}
+          onClose={() => setAddOpen(false)}
+        />
+      )}
     </section>
   )
 }
@@ -941,6 +979,7 @@ const TEXT_SUBTABS = [
 
 function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLayer, onRemoveLayer, onSelectLayer }) {
   const [sub, setSub] = useState('content')
+  const [addOpen, setAddOpen] = useState(false)
 
   const noLayerHint = (
     <p className="controls__hint" style={{ textAlign: 'center', padding: '4px 0 2px' }}>
@@ -952,7 +991,8 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
     <section className="controls__section controls__section--dock" aria-label="Text layers">
       {/* Layer strip — always visible */}
       <div className="controls__layer-strip">
-        <button className="controls__layer-add" onClick={onAddLayer} aria-label="Add text layer">
+        <button className="controls__layer-add"
+          onClick={() => textLayers.length ? setAddOpen(true) : onAddLayer()} aria-label="Add text layer">
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
             <path d="M7 2v10M2 7h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
           </svg>
@@ -1049,48 +1089,25 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
               </div>
             </div>
 
-            <div className="controls__row">
-              <label className="controls__label" htmlFor="text-size-slider">Size</label>
-              <EditableValue value={selectedLayer.size} min={20} max={300} step={2} label="Size"
-                onChange={v => ul('size', v)} />
-            </div>
-            <Slider id="text-size-slider" min={20} max={300} step={2} def={80}
-              value={selectedLayer.size} on={v => ul('size', v)} />
-
-            <div className="controls__row">
-              <label className="controls__label" htmlFor="text-opacity-slider">Opacity</label>
-              <EditableValue value={selectedLayer.opacity} min={10} max={100} suffix="%" label="Opacity"
-                onChange={v => ul('opacity', v)} />
-            </div>
-            <Slider id="text-opacity-slider" min={10} max={100} step={1} def={100}
-              value={selectedLayer.opacity} on={v => ul('opacity', v)} />
-
-            <div className="controls__row">
-              <label className="controls__label" htmlFor="text-letter-spacing">Letter spacing</label>
-              <EditableValue value={selectedLayer.letterSpacing} min={-5} max={40} label="Letter spacing"
-                format={v => v === 0 ? 'Normal' : `${v}px`}
-                onChange={v => ul('letterSpacing', v)} />
-            </div>
-            <Slider id="text-letter-spacing" min={-5} max={40} step={1} def={0}
-              value={selectedLayer.letterSpacing} on={v => ul('letterSpacing', v)} />
-
-            <div className="controls__row">
-              <label className="controls__label" htmlFor="text-word-spacing">Word spacing</label>
-              <EditableValue value={selectedLayer.wordSpacing ?? 0} min={-10} max={80} label="Word spacing"
-                format={v => v === 0 ? 'Normal' : `${v}px`}
-                onChange={v => ul('wordSpacing', v)} />
-            </div>
-            <Slider id="text-word-spacing" min={-10} max={80} step={1} def={0}
-              value={selectedLayer.wordSpacing ?? 0} on={v => ul('wordSpacing', v)} />
-
-            <div className="controls__row">
-              <label className="controls__label" htmlFor="text-line-height">Line height</label>
-              <EditableValue value={selectedLayer.lineHeight ?? 1.3} min={0.8} max={2.5} step={0.05} label="Line height"
-                format={v => v.toFixed(2)}
-                onChange={v => ul('lineHeight', v)} />
-            </div>
-            <Slider id="text-line-height" min={0.8} max={2.5} step={0.05} def={1.3}
-              value={selectedLayer.lineHeight ?? 1.3} on={v => ul('lineHeight', v)} />
+            <ParamRows params={[
+              { key: 'size', label: 'Size', min: 20, max: 300, step: 2, def: 80,
+                value: selectedLayer.size, onChange: v => ul('size', v) },
+              { key: 'opacity', label: 'Opacity', suffix: '%', min: 10, max: 100, step: 1, def: 100,
+                value: selectedLayer.opacity, onChange: v => ul('opacity', v) },
+              { key: 'x', label: 'Position X', suffix: '%', min: 0, max: 100, step: 1, def: 50,
+                value: Math.round((selectedLayer.x ?? 0.5) * 100), onChange: v => ul('x', v / 100) },
+              { key: 'y', label: 'Position Y', suffix: '%', min: 0, max: 100, step: 1, def: 88,
+                value: Math.round((selectedLayer.y ?? 0.88) * 100), onChange: v => ul('y', v / 100) },
+              { key: 'letterSpacing', label: 'Letter spacing', min: -5, max: 40, step: 1, def: 0,
+                format: v => v === 0 ? 'Normal' : `${v}px`,
+                value: selectedLayer.letterSpacing, onChange: v => ul('letterSpacing', v) },
+              { key: 'wordSpacing', label: 'Word spacing', min: -10, max: 80, step: 1, def: 0,
+                format: v => v === 0 ? 'Normal' : `${v}px`,
+                value: selectedLayer.wordSpacing ?? 0, onChange: v => ul('wordSpacing', v) },
+              { key: 'lineHeight', label: 'Line height', min: 0.8, max: 2.5, step: 0.05, def: 1.3,
+                format: v => v.toFixed(2),
+                value: selectedLayer.lineHeight ?? 1.3, onChange: v => ul('lineHeight', v) },
+            ]} />
           </>
         ) : noLayerHint
       )}
@@ -1416,6 +1433,16 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
             )}
           </>
         ) : noLayerHint
+      )}
+
+      {addOpen && (
+        <AddLayerSheet
+          title="New text layer" layers={textLayers}
+          labelFor={(l, i) => (l.content?.trim() ? l.content.trim().slice(0, 18) : `Layer ${i + 1}`)}
+          onDefault={() => { setAddOpen(false); onAddLayer() }}
+          onCopy={(id) => { setAddOpen(false); onAddLayer(id) }}
+          onClose={() => setAddOpen(false)}
+        />
       )}
     </section>
   )
