@@ -1516,6 +1516,7 @@ const BorderCanvas = forwardRef(function BorderCanvas(
     cropMode = false, snapEnabled = true, gridDivisions = 3 }, ref
 ) {
   const canvasRef    = useRef(null)
+  const wrapRef      = useRef(null)
   const sourceRef    = useRef(null)
   const onPaletteRef = useRef(onPalette)
   const onErrorRef   = useRef(onError)
@@ -1608,10 +1609,23 @@ const BorderCanvas = forwardRef(function BorderCanvas(
   // Write the inspect transform straight to the element. It is a CSS transform
   // on the <canvas>, never a change to `settings`, so the rendered bitmap — and
   // therefore the export — is untouched.
-  const applyView = useCallback((z, x, y, rect) => {
-    // Clamp the pan so the scaled document can never be dragged off-screen.
-    const maxX = Math.max(0, (z - 1) / 2 * (rect?.width ?? 0))
-    const maxY = Math.max(0, (z - 1) / 2 * (rect?.height ?? 0))
+  // The document's on-screen box. All hit-testing and crop math measures this,
+  // not the container — the container now fills the viewport area so a zoom can
+  // use the whole screen, while the canvas alone is the document.
+  const mediaRect = useCallback(() => (
+    canvasRef.current?.getBoundingClientRect() ?? { left: 0, top: 0, width: 1, height: 1 }
+  ), [])
+
+  const applyView = useCallback((z, x, y) => {
+    // Clamp so the scaled document never pulls its own edge inside the frame —
+    // measured against the CONTAINER, which is why zooming can now fill the
+    // screen instead of staying boxed in the document's footprint.
+    const el = canvasRef.current
+    const box = wrapRef.current
+    const sw = (el?.offsetWidth ?? 0) * z
+    const sh = (el?.offsetHeight ?? 0) * z
+    const maxX = Math.max(0, (sw - (box?.clientWidth ?? 0)) / 2)
+    const maxY = Math.max(0, (sh - (box?.clientHeight ?? 0)) / 2)
     const next = {
       z,
       x: Math.max(-maxX, Math.min(maxX, x)),
@@ -1632,7 +1646,7 @@ const BorderCanvas = forwardRef(function BorderCanvas(
     if (pickModeRef.current) {
       const canvas = canvasRef.current
       if (!canvas) return
-      const rect = e.currentTarget.getBoundingClientRect()
+      const rect = canvas.getBoundingClientRect()
       const x = Math.max(0, Math.min(canvas.width  - 1, Math.round((e.clientX - rect.left) * canvas.width  / rect.width)))
       const y = Math.max(0, Math.min(canvas.height - 1, Math.round((e.clientY - rect.top)  * canvas.height / rect.height)))
       const [r, g, b] = canvas.getContext('2d').getImageData(x, y, 1, 1).data
@@ -1643,7 +1657,7 @@ const BorderCanvas = forwardRef(function BorderCanvas(
 
     // Text hit-test: find the topmost layer under the tap
     if (textBBoxesRef.current.size > 0) {
-      const rect = e.currentTarget.getBoundingClientRect()
+      const rect = mediaRect()
       const geo = geoRef.current
       const canvasX = (e.clientX - rect.left) * geo.totalW / rect.width
       const canvasY = (e.clientY - rect.top)  * geo.totalH / rect.height
@@ -1716,12 +1730,13 @@ const BorderCanvas = forwardRef(function BorderCanvas(
       const startDist = Math.hypot(b.x - a.x, b.y - a.y)
       const pcx = (a.x + b.x) / 2
       const pcy = (a.y + b.y) / 2
-      const rect = e.currentTarget.getBoundingClientRect()
+      const rect = mediaRect()
       if (!cropModeRef.current) {
         // Outside Crop a pinch inspects the document — it must not re-frame the
         // photo, because that would silently change what gets exported.
         const v = viewRef.current
-        pinchRef.current = { view: true, startDist, startZ: v.z, startVX: v.x, startVY: v.y, pcx, pcy, rect }
+        const box = wrapRef.current?.getBoundingClientRect() ?? rect
+        pinchRef.current = { view: true, startDist, startZ: v.z, startVX: v.x, startVY: v.y, pcx, pcy, rect: box }
         setIsDragging(true)
         return
       }
@@ -1736,7 +1751,7 @@ const BorderCanvas = forwardRef(function BorderCanvas(
         rect,
       }
     } else {
-      const rect = e.currentTarget.getBoundingClientRect()
+      const rect = mediaRect()
       if (!cropModeRef.current) {
         // Single finger pans the inspect view (only meaningful once zoomed in).
         const v = viewRef.current
@@ -1793,7 +1808,7 @@ const BorderCanvas = forwardRef(function BorderCanvas(
         const k = z / pinch.startZ
         const nx = ex - (ex - pinch.startVX) * k + (pcx - pinch.pcx)
         const ny = ey - (ey - pinch.startVY) * k + (pcy - pinch.pcy)
-        applyView(z, nx, ny, r)
+        applyView(z, nx, ny)
         return
       }
 
@@ -1815,7 +1830,7 @@ const BorderCanvas = forwardRef(function BorderCanvas(
       const drag = dragRef.current
       const v = viewRef.current
       if (v.z <= 1) return   // nothing to pan at 1x
-      applyView(v.z, drag.startVX + (e.clientX - drag.startX), drag.startVY + (e.clientY - drag.startY), drag.rect)
+      applyView(v.z, drag.startVX + (e.clientX - drag.startX), drag.startVY + (e.clientY - drag.startY))
 
     } else if (dragRef.current) {
       const drag = dragRef.current
@@ -1849,7 +1864,7 @@ const BorderCanvas = forwardRef(function BorderCanvas(
       const [rp] = [...pointersRef.current.values()]
       dragRef.current = {
         view: true, startX: rp.x, startY: rp.y, startVX: v.x, startVY: v.y,
-        rect: e.currentTarget.getBoundingClientRect(),
+        rect: mediaRect(),
       }
     } else if (pointersRef.current.size === 1) {
       // Transition from pinch back to drag with the remaining finger
@@ -1864,7 +1879,7 @@ const BorderCanvas = forwardRef(function BorderCanvas(
         startX: remainingPos.x, startY: remainingPos.y,
         startSrcLeft: srcLeft, startSrcTop: srcTop,
         viewW, viewH,
-        rect: e.currentTarget.getBoundingClientRect(),
+        rect: mediaRect(),
       }
     }
     if (pointersRef.current.size === 0) {
@@ -2147,6 +2162,7 @@ const BorderCanvas = forwardRef(function BorderCanvas(
   return (
     <div
       className="border-canvas"
+      ref={wrapRef}
       style={{ cursor, touchAction: 'none' }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -2160,36 +2176,40 @@ const BorderCanvas = forwardRef(function BorderCanvas(
       aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight + - 0"
       onKeyDown={handleCanvasKeyDown}
     >
-      <canvas
-        ref={canvasRef}
-        className={`border-canvas__el${ready ? ' border-canvas__el--ready' : ''}`}
+      <div
+        className="border-canvas__stage"
         style={view.z === 1 ? undefined : { transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})` }}
-        aria-hidden="true"
-      />
+      >
+        <canvas
+          ref={canvasRef}
+          className={`border-canvas__el${ready ? ' border-canvas__el--ready' : ''}`}
+          aria-hidden="true"
+        />
+        {snapEnabled && isDragging && ready && (
+          <svg className="border-canvas__grid" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            {Array.from({ length: Math.max(2, Math.min(12, gridDivisions)) - 1 }, (_, i) => {
+              const p = ((i + 1) / Math.max(2, Math.min(12, gridDivisions))) * 100
+              return (
+                <g key={i}>
+                  <line className="border-canvas__grid-line" x1={p} y1="0" x2={p} y2="100" />
+                  <line className="border-canvas__grid-line" x1="0" y1={p} x2="100" y2={p} />
+                </g>
+              )
+            })}
+            {snapGuides.x != null && (
+              <line className="border-canvas__snap-line" x1={snapGuides.x * 100} y1="0" x2={snapGuides.x * 100} y2="100" />
+            )}
+            {snapGuides.y != null && (
+              <line className="border-canvas__snap-line" x1="0" y1={snapGuides.y * 100} x2="100" y2={snapGuides.y * 100} />
+            )}
+          </svg>
+        )}
+      </div>
       {viewZoom > 1 && (
         <button className="border-canvas__zoombadge" onClick={resetView}
           aria-label={`Inspect zoom ${viewZoom.toFixed(1)} times — tap to reset`}>
           {viewZoom.toFixed(1)}× · Reset
         </button>
-      )}
-      {snapEnabled && isDragging && ready && (
-        <svg className="border-canvas__grid" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          {Array.from({ length: Math.max(2, Math.min(12, gridDivisions)) - 1 }, (_, i) => {
-            const p = ((i + 1) / Math.max(2, Math.min(12, gridDivisions))) * 100
-            return (
-              <g key={i}>
-                <line className="border-canvas__grid-line" x1={p} y1="0" x2={p} y2="100" />
-                <line className="border-canvas__grid-line" x1="0" y1={p} x2="100" y2={p} />
-              </g>
-            )
-          })}
-          {snapGuides.x != null && (
-            <line className="border-canvas__snap-line" x1={snapGuides.x * 100} y1="0" x2={snapGuides.x * 100} y2="100" />
-          )}
-          {snapGuides.y != null && (
-            <line className="border-canvas__snap-line" x1="0" y1={snapGuides.y * 100} x2="100" y2={snapGuides.y * 100} />
-          )}
-        </svg>
       )}
       {!ready && (
         <div className="border-canvas__loading" aria-hidden="true">

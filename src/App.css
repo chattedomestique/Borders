@@ -134,11 +134,20 @@
 }
 
 .app__canvas-wrap--fit .border-canvas {
-  /* Let the canvas-wrap height (not width) drive the layout in fit mode */
-  width: auto;
+  /* Fill the available area rather than hugging the image, so a zoomed document
+     can use the whole screen. The stage inside stays image-sized and centred. */
+  width: 100%;
   height: 100%;
-  max-width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
+}
+
+.app__canvas-wrap--fit .border-canvas__stage {
+  max-width: 100%;
+  max-height: 100%;
+  display: flex;
 }
 
 .app__canvas-wrap--fit .border-canvas__el {

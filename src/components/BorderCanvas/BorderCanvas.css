@@ -3,9 +3,19 @@
   position: relative;
   width: 100%;
   background: var(--border);
-  /* Clip the inspect zoom to the document's own frame: a scaled canvas would
-     otherwise spill past its box and show through the translucent dock. */
+  /* The container is the pointer surface AND the clip. It fills the available
+     area (see App.css fit rules) so an inspect zoom can use the whole screen;
+     clipping here still keeps the zoom out of the dock. */
   overflow: hidden;
+}
+
+/* The document itself. The inspect transform lives here, so the grid/guide
+   overlay inside it stays locked to the image instead of to the viewport. */
+.border-canvas__stage {
+  position: relative;
+  display: block;
+  transform-origin: center center;
+  will-change: transform;
 }
 
 /* Visible focus ring for the keyboard pan/zoom path (§10.1). */
