@@ -1484,6 +1484,8 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const MAX_ZOOM = 6
+// Inspect zoom is display-only, so it can go further than the crop zoom.
+const MAX_VIEW_ZOOM = 8
 const SNAP_PX = 7   // how close (screen px) a drag must get to a target before it snaps
 
 // Snap `value` (normalized 0–1) to the nearest target within `threshold`.
@@ -1511,7 +1513,7 @@ function snapTargets(divisions, siblingPositions) {
 
 const BorderCanvas = forwardRef(function BorderCanvas(
   { media, settings, onUpdate, pickMode, onPickColor, onPalette, onError, selectedLayerId, onSelectLayer, onUpdateLayer,
-    snapEnabled = true, gridDivisions = 3 }, ref
+    cropMode = false, snapEnabled = true, gridDivisions = 3 }, ref
 ) {
   const canvasRef    = useRef(null)
   const sourceRef    = useRef(null)
@@ -1536,10 +1538,28 @@ const BorderCanvas = forwardRef(function BorderCanvas(
   const pinchRef      = useRef(null)       // pinch-zoom start state
   const dragRef       = useRef(null)       // single-pointer drag start state
   const lastTapRef    = useRef({ time: 0, x: 0, y: 0 })
+  const cropModeRef   = useRef(cropMode)
+  const viewRef       = useRef({ z: 1, x: 0, y: 0 })   // display-only inspect transform
   const [isDragging, setIsDragging] = useState(false)
   const [isDraggingText, setIsDraggingText] = useState(false)
   const [ready, setReady] = useState(false)
   const [snapGuides, setSnapGuides] = useState({ x: null, y: null })  // active guide lines (normalized 0–1)
+  // The inspect zoom is UI state, not document state: it never persists, never
+  // enters undo, and never reaches renderFrame — so it cannot affect the export.
+  const [view, setView] = useState({ z: 1, x: 0, y: 0 })
+  const viewZoom = view.z
+
+  // Entering Crop resets the inspect zoom: the crop gestures measure the
+  // element's rect, which a CSS transform would falsify. Synced during render
+  // (React-endorsed) rather than in an effect, so there's no extra paint.
+  const [prevCrop, setPrevCrop] = useState(cropMode)
+  if (cropMode !== prevCrop) {
+    setPrevCrop(cropMode)
+    // Compare against state, not the ref — reading a ref during render is the
+    // staleness bug the react-hooks/refs rule catches. The ref is re-synced by
+    // the mirroring effect below.
+    if (cropMode && view.z !== 1) setView({ z: 1, x: 0, y: 0 })
+  }
 
   // Mirror the latest props/settings into refs so the rAF loop, pointer
   // handlers, and the save path always read current values without re-binding.
@@ -1555,6 +1575,8 @@ const BorderCanvas = forwardRef(function BorderCanvas(
     onPickColorRef.current   = onPickColor
     onPaletteRef.current     = onPalette
     onErrorRef.current       = onError
+    cropModeRef.current      = cropMode
+    viewRef.current          = view
     pickModeRef.current      = pickMode
     onSelectLayerRef.current = onSelectLayer
     onUpdateLayerRef.current = onUpdateLayer
@@ -1582,6 +1604,28 @@ const BorderCanvas = forwardRef(function BorderCanvas(
   }, [stopLoop])
 
   // ── Pinch-to-zoom, drag-to-pan, double-tap-to-reset ──────────────────────────
+
+  // Write the inspect transform straight to the element. It is a CSS transform
+  // on the <canvas>, never a change to `settings`, so the rendered bitmap — and
+  // therefore the export — is untouched.
+  const applyView = useCallback((z, x, y, rect) => {
+    // Clamp the pan so the scaled document can never be dragged off-screen.
+    const maxX = Math.max(0, (z - 1) / 2 * (rect?.width ?? 0))
+    const maxY = Math.max(0, (z - 1) / 2 * (rect?.height ?? 0))
+    const next = {
+      z,
+      x: Math.max(-maxX, Math.min(maxX, x)),
+      y: Math.max(-maxY, Math.min(maxY, y)),
+    }
+    viewRef.current = next
+    setView(next)
+  }, [])
+
+  const resetView = useCallback(() => {
+    const next = { z: 1, x: 0, y: 0 }
+    viewRef.current = next
+    setView(next)
+  }, [])
 
   const handlePointerDown = useCallback((e) => {
     // Eye-dropper mode: sample the rendered canvas pixel, skip all pan/zoom logic
@@ -1639,9 +1683,15 @@ const BorderCanvas = forwardRef(function BorderCanvas(
       const now = Date.now()
       const last = lastTapRef.current
       if (now - last.time < 300 && Math.hypot(e.clientX - last.x, e.clientY - last.y) < 40) {
-        onUpdateRef.current?.('zoom', 1)
-        onUpdateRef.current?.('panX', 0.5)
-        onUpdateRef.current?.('panY', 0.5)
+        // In Crop, double-tap resets the photo's own framing; everywhere else it
+        // resets the inspect zoom, which is all that gesture can touch there.
+        if (cropModeRef.current) {
+          onUpdateRef.current?.('zoom', 1)
+          onUpdateRef.current?.('panX', 0.5)
+          onUpdateRef.current?.('panY', 0.5)
+        } else {
+          resetView()
+        }
         lastTapRef.current = { time: 0, x: 0, y: 0 }
         return
       }
@@ -1667,6 +1717,14 @@ const BorderCanvas = forwardRef(function BorderCanvas(
       const pcx = (a.x + b.x) / 2
       const pcy = (a.y + b.y) / 2
       const rect = e.currentTarget.getBoundingClientRect()
+      if (!cropModeRef.current) {
+        // Outside Crop a pinch inspects the document — it must not re-frame the
+        // photo, because that would silently change what gets exported.
+        const v = viewRef.current
+        pinchRef.current = { view: true, startDist, startZ: v.z, startVX: v.x, startVY: v.y, pcx, pcy, rect }
+        setIsDragging(true)
+        return
+      }
       // Convert pinch center to normalized position in media area, then to source coords
       const mx = Math.max(0, Math.min(1, ((pcx - rect.left) * geo.totalW / rect.width  - geo.offsetX) / geo.scaledW))
       const my = Math.max(0, Math.min(1, ((pcy - rect.top)  * geo.totalH / rect.height - geo.offsetY) / geo.scaledH))
@@ -1678,12 +1736,17 @@ const BorderCanvas = forwardRef(function BorderCanvas(
         rect,
       }
     } else {
-      // Single finger → drag to pan
       const rect = e.currentTarget.getBoundingClientRect()
-      dragRef.current = { startX: e.clientX, startY: e.clientY, startSrcLeft: srcLeft, startSrcTop: srcTop, viewW, viewH, rect }
+      if (!cropModeRef.current) {
+        // Single finger pans the inspect view (only meaningful once zoomed in).
+        const v = viewRef.current
+        dragRef.current = { view: true, startX: e.clientX, startY: e.clientY, startVX: v.x, startVY: v.y, rect }
+      } else {
+        dragRef.current = { startX: e.clientX, startY: e.clientY, startSrcLeft: srcLeft, startSrcTop: srcTop, viewW, viewH, rect }
+      }
     }
     setIsDragging(true)
-  }, [])
+  }, [resetView])
 
   const handlePointerMove = useCallback((e) => {
     // Text drag takes priority — don't update pointersRef so pinch stays inactive
@@ -1720,6 +1783,20 @@ const BorderCanvas = forwardRef(function BorderCanvas(
       const pcy = (a.y + b.y) / 2
       const pinch = pinchRef.current
 
+      if (pinch.view) {
+        const z = Math.max(1, Math.min(MAX_VIEW_ZOOM, pinch.startZ * currentDist / pinch.startDist))
+        // Anchor the pinch: keep whatever was under the fingers under them, and
+        // follow the centre as it moves so a two-finger drag also pans.
+        const r = pinch.rect
+        const ex = pinch.pcx - (r.left + r.width / 2)
+        const ey = pinch.pcy - (r.top + r.height / 2)
+        const k = z / pinch.startZ
+        const nx = ex - (ex - pinch.startVX) * k + (pcx - pinch.pcx)
+        const ny = ey - (ey - pinch.startVY) * k + (pcy - pinch.pcy)
+        applyView(z, nx, ny, r)
+        return
+      }
+
       const newZoom = Math.max(1, Math.min(MAX_ZOOM, pinch.startZoom * currentDist / pinch.startDist))
       const newViewW = geo.mediaW / newZoom
       const newViewH = geo.mediaH / newZoom
@@ -1733,6 +1810,12 @@ const BorderCanvas = forwardRef(function BorderCanvas(
       onUpdateRef.current?.('zoom', newZoom)
       onUpdateRef.current?.('panX', (newSrcLeft + newViewW / 2) / geo.srcW)
       onUpdateRef.current?.('panY', (newSrcTop  + newViewH / 2) / geo.srcH)
+
+    } else if (dragRef.current?.view) {
+      const drag = dragRef.current
+      const v = viewRef.current
+      if (v.z <= 1) return   // nothing to pan at 1x
+      applyView(v.z, drag.startVX + (e.clientX - drag.startX), drag.startVY + (e.clientY - drag.startY), drag.rect)
 
     } else if (dragRef.current) {
       const drag = dragRef.current
@@ -1752,7 +1835,7 @@ const BorderCanvas = forwardRef(function BorderCanvas(
       onUpdateRef.current?.('panX', panX)
       onUpdateRef.current?.('panY', panY)
     }
-  }, [])
+  }, [applyView])
 
   const handlePointerUp = useCallback((e) => {
     pointersRef.current.delete(e.pointerId)
@@ -1760,7 +1843,15 @@ const BorderCanvas = forwardRef(function BorderCanvas(
     if (pointersRef.current.size < 2) {
       pinchRef.current = null
     }
-    if (pointersRef.current.size === 1) {
+    if (pointersRef.current.size === 1 && !cropModeRef.current) {
+      // Outside Crop the remaining finger continues panning the inspect view.
+      const v = viewRef.current
+      const [rp] = [...pointersRef.current.values()]
+      dragRef.current = {
+        view: true, startX: rp.x, startY: rp.y, startVX: v.x, startVY: v.y,
+        rect: e.currentTarget.getBoundingClientRect(),
+      }
+    } else if (pointersRef.current.size === 1) {
       // Transition from pinch back to drag with the remaining finger
       const geo = geoRef.current
       const s = settingsRef.current
@@ -2072,8 +2163,15 @@ const BorderCanvas = forwardRef(function BorderCanvas(
       <canvas
         ref={canvasRef}
         className={`border-canvas__el${ready ? ' border-canvas__el--ready' : ''}`}
+        style={view.z === 1 ? undefined : { transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})` }}
         aria-hidden="true"
       />
+      {viewZoom > 1 && (
+        <button className="border-canvas__zoombadge" onClick={resetView}
+          aria-label={`Inspect zoom ${viewZoom.toFixed(1)} times — tap to reset`}>
+          {viewZoom.toFixed(1)}× · Reset
+        </button>
+      )}
       {snapEnabled && isDragging && ready && (
         <svg className="border-canvas__grid" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
           {Array.from({ length: Math.max(2, Math.min(12, gridDivisions)) - 1 }, (_, i) => {

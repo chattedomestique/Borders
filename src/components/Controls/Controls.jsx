@@ -664,8 +664,9 @@ const FRAME_SUBTABS = [
 ]
 
 function FrameControls({ borderThickness, cornerRadius, cropRatio = 'free', aspectMode = 'crop', showMedia, onUpdate,
-                         snapEnabled, onSnapToggle, gridDivisions, onGridDivisions }) {
-  const [sub, setSub] = useState('border')
+                         snapEnabled, onSnapToggle, gridDivisions, onGridDivisions,
+                         sub = 'border', onSub }) {
+  const setSub = onSub
   return (
     <section className="controls__section controls__section--dock" aria-label="Frame">
       <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }} role="tablist">
@@ -1498,6 +1499,7 @@ export default function Controls({
   borderSuggestions = [], onApplyBorderColor,
   selectedLayerId, onSelectLayer, onAddLayer, onRemoveLayer, onUpdateLayer,
   selectedHighlightId, onSelectHighlight, onAddHighlight, onRemoveHighlight,
+  frameSub = 'border', onFrameSub,
   snapEnabled = true, onSnapToggle, gridDivisions = 3, onGridDivisions,
 }) {
   if (!tab) return null
@@ -1524,7 +1526,8 @@ export default function Controls({
           borderThickness={borderThickness} cornerRadius={cornerRadius}
           cropRatio={cropRatio} aspectMode={aspectMode} showMedia={showMedia} onUpdate={onUpdate}
           snapEnabled={snapEnabled} onSnapToggle={onSnapToggle}
-          gridDivisions={gridDivisions} onGridDivisions={onGridDivisions} />
+          gridDivisions={gridDivisions} onGridDivisions={onGridDivisions}
+          sub={frameSub} onSub={onFrameSub} />
       )}
 
       {/* ── Background / border fill (sub-tabbed, dock-compact) ── */}

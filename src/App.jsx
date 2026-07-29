@@ -134,6 +134,7 @@ export default function App() {
   const [selectedLayerId, setSelectedLayerId] = useState(null)
   const [selectedHighlightId, setSelectedHighlightId] = useState(null)
   const [activeTab, setActiveTab] = useState(null)
+  const [frameSub, setFrameSub] = useState('border')
   const [viewMode, setViewMode] = useState('fit')
   const [showHint, setShowHint] = useState(false)
   const [snapEnabled, setSnapEnabled] = useState(() => {
@@ -471,6 +472,7 @@ export default function App() {
               onPickColor={handlePickColor}
               onPalette={handlePalette}
               onError={handleMediaError}
+              cropMode={activeTab === 'frame' && frameSub === 'crop'}
               selectedLayerId={selectedLayerId}
               onSelectLayer={selectLayerFromCanvas}
               onUpdateLayer={updateTextLayer}
@@ -562,6 +564,8 @@ export default function App() {
                   onSelectHighlight={setSelectedHighlightId}
                   onAddHighlight={addHighlightLayer}
                   onRemoveHighlight={removeHighlightLayer}
+                  frameSub={frameSub}
+                  onFrameSub={setFrameSub}
                   snapEnabled={snapEnabled}
                   onSnapToggle={() => setSnapEnabled(s => !s)}
                   gridDivisions={gridDivisions}
