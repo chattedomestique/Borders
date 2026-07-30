@@ -1761,7 +1761,7 @@ const BorderCanvas = forwardRef(function BorderCanvas(
       }
     }
     setIsDragging(true)
-  }, [resetView])
+  }, [resetView, mediaRect])
 
   const handlePointerMove = useCallback((e) => {
     // Text drag takes priority — don't update pointersRef so pinch stays inactive
@@ -1888,7 +1888,7 @@ const BorderCanvas = forwardRef(function BorderCanvas(
       setIsDraggingText(false)
       setSnapGuides({ x: null, y: null })
     }
-  }, [])
+  }, [mediaRect])
 
   // Load media
   useEffect(() => {
