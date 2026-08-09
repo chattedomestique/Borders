@@ -484,8 +484,13 @@ function ColorSliders({ hex, onColor }) {
     emit(nh)
   }
   const onHexInput = (v) => {
-    setHexDraft(v.replace(/[^0-9a-fA-F]/g, '').slice(0, 6))
     const norm = normalizeHex(v)
+    // A value carrying its own '#' arrived by paste, not by typing — the field
+    // renders the '#' as a separate span, so it can never be typed in. Take
+    // those whole, which expands shorthand ('#f0a' → ff00aa). Typed input is
+    // sanitised character by character instead, so '000' on the way to
+    // '00c2a8' isn't expanded to '000000' under the cursor.
+    setHexDraft(norm && v.includes('#') ? norm.slice(1) : v.replace(/[^0-9a-fA-F]/g, '').slice(0, 6))
     if (norm) { setHsl(hexToHsl(norm)); emit(norm) }
   }
   const copy = () => {
@@ -517,8 +522,10 @@ function ColorSliders({ hex, onColor }) {
       <div className="controls__hexrow">
         <span className="controls__hexhash" aria-hidden="true">#</span>
         <input className="controls__hexinput" value={hexDraft} onChange={e => onHexInput(e.target.value)}
-          spellCheck={false} autoCapitalize="none" autoCorrect="off" inputMode="text" maxLength={6}
+          spellCheck={false} autoCapitalize="none" autoCorrect="off" inputMode="text"
           aria-label="Hex color" />
+        {/* No maxLength: the browser applies it to the raw paste, so '#ff4d8d'
+            would arrive already cut to '#ff4d8'. onHexInput does the clamping. */}
         <button type="button" className="controls__hexcopy" onClick={copy}
           aria-label="Copy hex color">{copied ? 'Copied' : 'Copy'}</button>
       </div>
