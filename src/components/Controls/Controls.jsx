@@ -105,6 +105,14 @@ const TEXT_BG_MODES = [
   { id: 'rect', label: 'Box'  },
 ]
 
+// Auto ties every box to the line height, so the block is always one solid
+// slab. Manual scales off that auto box, which is how you pull the lines apart
+// into separate bars (or widen them into banners).
+const TEXT_BOX_SIZES = [
+  { id: 'auto',   label: 'Auto'   },
+  { id: 'manual', label: 'Manual' },
+]
+
 const ECHO_BLENDS = [
   { id: 'stack',   label: 'Stack'   },
   { id: 'screen',  label: 'Screen'  },
@@ -1218,6 +1226,33 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                 </div>
                 <Slider min={10} max={100} step={1} value={selectedLayer.bgOpacity} def={50}
                   on={v => ul('bgOpacity', v)} aria-label="Background opacity"/>
+
+                {/* Label and choice share a row, and the two sizes share one
+                    param strip — this panel is the tallest in the app and any
+                    row added here comes straight off the image. */}
+                <div className="controls__row controls__row--spaced" style={{ gap: 10 }}>
+                  <label className="controls__label">Box size</label>
+                  <div className="controls__seg controls__seg--fill" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}
+                    role="radiogroup" aria-label="Background box size">
+                    {TEXT_BOX_SIZES.map(m => {
+                      const active = (selectedLayer.boxSize ?? 'auto') === m.id
+                      return (
+                        <button key={m.id} role="radio" aria-checked={active}
+                          className={`controls__seg-btn${active ? ' controls__seg-btn--active' : ''}`}
+                          onClick={() => ul('boxSize', m.id)}>{m.label}</button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {(selectedLayer.boxSize ?? 'auto') === 'manual' && (
+                  <ParamRows params={[
+                    { key: 'boxHeight', label: 'Box height', suffix: '%', min: 20, max: 200, step: 1, def: 100,
+                      value: selectedLayer.boxHeight ?? 100, onChange: v => ul('boxHeight', v) },
+                    { key: 'boxWidth', label: 'Box width', suffix: '%', min: 20, max: 300, step: 1, def: 100,
+                      value: selectedLayer.boxWidth ?? 100, onChange: v => ul('boxWidth', v) },
+                  ]} />
+                )}
               </>
             )}
 

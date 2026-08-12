@@ -418,6 +418,7 @@ function paintBlock(ctx, layer, geom, px, blockCenterY, opts = {}) {
     bold = false, italic = false, letterSpacing = 0, wordSpacing = 0,
     shadow = false, stroke = false, strokeColor = '#000000', strokeWidth = 35,
     bg = 'none', bgColor = '#000000', bgOpacity = 50,
+    boxSize = 'auto', boxWidth = 100, boxHeight = 100,
   } = layer
   const { lines, lineHeight, blockH, isJustify, lineWidths, maxLineW, justifySpacing, canWordSpace } = geom
 
@@ -434,29 +435,44 @@ function paintBlock(ctx, layer, geom, px, blockCenterY, opts = {}) {
   const lineSpacing  = i => (justifySpacing[i] != null ? justifySpacing[i] : wordSpacing)
   const lineRendered = i => (justifySpacing[i] != null ? maxLineW : lineWidths[i])
 
-  // Per-line background
+  // Per-line background.
+  //
+  // Every box goes into ONE path and is filled ONCE. Filling them one at a time
+  // is what put a pale hairline between every line: two boxes that share an
+  // edge each cover the boundary pixel row partially, and at less than full
+  // opacity two partial composites never add back up to one full one — so the
+  // seam reads lighter than the fill at any line height. A single path is
+  // rasterised as a union, so touching boxes merge into solid colour and
+  // overlapping ones (box height over 100%) don't double-darken either.
   if (drawBg && bg !== 'none') {
     const pad = size * 0.28
+    // Auto keeps every box exactly one line tall, so the block stays solid no
+    // matter what the line height is. Manual scales off that same auto box,
+    // which is what lets you pull the boxes apart into separate bars.
+    const manual = boxSize === 'manual'
+    const wScale = manual ? boxWidth / 100 : 1
+    const hScale = manual ? boxHeight / 100 : 1
+    const path = new Path2D()
+    const rounded = typeof path.roundRect === 'function'
+    lines.forEach((line, i) => {
+      const lw = lineRendered(i)
+      const autoW = lw + pad * 2
+      const autoX = isJustify          ? boxLeft - pad
+                  : align === 'center' ? px - lw / 2 - pad
+                  : align === 'right'  ? px - lw - pad
+                  : px - pad
+      const rw = autoW * wScale
+      const rh = lineHeight * hScale
+      // Grow/shrink about the line's own centre so the text stays put.
+      const lx = autoX + autoW / 2 - rw / 2
+      const ly = startY + i * lineHeight - rh / 2
+      if (bg === 'pill' && rounded) path.roundRect(lx, ly, rw, rh, Math.min(rw, rh) / 2)
+      else path.rect(lx, ly, rw, rh)
+    })
     ctx.save()
     ctx.globalAlpha = (bgOpacity / 100) * alpha
     ctx.fillStyle = bgColor
-    lines.forEach((line, i) => {
-      const lw = lineRendered(i)
-      const lx = isJustify          ? boxLeft - pad
-               : align === 'center' ? px - lw / 2 - pad
-               : align === 'right'  ? px - lw - pad
-               : px - pad
-      const ly = startY + i * lineHeight - lineHeight / 2
-      const rw = lw + pad * 2
-      const rh = lineHeight
-      if (bg === 'pill') {
-        ctx.beginPath()
-        ctx.roundRect(lx, ly, rw, rh, rh / 2)
-        ctx.fill()
-      } else {
-        ctx.fillRect(lx, ly, rw, rh)
-      }
-    })
+    ctx.fill(path)
     ctx.restore()
   }
 
