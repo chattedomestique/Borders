@@ -10,6 +10,36 @@ import { hashNoise, fbm, seedFromId } from '../../noise'
 // on all four sides regardless of the media's aspect ratio.
 const OUT_SIZE = 1800
 
+// Export ceiling. The preview renders at OUT_SIZE because preview and export
+// used to share one canvas and every extra pixel cost interaction latency. The
+// export pass is a one-shot on its own canvas, so it can go as large as the
+// photo actually justifies — but not past what a canvas is guaranteed to hold.
+// 4096 edge / 16.7 Mpx area are the limits iOS Safari has always honoured;
+// going over doesn't throw, it hands back a blank canvas.
+const MAX_EXPORT_EDGE = 4096
+const MAX_EXPORT_AREA = 16777216
+
+/**
+ * How much bigger than the preview the export can usefully be.
+ *
+ * The honest number is "however many source pixels land in the media box,
+ * divided by the pixels the preview draws them into". Above 1 the preview is
+ * discarding detail; at 1 it is already 1:1 and there is nothing to gain, so we
+ * never upscale. Zoom counts, because zooming in uses fewer source pixels.
+ */
+function exportScaleFor(geo, settings) {
+  if (!geo?.scaledW || !geo?.scaledH || !geo?.totalW || !geo?.totalH) return 1
+  const zoom = settings?.zoom ?? 1
+  const native = Math.max(
+    (geo.mediaW / zoom) / geo.scaledW,
+    (geo.mediaH / zoom) / geo.scaledH,
+  )
+  const byEdge = Math.min(MAX_EXPORT_EDGE / geo.totalW, MAX_EXPORT_EDGE / geo.totalH)
+  const byArea = Math.sqrt(MAX_EXPORT_AREA / (geo.totalW * geo.totalH))
+  const s = Math.min(native, byEdge, byArea)
+  return Number.isFinite(s) && s > 1 ? s : 1
+}
+
 function sampleAverageColor(imageData) {
   const { data } = imageData
   let r = 0, g = 0, b = 0, count = 0
@@ -132,14 +162,16 @@ function applyVibrance(data, amount) {
   }
 }
 
-function drawFrostedBg(ctx, source, canvasW, canvasH, blurAmount, frostSettings, cache) {
+function drawFrostedBg(ctx, source, canvasW, canvasH, blurAmount, frostSettings, cache, renderScale = 1) {
   const { brightness = -15, contrast = 0, saturation = 60, vibrance = 0 } = frostSettings ?? {}
   const srcW = source.videoWidth ?? source.naturalWidth ?? canvasW
   const srcH = source.videoHeight ?? source.naturalHeight ?? canvasH
   const longest = Math.max(canvasW, canvasH)
 
-  // 240px on the longest side — good quality/speed balance (8× upscale max)
-  const SMALL = 240
+  // 240px on the longest side — good quality/speed balance (8× upscale max).
+  // The export pass raises it in step with the render scale, so the blur keeps
+  // the same apparent radius without being stretched from a thumbnail.
+  const SMALL = 240 * renderScale
   const scale = SMALL / longest
   const sw = Math.max(4, Math.round(canvasW * scale))
   const sh = Math.max(4, Math.round(canvasH * scale))
@@ -156,7 +188,7 @@ function drawFrostedBg(ctx, source, canvasW, canvasH, blurAmount, frostSettings,
   fc.drawImage(source, (sw - srcW * cs) / 2, (sh - srcH * cs) / 2, srcW * cs, srcH * cs)
 
   // 3 box-blur passes ≈ Gaussian; radius scales with blurAmount
-  const r = Math.max(2, Math.round(3 + (blurAmount - 10) * 9 / 110))
+  const r = Math.max(2, Math.round((3 + (blurAmount - 10) * 9 / 110) * renderScale))
   const id = fc.getImageData(0, 0, sw, sh)
   boxBlurPass(id.data, sw, sh, r)
   boxBlurPass(id.data, sw, sh, r)
@@ -574,12 +606,14 @@ function makeNoiseTile(cache, key, nw, nh, sigma, mono, animate, uniform) {
  * head/tail `axis` in buffer coordinates.
  */
 function applyTrailGrain(tb, cache, opts) {
-  const { amount, size, variability, mono, spread = 0, dissolve = false, axis, animate } = opts
+  const { amount, size, variability, mono, spread = 0, dissolve = false, axis, animate, scale = 1 } = opts
   if (!amount) return
   const w = tb.width, h = tb.height
   // Grain cell size in buffer px: Size 0 → per-pixel (~1px, a true 1:1 dither),
   // Size 100 → coarse (~16px clumps).
-  const cell = 1 + (Math.max(0, Math.min(100, size)) / 100) * 15
+  // ×scale keeps the speck size constant *relative to the mark*: the buffer
+  // grew with the render scale, so a fixed cell would read finer on export.
+  const cell = (1 + (Math.max(0, Math.min(100, size)) / 100) * 15) * scale
   const nw = Math.max(2, Math.round(w / cell))
   const nh = Math.max(2, Math.round(h / cell))
   const v = Math.max(0, Math.min(100, variability)) / 100
@@ -677,7 +711,7 @@ function paintTrailCopies(target, off, ox0, oy0, vx, vy, K, peak, gamma, dens, o
   target.restore()
 }
 
-function drawTextTrail(ctx, layer, geom, px, blockCenterY, cache, animate) {
+function drawTextTrail(ctx, layer, geom, px, blockCenterY, cache, animate, scale = 1) {
   const {
     size = 80, opacity = 100, align = 'center', stroke = false, strokeWidth = 35,
     motionAngle = 0, motionLength = 0, motionSpeed = 60,
@@ -762,7 +796,7 @@ function drawTextTrail(ctx, layer, geom, px, blockCenterY, cache, animate) {
     variability: trailGrainVariability, mono: trailGrainMono,
     spread: trailGrainSpread, dissolve: trailGrainDissolve,
     axis: { hx: headCx, hy: headCy, tx: headCx - vx, ty: headCy - vy },
-    animate,
+    animate, scale,
   })
 
   ctx.save()
@@ -1040,7 +1074,7 @@ function distanceField(mask, w, h, cache) {
  *
  * Pure JS on the alpha channel — no ctx.filter / SVG / WebGL.
  */
-function drawTextBlob(ctx, layer, geom, px, blockCenterY, cache, animate) {
+function drawTextBlob(ctx, layer, geom, px, blockCenterY, cache, animate, scale = 1) {
   const {
     size = 80, opacity = 100, align = 'center',
     blobDistance = 40, blobCurve = 30, blobColor = '#000000',
@@ -1121,7 +1155,7 @@ function drawTextBlob(ctx, layer, geom, px, blockCenterY, cache, animate) {
   if (blobGrain > 0) {
     applyTrailGrain(out, cache, {
       amount: blobGrain, size: blobGrainSize, variability: blobGrainRough,
-      mono: blobGrainMono, spread: 0, dissolve: blobGrainDissolve, animate,
+      mono: blobGrainMono, spread: 0, dissolve: blobGrainDissolve, animate, scale,
     })
   }
 
@@ -1172,7 +1206,7 @@ function roundedBoxSDF(lx, ly, hw, hh, r) {
  *   torn   — the contour displaced by coherent fBm noise, so it wanders like a
  *            paper tear, plus a sparse fibre fringe just past the edge.
  */
-function drawHighlightLayer(ctx, W, H, layer, bboxMap, cache) {
+function drawHighlightLayer(ctx, W, H, layer, bboxMap, cache, scale = 1) {
   const {
     id, x = 0.5, y = 0.5, w = 0.6, h = 0.08, angle = 0,
     color = '#ffe14d', opacity = 85, blend = 'multiply',
@@ -1194,7 +1228,9 @@ function drawHighlightLayer(ctx, W, H, layer, bboxMap, cache) {
   const reach = edge === 'torn' ? tearAmp * 0.75 : feather
   const P = Math.ceil(reach + 6)
   const bw = Math.ceil(rw) + P * 2, bh = Math.ceil(rh) + P * 2
-  if (bw <= 0 || bh <= 0 || bw > 6000 || bh > 6000) return
+  // Sanity cap on the scratch buffer, in step with the render scale (the
+  // geometry it guards is a fraction of the frame, which grew).
+  if (bw <= 0 || bh <= 0 || bw > 6000 * scale || bh > 6000 * scale) return
 
   if (!cache.hlBuf) cache.hlBuf = document.createElement('canvas')
   const buf = cache.hlBuf
@@ -1271,7 +1307,7 @@ function drawHighlightLayer(ctx, W, H, layer, bboxMap, cache) {
   if (grain > 0) {
     applyTrailGrain(buf, cache, {
       amount: grain, size: grainSize, variability: grainVariability,
-      mono: grainMono, dissolve: grainDissolve, spread: 0,
+      mono: grainMono, dissolve: grainDissolve, spread: 0, scale,
     })
   }
 
@@ -1302,7 +1338,20 @@ function drawHighlightLayer(ctx, W, H, layer, bboxMap, cache) {
   }
 }
 
-function drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache, animate) {
+// The settings a text layer carries in absolute document pixels. Everything
+// else is either a fraction of the frame (x/y), a multiplier (lineHeight) or a
+// percentage of the font size (strokeWidth, shadow, blob), so it needs no help.
+const TEXT_PX_KEYS = ['size', 'letterSpacing', 'wordSpacing', 'motionLength', 'echoSpacing', 'echoBlur']
+
+function scaleTextLayer(layer, scale) {
+  if (scale === 1) return layer
+  const out = { ...layer }
+  for (const k of TEXT_PX_KEYS) if (typeof out[k] === 'number') out[k] = out[k] * scale
+  return out
+}
+
+function drawTextLayer(ctx, totalW, totalH, srcLayer, bboxMap, cache, animate, scale = 1) {
+  const layer = scaleTextLayer(srcLayer, scale)
   const {
     id, content, align = 'center', x = 0.5, y = 0.88, opacity = 100,
     motionBlur = false, motionLength = 0, echo = false, echoCount = 0,
@@ -1323,7 +1372,7 @@ function drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache, animate) {
   // Hit-test bbox tracks the sharp text (not the trail) so dragging always grabs
   // the readable glyphs.
   if (bboxMap) {
-    const pad = 24
+    const pad = 24 * scale
     const boxLeft = blockLeftFor(align, geom.isJustify, px, maxLineW)
     bboxMap.set(id, {
       x: boxLeft - pad, y: cy - blockH / 2 - pad,
@@ -1334,13 +1383,13 @@ function drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache, animate) {
   // Echo ghosts furthest back, then the motion trail, then the blob stroke
   // hugging the glyphs, then the sharp text on top.
   if (echo && echoCount > 0 && cache) {
-    drawTextEcho(ctx, layer, geom, px, cy, cache)
+    drawTextEcho(ctx, layer, geom, px, cy, cache)   // no raster effects of its own
   }
   if (motionBlur && motionLength > 0 && cache) {
-    drawTextTrail(ctx, layer, geom, px, cy, cache, animate)
+    drawTextTrail(ctx, layer, geom, px, cy, cache, animate, scale)
   }
   if (blobStroke && cache) {
-    drawTextBlob(ctx, layer, geom, px, cy, cache, animate)
+    drawTextBlob(ctx, layer, geom, px, cy, cache, animate, scale)
   }
   paintBlock(ctx, layer, geom, px, cy, { drawBg: true, drawShadow: true, alpha: opacity / 100 })
   ctx.restore()
@@ -1350,8 +1399,12 @@ function drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache, animate) {
  * Core render. The border is added AROUND the scaled media so it is
  * always uniform on all four sides, regardless of aspect ratio.
  */
-function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
+function renderFrame(canvas, source, settings, cache, geoRef, bboxMap, scale = 1) {
   if (!canvas || !source) return
+  // `scale` multiplies the whole composition. 1 is the live preview; the export
+  // pass raises it until the photo is drawn at its own native resolution.
+  const S = Math.max(1, scale || 1)
+  const OUT = OUT_SIZE * S
   const { borderThickness, bgMode, bgColor = '#ffffff', blurAmount = 60, cornerRadius, cropRatio = 'free',
           aspectMode = 'crop', zoom = 1, panX = 0.5, panY = 0.5,
           showMedia = true, grainAmount = 0, grainVariability = 0, grainMonochrome = true, grainSpread = 0,
@@ -1362,7 +1415,7 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
   const srcW = source.videoWidth ?? source.naturalWidth ?? source.width ?? 1
   const srcH = source.videoHeight ?? source.naturalHeight ?? source.height ?? 1
 
-  const border = borderThickness
+  const border = borderThickness * S
   const hasRatio = cropRatio && cropRatio !== 'free'
   // "fit": the chosen ratio shapes the OUTPUT frame; the photo keeps its own
   // aspect and is matted (not cropped) inside, inset by >= the border.
@@ -1389,8 +1442,8 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
     // Output canvas takes the chosen aspect ratio (longest side = OUT_SIZE).
     const [tw, th] = cropRatio.split(':').map(Number)
     const frameRatio = tw / th
-    if (frameRatio >= 1) { totalW = OUT_SIZE; totalH = Math.round(OUT_SIZE / frameRatio) }
-    else { totalH = OUT_SIZE; totalW = Math.round(OUT_SIZE * frameRatio) }
+    if (frameRatio >= 1) { totalW = OUT; totalH = Math.round(OUT / frameRatio) }
+    else { totalH = OUT; totalW = Math.round(OUT * frameRatio) }
     // Contain-fit the photo (natural aspect) inside the frame minus the border on
     // every side — so the matte is >= border everywhere and exactly border on the
     // tight axis. If the border is too thick to leave room, the photo shrinks to 0.
@@ -1406,7 +1459,7 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
     offsetY = Math.round((totalH - scaledH) / 2)
   } else {
     // Crop / free: scale media so its longest side = OUT_SIZE, add a uniform border.
-    const mediaScale = OUT_SIZE / Math.max(mediaW, mediaH)
+    const mediaScale = OUT / Math.max(mediaW, mediaH)
     scaledW = Math.round(mediaW * mediaScale)
     scaledH = Math.round(mediaH * mediaScale)
     totalW = scaledW + border * 2
@@ -1426,7 +1479,7 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
   if (bgMode === 'frosted') {
     drawFrostedBg(ctx, source, totalW, totalH, blurAmount,
       { brightness: frostBrightness, contrast: frostContrast, saturation: frostSaturation, vibrance: frostVibrance },
-      cache)
+      cache, S)
   } else if (bgMode === 'color') {
     ctx.fillStyle = bgColor
     ctx.fillRect(0, 0, totalW, totalH)
@@ -1491,10 +1544,10 @@ function renderFrame(canvas, source, settings, cache, geoRef, bboxMap) {
 
   // 4. Highlight marks — over the photo, under the type. That order is the
   //    physical one: you highlight the page, then write on top of it.
-  highlightLayers.forEach(layer => drawHighlightLayer(ctx, totalW, totalH, layer, bboxMap, cache))
+  highlightLayers.forEach(layer => drawHighlightLayer(ctx, totalW, totalH, layer, bboxMap, cache, S))
 
   // 5. Text layers (drawn last, on top of everything)
-  textLayers.forEach(layer => drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache, isVideo))
+  textLayers.forEach(layer => drawTextLayer(ctx, totalW, totalH, layer, bboxMap, cache, isVideo, S))
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -2117,10 +2170,29 @@ const BorderCanvas = forwardRef(function BorderCanvas(
       // Ensure any custom fonts are loaded, then re-render so the export never
       // captures a fallback face.
       if (document.fonts) { try { await document.fonts.ready } catch { /* ignore */ } }
-      renderFrame(canvas, source, settingsRef.current, cacheRef.current, geoRef, null)
+
+      // Full-resolution pass. Rendered on its own canvas at its own scale, with
+      // its own cache, so the visible canvas never resizes under the user and
+      // the preview's effect buffers (sized for 1×) survive the export. Falls
+      // back to the preview canvas if the big allocation fails — better a
+      // preview-sized JPEG than no save at all.
+      const scale = exportScaleFor(geoRef.current, settingsRef.current)
+      let out = canvas
+      if (scale > 1.01) {
+        try {
+          const big = document.createElement('canvas')
+          renderFrame(big, source, settingsRef.current, {}, null, null, scale)
+          if (big.width > 0 && big.height > 0) out = big
+        } catch (e) {
+          console.warn('Full-resolution export failed, falling back to preview size:', e)
+        }
+      }
+      if (out === canvas) renderFrame(canvas, source, settingsRef.current, cacheRef.current, geoRef, null)
+
       // N4: JPEG, not PNG — a bordered photo is opaque, so there's no alpha to
-      // keep, and 0.92 JPEG is ~300 KB where the PNG is multiple MB.
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92))
+      // keep. 0.95 rather than 0.92: at full resolution the file is the point.
+      const blob = await new Promise(resolve => out.toBlob(resolve, 'image/jpeg', 0.95))
+      if (out !== canvas) { out.width = 0; out.height = 0 }   // release ~30 MB now
       if (!blob) return
 
       // N3: Web Share first (the iOS "Save Image" path); AbortError means the
