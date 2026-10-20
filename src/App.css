@@ -134,7 +134,8 @@
   padding-inline: max(var(--gutter), var(--safe-left, 0px)) max(var(--gutter), var(--safe-right, 0px));
   padding-block-end: max(var(--chrome-2), var(--safe-bottom, 0px));
   background: var(--canvas);
-  border-block-start: var(--bw) solid var(--line);
+  /* A divider, not a frame: the thin weight. */
+  border-block-start: var(--bw-thin) solid var(--line);
 }
 
 /* Sliding panel — the grid-rows trick gives a symmetric open / close. */
@@ -221,7 +222,19 @@
 
 /* ── Bottom row: the tool tray, the full width of the column ── */
 .app__tools { margin-block-start: var(--space-1); }
-.app__tray { inline-size: 100%; }
+/* The tray loses the toolbar's frame here: the rule above the dock already
+   says where the controls begin, and a box inside it was a third heavy line
+   around the same edge. */
+.app__tray {
+  inline-size: 100%;
+  border-width: 0;
+  padding-inline: 0;
+  background: transparent;
+}
+/* The tray runs closer to the screen's edges than the panels do: on a 320px
+   phone the gutters were the 4px between five whole tools and two-at-a-time
+   pages. */
+.app__tools { margin-inline: calc(var(--chrome-2) - var(--gutter)); }
 /* Five tools in a tray wider than they need: spread them so the row reads as
    one set rather than a set and a gap. While the toolbar script pages the
    list (a narrow phone), it does its own spreading, so this steps aside. */

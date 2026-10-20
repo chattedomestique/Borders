@@ -20,14 +20,17 @@ if (!existsSync(join(dist, 'core.min.css'))) {
 
 // Every element a Border Studio screen is built from.
 const ELEMENTS = ['button', 'card', 'toolbar', 'segmented', 'tabs', 'slider', 'appbar', 'chip',
-                  'swatch', 'dialog', 'spinner', 'switch', 'divider', 'field', 'input']
+                  'swatch', 'dialog', 'spinner', 'switch', 'divider', 'field', 'input', 'select']
 // The style guide's scripts that only measure layout. The ones that own state
 // (tabs, slider, chip, dialog) are left out on purpose: React owns that state,
 // and two owners of aria-selected fight.
 // 70-scrubber is here only because 71-toolbar calls SG.afterParse, which the
 // scrubber script defines; the manifest does not list it (an upstream gap). It
 // is inert without .scrubber elements.
-const SCRIPTS = ['44-segmented', '70-scrubber', '71-toolbar']
+// 42-chip: only its scrolling-row measure is used (the chip cut at the edge
+// shows 30-60% of itself, never a sliver). Its click handling is opt-in per
+// row (data-sg-chips), and no row opts in, so it owns no state here.
+const SCRIPTS = ['42-chip', '44-segmented', '70-scrubber', '71-toolbar']
 
 const css = resolve('src/vendor/styleguide')
 const js = resolve('public/sg')

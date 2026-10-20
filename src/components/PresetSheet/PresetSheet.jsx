@@ -23,9 +23,6 @@ export default function PresetSheet({ presets, hasLast, onSave, onLoad, onDelete
     <dialog ref={ref} className="dialog card presetsheet" aria-labelledby="presets-t" aria-describedby="presets-d">
       <header className="card__bar">
         <p className="card__label" id="presets-t">Presets</p>
-        <button className="card__ctl" type="button" onClick={onClose} aria-label="Close">
-          <Icon name="close" />
-        </button>
       </header>
       <div className="card__body presetsheet__body">
         <p className="card__text" id="presets-d">
@@ -63,6 +60,9 @@ export default function PresetSheet({ presets, hasLast, onSave, onLoad, onDelete
             ))}
           </ul>
         )}
+      </div>
+      <div className="dialog__actions">
+        <button className="btn" type="button" onClick={onClose}>Done</button>
       </div>
     </dialog>,
     document.body,

@@ -67,29 +67,26 @@
   margin-block: var(--space-1);
 }
 
-/* ── [−] value [+] beside a label ── */
-.controls__valuectl {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--chrome-2);
-  flex: 0 0 auto;
-}
-/* The readout is a button (tap to type a value), drawn as text: it is a
-   value you read first and press second. Its target is still 44px. */
+/* ── The value beside a slider's name ──
+   The style guide's slider readout (plain text, tabular), made a button so
+   you can tap it to type an exact number. No frame: it reads as the value,
+   and the target is still 44px. */
 .controls__value {
-  min-inline-size: max(4.5ch, var(--chrome-hit));
+  flex: 0 0 auto;
+  min-inline-size: var(--chrome-hit);
   min-block-size: var(--chrome-hit);
-  padding-inline: var(--chrome-1);
+  padding: 0;
   font: var(--type-ctl);
+  font-variant-numeric: tabular-nums lining-nums;
   color: var(--ink);
-  text-align: center;
+  text-align: end;
+  white-space: nowrap;
   background: none;
   border: 0;
-  border-block-end: var(--bw-thin) dashed var(--line-soft);
   cursor: pointer;
 }
 @media (hover: hover) {
-  .controls__value:hover { border-block-end-color: var(--line); }
+  .controls__value:hover { text-decoration: underline; text-underline-offset: 0.2em; }
 }
 
 /* ── Sliders ── */
@@ -119,26 +116,34 @@
   gap: var(--space-3);
   min-block-size: var(--hit);
 }
-/* The name opens the picker, so it is a control: a pill you can see is one. */
+/* The name opens the picker. It is the slider's label, so it reads as one —
+   words, with the up/down chevrons that say "there are more" — rather than a
+   second framed control beside the value. Pressed, it tints at once. */
 .paramstrip__pick {
   display: inline-flex;
   align-items: center;
   gap: var(--chrome-2);
   min-block-size: var(--chrome-hit);
-  padding-inline: var(--chrome-3) var(--chrome-4);
+  margin-inline-start: calc(-1 * var(--chrome-2));
+  padding-inline: var(--chrome-2) var(--chrome-3);
   font: var(--type-ctl);
   color: var(--ink);
-  background: var(--paper);
-  border: var(--bw) solid var(--line);
+  background: none;
+  border: 0;
   border-radius: var(--radius-pill);
   cursor: pointer;
   touch-action: none;   /* a swipe up on the name opens the picker */
 }
+.paramstrip__pick .ic { --ic-size: 1em; color: var(--ink-soft); }
 @media (hover: hover) {
   .paramstrip__pick:hover { background: var(--paper-2); }
 }
 .paramstrip__pick:active { background: var(--paper-3); }
 .paramstrip__name { font: var(--type-ctl); color: var(--ink); }
+/* A colour leading the strip (the outline's colour before its width): the
+   name and value keep the rest of the line. */
+.paramstrip__head > .controls__colorbtn { margin-inline-end: auto; }
+.paramstrip__head > .controls__colorbtn + * { margin-inline-end: auto; }
 
 /* ── The parameter picker: floats over the photo, costs no layout ──
    Text over a photo needs a scrim (house rule): --scrim behind, --on-media
@@ -185,12 +190,16 @@
   border-radius: var(--radius-pill);
   cursor: pointer;
 }
-.parampick__row--on,
-.parampick__row[aria-current="true"] {
-  color: var(--ink);
-  background: var(--paper);
-  border-color: var(--line);
+/* One plate: the row under your finger (the current one when it opens). The
+   current row also carries a check, so moving off it never loses it. The
+   plate is the style guide's current list row: the ink fill. */
+.parampick__row--on {
+  color: var(--paper);
+  background: var(--ink);
+  border-color: var(--ink);
 }
+.parampick__label { display: inline-flex; align-items: center; gap: var(--chrome-2); }
+.parampick__mark { --ic-size: 1em; }
 .parampick__val { font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .parampick { animation-duration: 1ms; } }
 
@@ -210,6 +219,10 @@
   flex-wrap: nowrap;
 }
 .controls__layer-chips .chip { flex: 0 0 auto; max-inline-size: 11rem; }
+/* A mark's chip leads with its ink colour; the chip's own check would make
+   two symbols in front of one word. Chosen still reads as the fill and the
+   doubled frame. */
+.controls__layer-chips .chip:has(.controls__markdot)::before { display: none; }
 .controls__markdot {
   display: inline-block;
   inline-size: 0.75em;
@@ -226,6 +239,22 @@
 .controls__chips .chip { flex: 0 0 auto; }
 .controls__flip { --ic-size: 0.9em; margin-inline-start: var(--chrome-1); }
 .controls__effects { flex: 1 1 auto; min-inline-size: 0; }
+/* Toggles that share a row with a colour: they keep their size, the hint
+   between them gives way. */
+.controls__effects-inline { flex: 0 0 auto; flex-wrap: nowrap; }
+.controls__color-row .segmented { flex: 0 0 auto; }
+
+/* A tab whose effect is on: a small dot after its name (the words ", on" are
+   there for a screen reader). A dot, because the underline already means
+   "the tab on screen". */
+.tabs__on {
+  display: inline-block;
+  inline-size: 0.4em;
+  block-size: 0.4em;
+  margin-inline-start: var(--chrome-2);
+  border-radius: var(--radius-pill);
+  background: currentColor;
+}
 
 /* ── Text format row: B / I toggles, then alignment ── */
 .controls__text-row {
@@ -292,7 +321,8 @@
 }
 .controls__fontlist-count { font: var(--type-meta); color: var(--ink-soft); }
 .controls__fontlist--solo {
-  max-block-size: min(34dvh, 20rem);
+  /* Sized so the Text panel (layers, tabs, this list) fits the dock. */
+  max-block-size: min(20dvh, 10.5rem);
   overflow-y: auto;
   overscroll-behavior: contain;
   border: var(--bw) solid var(--line);
@@ -386,3 +416,23 @@
   padding: var(--chrome-2);   /* room for the rings and lifts inside the scroller */
   margin: calc(-1 * var(--chrome-2));
 }
+
+.controls__grow { flex: 1 1 auto; min-inline-size: 0; }
+
+/* Swatches on one scrolling line in the dock: a second row of six colour
+   chips cost the photo ~90px. The chip cut at the edge says "more"; the
+   padding keeps the rings and the chosen chip's second ring unclipped. */
+.controls__section .swatch-set__list {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  padding-inline: var(--chrome-2);
+  margin-inline: calc(-1 * var(--chrome-2));
+}
+.controls__section .swatch-set__list::-webkit-scrollbar { display: none; }
+.controls__section .swatch-set__opt { flex: 0 0 auto; min-inline-size: 4.5rem; }
+.controls__select { flex: 0 0 auto; min-inline-size: 9rem; }

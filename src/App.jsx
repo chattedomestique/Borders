@@ -83,9 +83,6 @@ function NewChoiceDialog({ open, onClose, onChoose }) {
       aria-labelledby="new-photo-t" aria-describedby="new-photo-d">
       <header className="card__bar">
         <p className="card__label">New photo</p>
-        <button className="card__ctl" type="button" onClick={onClose} aria-label="Cancel">
-          <Icon name="close" />
-        </button>
       </header>
       <div className="card__body">
         <h2 className="card__title" id="new-photo-t">Start a new photo</h2>
@@ -94,6 +91,7 @@ function NewChoiceDialog({ open, onClose, onChoose }) {
         </p>
       </div>
       <div className="dialog__actions">
+        <button className="btn" type="button" onClick={onClose}>Cancel</button>
         <button className="btn" type="button" onClick={() => onChoose('default')}>Reset to defaults</button>
         <button className="btn" type="button" data-variant="primary" autoFocus
           onClick={() => onChoose('full')}>Keep my settings</button>
@@ -551,7 +549,7 @@ export default function App() {
                   <div className="toolbar__list" role="toolbar" aria-label="Edit tools" ref={toolsRef}>
                     {TABS.map(t => (
                       <div className="toolbar__item" key={t.id}>
-                        <button className="btn" type="button" data-shape="circle" id={`tool-${t.id}`}
+                        <button className="btn" type="button" data-shape="circle" data-size="sm" id={`tool-${t.id}`}
                           aria-pressed={activeTab === t.id} onClick={() => toggleTab(t.id)}>
                           <Icon name={t.icon} />
                         </button>

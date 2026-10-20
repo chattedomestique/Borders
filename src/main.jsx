@@ -18,6 +18,7 @@ import './vendor/styleguide/elements/switch.min.css'
 import './vendor/styleguide/elements/dialog.min.css'
 import './vendor/styleguide/elements/field.min.css'
 import './vendor/styleguide/elements/input.min.css'
+import './vendor/styleguide/elements/select.min.css'
 import './vendor/styleguide/elements/divider.min.css'
 import './vendor/styleguide/elements/spinner.min.css'
 // The app's own CSS is unlayered, so it wins over every sg.* layer.
@@ -48,6 +49,24 @@ const registerBarFit = () => window.SG?.fit?.register('.app__bar', {
 })
 if (window.SG?.fit) registerBarFit()
 else document.addEventListener('DOMContentLoaded', registerBarFit, { once: true })
+
+// Scrolling chip rows are measured by the style guide (42-chip) so the chip cut
+// at the edge shows 30-60% of itself — a sliver reads as a stray bracket. It
+// only finds rows present at load; React mounts them later, as panels open.
+// Watch for them, measure each once it appears and again when it resizes.
+const watchChipRows = () => {
+  if (!window.SG?.chips?.fit) return
+  const seen = new WeakSet()
+  const ro = new ResizeObserver(entries => entries.forEach(e => window.SG.chips.fit(e.target)))
+  const scan = () => document.querySelectorAll('.chips.scroller').forEach(row => {
+    if (seen.has(row)) return
+    seen.add(row); ro.observe(row); window.SG.chips.fit(row)
+  })
+  new MutationObserver(scan).observe(document.body, { childList: true, subtree: true })
+  scan()
+}
+if (window.SG?.chips) watchChipRows()
+else document.addEventListener('DOMContentLoaded', watchChipRows, { once: true })
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

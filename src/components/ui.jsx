@@ -5,7 +5,7 @@
 // the state. The style guide's state-owning scripts (tabs, chip, dialog,
 // slider) are deliberately not loaded — two owners of aria-selected fight — so
 // the keyboard patterns they would add are implemented here instead.
-import { useId, useRef } from 'react'
+import { useEffect, useId, useRef } from 'react'
 
 /** A masked symbol. Decorative: the control that holds it carries the name. */
 export function Icon({ name, className = '' }) {
@@ -16,11 +16,11 @@ export function Icon({ name, className = '' }) {
  * Pick one of two to four values. Native radios inside, so arrow keys, roving
  * focus and the screen-reader semantics come from the browser.
  */
-export function Segmented({ label, options, value, onChange, size = 'sm', block = true, name }) {
+export function Segmented({ label, options, value, onChange, size = 'sm', block = true, name, describedBy }) {
   const auto = useId()
   const group = name ?? `seg${auto}`
   return (
-    <fieldset className="segmented" data-size={size} data-block={block ? '' : undefined}>
+    <fieldset className="segmented" data-size={size} data-block={block ? '' : undefined} aria-describedby={describedBy}>
       <legend className="sr-only">{label}</legend>
       {options.map(o => (
         <label key={String(o.id)} className="segmented__opt">
@@ -42,8 +42,14 @@ export function Segmented({ label, options, value, onChange, size = 'sm', block 
  * The panel is the caller's next sibling; give it role="tabpanel" with
  * aria-labelledby = tabId(value) so the pairing is announced.
  */
-export function Tabs({ label, tabs, value, onChange, idBase }) {
+export function Tabs({ label, tabs, value, onChange, idBase, block = true }) {
   const listRef = useRef(null)
+  // A bar wider than the screen scrolls; keep the chosen tab in view (the
+  // style guide's tabs script does this, and it is not loaded here).
+  useEffect(() => {
+    const el = listRef.current?.querySelector('[aria-selected="true"]')
+    el?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  }, [value])
   const onKeyDown = (e) => {
     const i = tabs.findIndex(t => t.id === value)
     const last = tabs.length - 1
@@ -57,7 +63,10 @@ export function Tabs({ label, tabs, value, onChange, idBase }) {
     requestAnimationFrame(() => listRef.current?.querySelector(`[data-tab="${tabs[next].id}"]`)?.focus())
   }
   return (
-    <div className="tabs" data-size="sm" data-block="">
+    // The underline variant: flat words with a bar under the chosen one. A row
+    // of framed pills above a panel of framed controls left nothing reading
+    // as primary.
+    <div className="tabs" data-variant="underline" data-size="sm" data-block={block ? '' : undefined}>
       <div className="tabs__bar">
         <div className="tabs__list" role="tablist" aria-label={label} ref={listRef} onKeyDown={onKeyDown}>
           {tabs.map(t => {
@@ -68,6 +77,7 @@ export function Tabs({ label, tabs, value, onChange, idBase }) {
                 aria-selected={on} aria-controls={`${idBase}-panel`}
                 tabIndex={on ? 0 : -1} onClick={() => onChange(t.id)}>
                 {t.label}
+                {t.on && <><span className="tabs__on" aria-hidden="true" /><span className="sr-only">, on</span></>}
               </button>
             )
           })}
@@ -78,10 +88,13 @@ export function Tabs({ label, tabs, value, onChange, idBase }) {
 }
 
 /** An on/off setting that applies at once: a native checkbox with role=switch. */
-export function Switch({ label, checked, onChange, hideLabel = false }) {
+export function Switch({ label, checked, onChange, hideLabel = false, describedBy, layout }) {
   return (
-    <label className="switch" data-state="hidden">
-      <input type="checkbox" role="switch" checked={!!checked} onChange={e => onChange(e.target.checked)} />
+    // layout="start" ([switch][label], shrinks to fit) for a switch that shares
+    // a row with other controls; the default row spans the width.
+    <label className="switch" data-state="hidden" data-layout={layout}>
+      <input type="checkbox" role="switch" checked={!!checked} onChange={e => onChange(e.target.checked)}
+        aria-describedby={describedBy} />
       <span className={`switch__label${hideLabel ? ' sr-only' : ''}`}>{label}</span>
       <span className="switch__state" aria-hidden="true"><span data-on>On</span><span data-off>Off</span></span>
     </label>
