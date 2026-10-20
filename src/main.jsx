@@ -21,8 +21,10 @@ import './vendor/styleguide/elements/input.min.css'
 import './vendor/styleguide/elements/select.min.css'
 import './vendor/styleguide/elements/divider.min.css'
 import './vendor/styleguide/elements/spinner.min.css'
+import './vendor/styleguide/elements/menu.min.css'
 // The app's own CSS is unlayered, so it wins over every sg.* layer.
 import './index.css'
+import './editor.css'
 import './fonts.css'
 import App from './App.jsx'
 

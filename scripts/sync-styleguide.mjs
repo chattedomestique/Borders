@@ -20,7 +20,7 @@ if (!existsSync(join(dist, 'core.min.css'))) {
 
 // Every element a Border Studio screen is built from.
 const ELEMENTS = ['button', 'card', 'toolbar', 'segmented', 'tabs', 'slider', 'appbar', 'chip',
-                  'swatch', 'dialog', 'spinner', 'switch', 'divider', 'field', 'input', 'select']
+                  'swatch', 'dialog', 'spinner', 'switch', 'divider', 'field', 'input', 'select', 'menu']
 // The style guide's scripts that only measure layout. The ones that own state
 // (tabs, slider, chip, dialog) are left out on purpose: React owns that state,
 // and two owners of aria-selected fight.

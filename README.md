@@ -34,8 +34,17 @@ which records the source commit in `src/vendor/styleguide/VERSION.md`. To update
 rebuild the style guide, then run `node scripts/sync-styleguide.mjs ../styleguide`.
 
 - Only the elements the app uses are shipped: button, card, appbar, toolbar,
-  tabs, segmented, slider, chip, swatch, switch, dialog, field, input, divider,
-  spinner (about a third of the full bundle).
+  tabs, segmented, slider, chip, swatch, switch, dialog, field, input, select,
+  divider, spinner, menu (about a third of the full bundle).
+- The editor is three planes told apart by brightness, after the style
+  guide's own photo-editor reference (`references/screens/img6`): the stage
+  (the photo), the tray (the dock, one step up) and the floating plane
+  (action sheets, dialogs, the toast: framed, over a scrim). Frames mean "on
+  top": controls resting in the tray have none, an icon is a bare glyph, a
+  word control sits in a well, and the chosen one is the ink fill. The rules
+  and the one type scale are in `src/editor.css`.
+- Everything that opens on top of the editor (the parameter picker, More) is
+  the style guide's menu presented as an action sheet, on a modal `<dialog>`.
 - The look is set on `<html>`: `data-palette="sand"` — a warm-tinted neutral
   with an ink accent, so the chrome carries no colour beside the photo.
   Light / dark and higher contrast follow the device.

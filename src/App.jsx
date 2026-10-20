@@ -6,7 +6,7 @@ import { useHistory } from './useHistory'
 import { buildSuggestionsFromColor } from './palette'
 import { saveSettings, seedForNewMedia, loadSettings, loadPresets, savePreset, deletePreset, applyPresetLook } from './persist'
 import PresetSheet from './components/PresetSheet/PresetSheet'
-import { Icon, Segmented } from './components/ui'
+import { Icon, ActionSheet } from './components/ui'
 import { useModalDialog } from './components/useModalDialog'
 import './App.css'
 
@@ -73,6 +73,12 @@ const TABS = [
   { id: 'text',  label: 'Text',  icon: 'type' },
 ]
 
+// How the composition sits on the screen (More › Canvas).
+const CANVAS_VIEWS = [
+  { id: 'fit',  label: 'Fit the whole frame' },
+  { id: 'fill', label: 'Fill the width' },
+]
+
 // Starting over: the style guide's confirm dialog — a card on a native
 // <dialog>, so the page behind is inert and Esc / a backdrop tap cancel. The
 // safe choice (keep what you built) is the primary one and takes focus.
@@ -110,6 +116,7 @@ export default function App() {
   const [presetsOpen, setPresetsOpen] = useState(false)
   const [presets, setPresets] = useState(() => loadPresets())
   const [newChoiceOpen, setNewChoiceOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
   const nextSeedRef = useRef(null)   // 'full' | 'default' | null (frame-only) for the next photo
   const [mediaError, setMediaError] = useState(null)
   const [borderSuggestions, setBorderSuggestions] = useState([])
@@ -393,16 +400,16 @@ export default function App() {
         <h1 className="appbar__title">Border Studio</h1>
         {step !== STEPS.UPLOAD && (
           <div className="appbar__end">
-            <button className="btn" type="button" data-shape="circle" data-size="sm"
+            <button className="btn ed-bare" type="button" data-shape="circle" data-size="sm"
               onClick={undo} disabled={!canUndo} aria-label="Undo">
               <Icon name="undo-2" />
             </button>
-            <button className="btn" type="button" data-shape="circle" data-size="sm"
+            <button className="btn ed-bare" type="button" data-shape="circle" data-size="sm"
               onClick={redo} disabled={!canRedo} aria-label="Redo">
               <Icon name="redo-2" />
             </button>
-            <button className="btn" type="button" data-shape="circle" data-size="sm"
-              popoverTarget="app-more" aria-label="More">
+            <button className="btn ed-bare" type="button" data-shape="circle" data-size="sm"
+              onClick={() => setMoreOpen(true)} aria-haspopup="dialog" aria-expanded={moreOpen} aria-label="More">
               <Icon name="ellipsis" />
             </button>
             {/* Save is the one action of the screen, so it is the one filled
@@ -423,28 +430,29 @@ export default function App() {
         )}
       </header>
 
-      {/* More: a native popover, so light-dismiss, Esc and focus return are the
-          browser's. A card, because it holds a group of things. */}
+      {/* More: the rarer things, as an action sheet (the same kind of surface as
+          the parameter picker, so everything that opens on top looks it). */}
       {step !== STEPS.UPLOAD && (
-        <div id="app-more" className="card app__more" popover="auto" aria-label="More">
-          <div className="card__body app__more-body">
-            <button className="btn" type="button" data-block="" data-variant="primary"
-              popoverTarget="app-more" popoverTargetAction="hide"
-              onClick={() => setNewChoiceOpen(true)}>
-              <span className="btn__label"><Icon name="plus" />New photo</span>
-            </button>
-            <button className="btn" type="button" data-block=""
-              popoverTarget="app-more" popoverTargetAction="hide"
-              onClick={() => setPresetsOpen(true)}>
-              <span className="btn__label"><Icon name="bookmark" />Presets</span>
-            </button>
-            <div className="app__more-row">
-              <span className="t-label" id="app-more-view">Canvas</span>
-              <Segmented label="Canvas" value={viewMode} onChange={setViewMode}
-                options={[{ id: 'fit', label: 'Fit' }, { id: 'fill', label: 'Fill' }]} />
-            </div>
+        <ActionSheet open={moreOpen} onClose={() => setMoreOpen(false)} label="More">
+          <button type="button" className="menu__item" role="menuitem"
+            onClick={() => { setMoreOpen(false); setNewChoiceOpen(true) }}>
+            <Icon name="plus" />New photo
+          </button>
+          <button type="button" className="menu__item" role="menuitem"
+            onClick={() => { setMoreOpen(false); setPresetsOpen(true) }}>
+            <Icon name="bookmark" />Presets
+          </button>
+          <div className="menu__group" role="group" aria-labelledby="more-canvas">
+            <p className="menu__label" id="more-canvas">Canvas</p>
+            {CANVAS_VIEWS.map(v => (
+              <button key={v.id} type="button" className="menu__item" role="menuitemradio"
+                aria-checked={viewMode === v.id}
+                onClick={() => { setViewMode(v.id); setMoreOpen(false) }}>
+                <Icon name="check" className="menu__check" />{v.label}
+              </button>
+            ))}
           </div>
-        </div>
+        </ActionSheet>
       )}
 
       <main className="app__main">
@@ -542,14 +550,14 @@ export default function App() {
                   action in the tray, so it is the one filled shape at rest. */}
               <div className="app__tools">
                 <div className="toolbar app__tray">
-                  <button className="btn toolbar__scroll" type="button" data-shape="circle" data-size="sm"
+                  <button className="btn ed-bare toolbar__scroll" type="button" data-shape="circle" data-size="sm"
                     data-dir="back" aria-label="Scroll tools back" tabIndex={-1} hidden>
                     <Icon name="chevron-left" />
                   </button>
                   <div className="toolbar__list" role="toolbar" aria-label="Edit tools" ref={toolsRef}>
                     {TABS.map(t => (
                       <div className="toolbar__item" key={t.id}>
-                        <button className="btn" type="button" data-shape="circle" data-size="sm" id={`tool-${t.id}`}
+                        <button className="btn ed-bare" type="button" data-shape="circle" data-size="sm" id={`tool-${t.id}`}
                           aria-pressed={activeTab === t.id} onClick={() => toggleTab(t.id)}>
                           <Icon name={t.icon} />
                         </button>
@@ -557,7 +565,7 @@ export default function App() {
                       </div>
                     ))}
                   </div>
-                  <button className="btn toolbar__scroll" type="button" data-shape="circle" data-size="sm"
+                  <button className="btn ed-bare toolbar__scroll" type="button" data-shape="circle" data-size="sm"
                     data-dir="forward" aria-label="Scroll tools forward" tabIndex={-1} hidden>
                     <Icon name="chevron-right" />
                   </button>

@@ -1,0 +1,227 @@
+/* ── Border Studio's layers ──────────────────────────────────────────────────
+   The editor is three planes, and you can tell them apart by brightness alone.
+   That is the style guide's own photo-editor reference (references/screens/
+   img6: "hierarchy comes only from luminance"):
+
+     0  stage   --canvas     the photo sits here; nothing else competes with it
+     1  tray    --ed-tray    the dock under the photo, one step up
+     2  float   --ed-float   whatever opens ON TOP (action sheets, dialogs, the
+                             toast): framed, over a scrim that dims 0 and 1
+
+   Three rules make the hierarchy:
+
+   - A FRAME MEANS "ON TOP". Only plane 2 is framed. A control resting in the
+     tray has no frame: an icon control is a bare glyph, a control with words
+     sits in a well (a fill one step up from the tray), and whatever is chosen
+     is the ink fill, the brightest shape on screen after the photo. A 2px
+     frame on all forty controls of a tray said nothing about any of them.
+   - NOTHING LIFTS IN THE TRAY. The style guide's hard shadow says "this can be
+     pressed" on a page of mixed content; in a tray where everything is a
+     control it repeated itself forty times. Focus keeps its ring.
+   - ONE TYPE SCALE, strongest first: the value being set (20px), its name
+     (16px), the panel's tabs (13px capitals), the labels beside controls
+     (14px, soft ink), the tool names (13px, muted until chosen).
+
+   Roles only: every colour here is a style-guide role, or a mix of two. */
+
+:root {
+  --ed-tray: var(--paper);
+  --ed-well: var(--paper-3);
+  /* Up is lighter in the dark (as the style guide's own cards over its
+     canvas); in the light, the floating plane is the white paper and its frame
+     and the scrim carry the "on top". */
+  --ed-float: light-dark(var(--paper), var(--paper-2));
+  --ed-float-2: light-dark(var(--paper-2), var(--paper-3));
+  --ed-float-3: light-dark(var(--paper-3), color-mix(in oklab, var(--paper-3), var(--ink) 10%));
+  --ed-line: var(--line);
+  /* Tints for a bare control under a pointer or a finger. */
+  --ed-tint: color-mix(in oklab, var(--ink) 10%, transparent);
+  --ed-tint-2: color-mix(in oklab, var(--ink) 18%, transparent);
+  /* The one rule inside the tray: tools below, the panel above. */
+  --ed-hair: color-mix(in oklab, var(--ink) 12%, transparent);
+  /* The plane a control sits on, for the few things drawn in its colour (the
+     ring around a slider's thumb, the glyph on an ink disc). */
+  --ed-surface: var(--canvas);
+}
+
+/* ── Plane 0: the stage ── */
+/* The bar sits on the stage like the photo does: no rule under it. */
+.app__bar { border-block-end-color: transparent; }
+
+/* ── Plane 1: the tray ──
+   Inside it a control's "paper" is the well, and its frame is no line at all.
+   The two roles every style-guide control reads, swapped in one place. */
+.app__overlay {
+  --ed-surface: var(--ed-tray);
+  --line: transparent;
+  --paper: var(--ed-well);
+  --paper-2: var(--ed-well);
+  --paper-3: color-mix(in oklab, var(--ink) 14%, var(--ed-well));
+}
+:is(.app__overlay, .app__bar) :not(dialog, dialog *) { --lift: 0; }
+/* Chosen is the fill alone: the doubled frame (a ring of the resting colour
+   inside the border) was there to survive a pale accent next to a frame, and
+   there is no frame here. */
+:is(.app__overlay, .app__bar) :is(.btn, .chip):not(dialog *) {
+  --_selw: 0px;
+  --_select: 0 0 0 0 transparent;
+}
+/* Unavailable is the faint ink alone; a dashed frame was one more line. */
+:is(.app__overlay, .app__bar) :is(.btn, .chip):is(:disabled, [aria-disabled="true"]):not(dialog *) {
+  border-color: transparent;
+}
+
+/* A bare control: a glyph in soft ink, a tint under the finger, and when it is
+   a toggle that is on, the ink disc. */
+.btn.ed-bare {
+  --_rest-bg: transparent;
+  --_rest-ink: var(--ink-soft);
+  --_on-bg: var(--ed-tint-2);
+  --_on-ink: var(--ink);
+  border-color: transparent;
+}
+.btn.ed-bare[aria-pressed="true"] {
+  --_on-bg: var(--ink);
+  --_on-ink: var(--ed-surface);
+  --_selw: 0px;
+}
+.btn.ed-bare[aria-pressed="false"]:active {
+  --fill: 1;
+  --_on-bg: var(--ed-tint-2);
+  --_on-ink: var(--ink);
+}
+
+/* The tools: muted names, the chosen one in ink under its disc. */
+.app__tray .toolbar__label {
+  font: 500 var(--text-xs) / var(--lh-snug) var(--font-sans);
+  color: var(--ink-mute);
+  text-decoration: none;
+}
+.app__tray .toolbar__item:has(> [aria-pressed="true"]) .toolbar__label {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+/* The panel's tabs: small capitals in muted ink, the chosen one in ink with
+   a short bar under its word. The full-width rule under the row was one more
+   line the length of the screen. */
+.app__overlay .tabs[data-variant="underline"] .tabs__bar { border-block-end-color: transparent; }
+.app__overlay .tabs[data-variant="underline"] .tabs__tab {
+  --_rest-ink: var(--ink-mute);
+  font: var(--type-label);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+}
+.app__overlay .tabs[data-variant="underline"] .tabs__tab::before {
+  inset-inline: calc(50% - var(--chrome-3));
+  inset-block-end: 0;
+  background: var(--ink);
+  border-radius: var(--radius-pill);
+}
+
+/* Segmented controls: the well is the track, the chosen cell the ink. */
+.app__overlay .segmented { --_track: var(--ed-well); }
+
+/* Every slider in the app: a thin rail, the ink up to the thumb, an ink thumb
+   ringed in its surface's colour so it reads apart from the fill it sits on.
+   The style guide's 12px framed rail and outlined thumb were the heaviest
+   shape in the tray, heavier than the value they set. */
+.slider {
+  --_tr: min(0.25rem, 4px);
+  --_thumb: min(1.5rem, 24px);
+  --_rail: color-mix(in oklab, var(--ink) 24%, var(--ed-surface));
+  --_fillc: var(--ink);
+}
+.slider__track::before {
+  border: 0;
+  border-radius: var(--radius-pill);
+}
+.slider__track::after {
+  inset-inline-start: 0;
+  inset-block-start: var(--_rail-top);
+  block-size: var(--_tr);
+  inline-size: calc((100% - var(--_thumb)) * var(--p, 0) + var(--_thumb) / 2);
+  border-radius: var(--radius-pill);
+}
+.slider__input::-webkit-slider-thumb {
+  background: var(--ink);
+  border: min(0.1875rem, 3px) solid var(--ed-surface);
+  box-shadow: none;
+  transform: none;
+  transition: scale var(--dur-press) var(--ease-out);
+}
+.slider__input:active::-webkit-slider-thumb { scale: calc(1 + var(--move, 1) * 0.15); }
+.slider__input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 var(--ring-offset) var(--ed-surface); }
+.slider__input::-moz-range-thumb {
+  background: var(--ink);
+  border: min(0.1875rem, 3px) solid var(--ed-surface);
+  box-shadow: none;
+  transform: none;
+}
+/* A colour channel shows the colours it reaches, so its rail stays wide
+   enough to see them. */
+:is(.controls__slider--hue, .controls__slider--tint) { --_tr: min(0.625rem, 10px); }
+
+/* Swatches are the photo's colours, so they keep an edge (a pale one on a pale
+   tray still has a boundary, 1.4.11). The chosen one is ringed in ink. */
+.app__overlay .swatch-set { --line: var(--ink-faint); }
+.app__overlay .swatch-set__opt:has(> input:checked) { --line: var(--ink); }
+
+/* ── Plane 2: floating ──
+   Anything on top gets the style guide's frames back, on the floating paper. */
+dialog.dialog,
+.app__toast,
+.app__hint {
+  --ed-surface: var(--ed-float);
+  --line: var(--ed-line);
+  --paper: var(--ed-float);
+  --paper-2: var(--ed-float-2);
+  --paper-3: var(--ed-float-3);
+}
+
+/* The action sheet: the style guide's menu presented as a sheet (its
+   data-presentation="sheet") on a modal <dialog>, so the page behind is inert
+   and the scrim covers the photo and the tray alike. Docked to the bottom,
+   where the thumb already is; rows are the style guide's .menu__item. */
+dialog.dialog.actsheet {
+  --_rise: calc(var(--move) * 100%);
+  inset: auto 0 0 0;
+  margin: 0 auto;
+  inline-size: 100%;
+  max-inline-size: var(--container-sm);
+  max-block-size: calc(100dvh - var(--safe-top) - var(--space-8));
+  padding: 0 0 var(--safe-bottom);
+  flex-direction: column;
+  overflow-y: auto;
+  border-block-end-width: 0;
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+}
+/* Full width on a phone: its sides are the screen's edges, so only the top
+   is framed. */
+@media (max-width: 30rem) {
+  dialog.dialog.actsheet { border-inline-width: 0; }
+}
+.actsheet__title {
+  /* the sheet's name, for orientation: what these rows change */
+  padding-block: var(--chrome-4) var(--chrome-2);
+}
+.actsheet .menu__item {
+  min-block-size: var(--chrome-ctl-lg);
+  font-size: var(--text-lg);
+}
+.actsheet .menu__item .menu__meta { font-size: var(--text-md); }
+.actsheet .menu__item[data-variant="cancel"] {
+  justify-content: center;
+  border-block-start: var(--bw) solid var(--line);
+}
+/* The row under a dragging finger, before it lifts. */
+.actsheet .menu__item[data-drag] { --fill: 1; }
+.actsheet .menu__group + .menu__group,
+.actsheet .menu__group + .menu__item { border-block-start: var(--bw) solid var(--line); }
+.actsheet .menu__group > .menu__item:first-of-type { border-block-start-color: var(--line); }
+
+@media (forced-colors: active) {
+  :is(.app__overlay, .app__bar) :is(.btn, .chip, .select, .input, .input-group, .segmented) { border-color: ButtonText; }
+  .btn.ed-bare[aria-pressed="true"] { border-width: var(--bw-heavy); }
+}

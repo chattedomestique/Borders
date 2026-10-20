@@ -6,6 +6,7 @@
 // slider) are deliberately not loaded — two owners of aria-selected fight — so
 // the keyboard patterns they would add are implemented here instead.
 import { useEffect, useId, useRef } from 'react'
+import { useModalDialog } from './useModalDialog'
 
 /** A masked symbol. Decorative: the control that holds it carries the name. */
 export function Icon({ name, className = '' }) {
@@ -123,5 +124,48 @@ export function SwatchSet({ legend, items, value, onPick, hideLegend = true, nam
         ))}
       </div>
     </fieldset>
+  )
+}
+
+/**
+ * The style guide's action sheet (its menu with data-presentation="sheet"):
+ * big rows docked to the bottom of the screen, over a scrim that dims the
+ * photo and the tray alike, and a Cancel row last. It is on a modal <dialog>,
+ * so the page behind is inert, Esc and a tap on the scrim cancel, and focus
+ * goes back to whatever opened it. The caller passes the rows (.menu__item
+ * buttons); arrow keys, Home and End move between them, and the checked one
+ * (or the first) has focus when it opens.
+ */
+export function ActionSheet({ open, onClose, title, label, children, listRef }) {
+  const ref = useModalDialog(open, onClose)
+  const titleId = useId()
+  useEffect(() => {
+    if (!open) return
+    const list = ref.current?.querySelector('.actsheet__list')
+    ;(list?.querySelector('[aria-checked="true"]') ?? list?.querySelector('.menu__item'))?.focus()
+  }, [open, ref])
+  const onKeyDown = (e) => {
+    const items = [...e.currentTarget.querySelectorAll('.menu__item')]
+    const i = items.indexOf(document.activeElement)
+    const last = items.length - 1
+    const next = e.key === 'ArrowDown' ? (i < last ? i + 1 : 0)
+               : e.key === 'ArrowUp' ? (i > 0 ? i - 1 : last)
+               : e.key === 'Home' ? 0 : e.key === 'End' ? last : null
+    if (next == null) return
+    e.preventDefault()
+    items[next].focus()
+  }
+  const setList = (el) => { if (listRef) listRef.current = el }
+  return (
+    <dialog ref={ref} className="dialog card actsheet"
+      aria-labelledby={title ? titleId : undefined} aria-label={title ? undefined : label}>
+      {title && <p className="menu__label actsheet__title" id={titleId}>{title}</p>}
+      <div className="actsheet__list" role="menu" aria-label={label ?? title} ref={setList} onKeyDown={onKeyDown}>
+        {children}
+        <button type="button" className="menu__item" role="menuitem" data-variant="cancel" onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </dialog>
   )
 }

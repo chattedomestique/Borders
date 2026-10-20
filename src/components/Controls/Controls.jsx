@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useId } from 'react'
 import { createPortal } from 'react-dom'
-import { Icon, Segmented, Tabs, Switch, SwatchSet } from '../ui'
+import { Icon, Segmented, Tabs, Switch, SwatchSet, ActionSheet } from '../ui'
 import { useModalDialog } from '../useModalDialog'
 import './Controls.css'
 import { hexToHsl, hslCss } from '../../palette'
@@ -156,7 +156,7 @@ function Slider({ def, on, className = '', style, label, ...rest }) {
     <div className={`slider controls__slider${className ? ` ${className}` : ''}`}
       style={{ ...style, '--p': Math.min(1, Math.max(0, p)) }}>
       <div className="slider__row">
-        <button type="button" className="btn" data-shape="circle" data-size="sm" data-sg-nudge="-1"
+        <button type="button" className="btn ed-bare" data-shape="circle" data-size="sm" data-sg-nudge="-1"
           aria-label={`Decrease ${name}`} aria-controls={id} aria-disabled={v <= min || undefined}
           onClick={() => nudge(-1)}><Icon name="minus" /></button>
         <div className="slider__track">
@@ -172,7 +172,7 @@ function Slider({ def, on, className = '', style, label, ...rest }) {
             }}
           />
         </div>
-        <button type="button" className="btn" data-shape="circle" data-size="sm" data-sg-nudge="1"
+        <button type="button" className="btn ed-bare" data-shape="circle" data-size="sm" data-sg-nudge="1"
           aria-label={`Increase ${name}`} aria-controls={id} aria-disabled={v >= max || undefined}
           onClick={() => nudge(1)}><Icon name="plus" /></button>
       </div>
@@ -302,61 +302,70 @@ function AddLayerSheet({ title, layers, labelFor, dotFor, onDefault, onCopy, onC
 }
 
 /**
- * The parameter picker overlay — Snapseed's list, floating over the photo.
+ * The parameter picker: which setting the slider sets. An action sheet (the
+ * style guide's menu as a sheet), so it is plainly ON TOP: it rises from the
+ * bottom on the floating paper, framed, over a scrim that dims the photo and
+ * the tray. It costs no layout while closed, which is what keeps the photo
+ * large.
  *
- * The whole point is that it costs ZERO permanent layout: it appears above the
- * dock, over the image, only while you're choosing, then vanishes. That is the
- * structural difference from a dock-resident list, and it's where the image area
- * actually comes from.
- *
- * Selection works by tap OR by dragging through the rows and releasing on one
- * (pointer capture keeps the drag alive across rows), mirroring Snapseed's
- * vertical-swipe pick.
+ * Pick by tap, or Snapseed's way: the finger that swiped the strip's name to
+ * open it keeps going, and lifting on a row picks that row. The drag is read
+ * from the window, because the pointer is still captured by the name it went
+ * down on.
  */
-function ParamPicker({ params, currentKey, onPick, onClose }) {
-  const [hover, setHover] = useState(currentKey)
-  const rowsRef = useRef(null)
+function ParamPicker({ params, currentKey, onPick, onClose, title = 'Adjust' }) {
+  const listRef = useRef(null)
+  const [drag, setDrag] = useState(null)
+  const done = useRef({ onPick, onClose })
+  useEffect(() => { done.current = { onPick, onClose } })
 
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); onClose() } }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
-
-  // Which row is under a given clientY (used while dragging through the list).
-  const keyAt = (clientY) => {
-    const el = rowsRef.current
-    if (!el) return null
-    for (const child of el.children) {
-      const r = child.getBoundingClientRect()
-      if (clientY >= r.top && clientY <= r.bottom) return child.dataset.key
+    const keyAt = (y) => {
+      for (const el of listRef.current?.querySelectorAll('[data-key]') ?? []) {
+        const r = el.getBoundingClientRect()
+        if (y >= r.top && y <= r.bottom) return el.dataset.key
+      }
+      return null
     }
-    return null
-  }
+    let from = null
+    let dragging = false
+    const onMove = (e) => {
+      if (e.pointerType === 'mouse' && !e.buttons) return
+      if (from == null) from = e.clientY
+      // A row is "under the finger" only once it has moved: the swipe that
+      // opened the sheet must not pick whatever row came up beneath it.
+      if (!dragging && Math.abs(e.clientY - from) < 6) return
+      dragging = true
+      setDrag(keyAt(e.clientY))
+    }
+    const onUp = (e) => {
+      const k = dragging ? keyAt(e.clientY) : null
+      from = null
+      dragging = false
+      setDrag(null)
+      if (k) { done.current.onPick(k); done.current.onClose() }
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+  }, [])
 
   return createPortal(
-    <div className="parampick" role="dialog" aria-modal="true" aria-label="Choose parameter"
-      onPointerDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="parampick__rows" ref={rowsRef}
-        onPointerMove={(e) => { if (e.buttons) { const k = keyAt(e.clientY); if (k) setHover(k) } }}
-        onPointerUp={(e) => { const k = keyAt(e.clientY); if (k) { onPick(k); onClose() } }}>
-        {params.map(p => {
-          const on = hover === p.key
-          return (
-            <button key={p.key} data-key={p.key} type="button"
-              className={`parampick__row${on ? ' parampick__row--on' : ''}`}
-              aria-current={p.key === currentKey}
-              onClick={() => { onPick(p.key); onClose() }}>
-              <span className="parampick__label">
-                {p.key === currentKey && <Icon name="check" className="parampick__mark" />}
-                {p.label}
-              </span>
-              <span className="parampick__val">{p.format ? p.format(p.value) : `${p.value}${p.suffix ?? ''}`}</span>
-            </button>
-          )
-        })}
-      </div>
-    </div>,
+    <ActionSheet open onClose={onClose} title={title} label={`${title}: choose a setting`} listRef={listRef}>
+      {params.map(p => (
+        <button key={p.key} data-key={p.key} type="button" className="menu__item"
+          role="menuitemradio" aria-checked={p.key === currentKey}
+          data-drag={drag === p.key ? '' : undefined}
+          onClick={() => { onPick(p.key); onClose() }}>
+          <Icon name="check" className="menu__check" />
+          {p.label}
+          <span className="menu__meta">{p.format ? p.format(p.value) : `${p.value}${p.suffix ?? ''}`}</span>
+        </button>
+      ))}
+    </ActionSheet>,
     document.body,
   )
 }
@@ -555,7 +564,7 @@ function ColorField({ value, onChange, label }) {
   const v = normalizeHex(value) || '#000000'
   return (
     <>
-      <button type="button" className="btn controls__colorbtn" data-shape="circle"
+      <button type="button" className="btn ed-bare controls__colorbtn" data-shape="circle"
         onClick={() => setOpen(true)} aria-label={`${label || 'Color'} ${v}, tap to change`}>
         <span className="controls__colorchip" style={{ '--swatch': v }} aria-hidden="true" />
       </button>
@@ -820,7 +829,7 @@ function LayerStrip({ kind, layers, selectedId, labelFor, dotFor, onAdd, onSelec
         </div>
       )}
       {sel && (
-        <button type="button" className="btn" data-shape="circle" data-size="sm"
+        <button type="button" className="btn ed-bare" data-shape="circle" data-size="sm"
           onClick={() => onRemove(sel.id)} aria-label={`Remove ${labelFor(sel, selIndex)}`}>
           <Icon name="trash-2" />
         </button>

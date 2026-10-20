@@ -1,10 +1,11 @@
 /* ── The editor's panels, on the style guide ─────────────────────────────────
    The controls themselves are the style guide's elements — .btn, .tabs,
    .segmented, .slider, .switch, .chip, .swatch-set, .input, .card / .dialog —
-   so this file holds no button, toggle or slider styling of its own. It lays
-   those elements out for a short panel above the photo, and draws the few
-   things the style guide has no element for: the one-line parameter strip,
-   the parameter picker over the photo, the font list, and the colour editor.
+   so this file holds no button, toggle or slider styling of its own (how they
+   look in the tray, without frames, is editor.css). It lays those elements
+   out for a short panel above the photo, and draws the few things the style
+   guide has no element for: the one-line parameter strip, the font list, and
+   the colour editor.
 
    Roles only: no colour literals except where the colour IS the data (a hue
    track shows the hues it reaches, like a swatch shows its colour). */
@@ -70,13 +71,15 @@
 /* ── The value beside a slider's name ──
    The style guide's slider readout (plain text, tabular), made a button so
    you can tap it to type an exact number. No frame: it reads as the value,
-   and the target is still 44px. */
+   and the target is still 44px. It is the largest words in the tray: the
+   number you are changing is what the eye should find first. */
 .controls__value {
   flex: 0 0 auto;
   min-inline-size: var(--chrome-hit);
   min-block-size: var(--chrome-hit);
   padding: 0;
   font: var(--type-ctl);
+  font-size: var(--text-lg);
   font-variant-numeric: tabular-nums lining-nums;
   color: var(--ink);
   text-align: end;
@@ -134,74 +137,15 @@
   cursor: pointer;
   touch-action: none;   /* a swipe up on the name opens the picker */
 }
-.paramstrip__pick .ic { --ic-size: 1em; color: var(--ink-soft); }
+.paramstrip__pick .ic { --ic-size: 1em; color: var(--ink-mute); }
 @media (hover: hover) {
   .paramstrip__pick:hover { background: var(--paper-2); }
 }
 .paramstrip__pick:active { background: var(--paper-3); }
 .paramstrip__name { font: var(--type-ctl); color: var(--ink); }
 /* A colour leading the strip (the outline's colour before its width): the
-   name and value keep the rest of the line. */
-.paramstrip__head > .controls__colorbtn { margin-inline-end: auto; }
+   name follows it, the value keeps the far end. */
 .paramstrip__head > .controls__colorbtn + * { margin-inline-end: auto; }
-
-/* ── The parameter picker: floats over the photo, costs no layout ──
-   Text over a photo needs a scrim (house rule): --scrim behind, --on-media
-   words. The current row is a paper plate with ink, so it is a shape and a
-   colour, never colour alone. */
-.parampick {
-  position: fixed;
-  inset-inline: 0;
-  inset-block-start: 0;
-  inset-block-end: var(--overlay-h);
-  z-index: 60;
-  display: flex;
-  align-items: flex-end;
-  padding-block-end: var(--space-2);
-  background: var(--scrim);
-  animation: parampick-in var(--dur-hover) var(--ease-out);
-}
-@keyframes parampick-in { from { opacity: 0; } to { opacity: 1; } }
-.parampick__rows {
-  inline-size: 100%;
-  max-inline-size: var(--container-sm);
-  margin-inline: auto;
-  max-block-size: 100%;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  display: flex;
-  flex-direction: column;
-  gap: var(--chrome-1);
-  padding-inline: var(--gutter);
-  touch-action: none;   /* a vertical drag picks a row instead of scrolling */
-}
-.parampick__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  inline-size: 100%;
-  min-block-size: var(--hit);
-  padding: var(--chrome-2) var(--chrome-4);
-  font: var(--type-ctl);
-  color: var(--on-media);
-  background: none;
-  border: var(--bw) solid transparent;
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-}
-/* One plate: the row under your finger (the current one when it opens). The
-   current row also carries a check, so moving off it never loses it. The
-   plate is the style guide's current list row: the ink fill. */
-.parampick__row--on {
-  color: var(--paper);
-  background: var(--ink);
-  border-color: var(--ink);
-}
-.parampick__label { display: inline-flex; align-items: center; gap: var(--chrome-2); }
-.parampick__mark { --ic-size: 1em; }
-.parampick__val { font-variant-numeric: tabular-nums; }
-@media (prefers-reduced-motion: reduce) { .parampick { animation-duration: 1ms; } }
 
 /* ── Layers: Add, a chip per layer, Remove for the chosen one ── */
 .controls__layers {
@@ -229,7 +173,7 @@
   block-size: 0.75em;
   border-radius: var(--radius-pill);
   background: var(--swatch);
-  border: var(--bw-thin) solid var(--line);
+  border: var(--bw-thin) solid var(--ink-faint);
   flex: 0 0 auto;
   margin-inline-end: var(--chrome-1);
 }
@@ -280,8 +224,9 @@
 }
 .controls__color-hint {
   flex: 1 1 auto;
-  font: var(--type-ctl);
-  color: var(--ink);
+  /* a label beside a control on a shared row: one step below a slider's name */
+  font: 500 var(--text-sm) / var(--lh-snug) var(--font-sans);
+  color: var(--ink-soft);
 }
 /* A circle you press to edit a colour, filled with that colour. The chip has
    its own frame so a colour as pale as the paper still has an edge (1.4.11). */
@@ -293,7 +238,8 @@
   block-size: var(--chrome-ic);
   border-radius: var(--radius-pill);
   background: var(--swatch);
-  border: var(--bw) solid var(--line);
+  /* the colour's own edge: --line is no line in the tray (editor.css) */
+  border: var(--bw-thin) solid var(--ink-faint);
 }
 
 .controls__hsl {

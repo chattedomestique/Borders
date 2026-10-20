@@ -5,8 +5,8 @@
    the bar and the bottom overlay, and nothing ever scrolls the photo away.
 
    Flat, as the style guide requires: no glass, no blur, no soft shadows. The
-   overlay sits on the canvas colour with a 2px rule, so the controls read as
-   a tray below the photo rather than a smoked pane over it. */
+   planes the editor is built from (stage, tray, floating) and the rules that
+   tell them apart are in editor.css. */
 
 /* ── Shell ── */
 .app {
@@ -33,28 +33,6 @@
   /* The style guide's .app__main pads for a dock; this app's overlay reserves
      its own room (--overlay-h on the canvas wrap below). */
   padding-block: 0;
-}
-
-/* ── More (a native popover) ── */
-.app__more {
-  /* Anchored under the bar's end without anchor positioning (not yet in every
-     engine): the bar is a fixed height, so a fixed offset is exact enough. */
-  position: fixed;
-  inset: auto;
-  inset-block-start: calc(var(--safe-top, 0px) + var(--space-8));
-  inset-inline-end: max(var(--gutter), var(--safe-right, 0px));
-  inline-size: min(20rem, calc(100vw - 2 * var(--gutter)));
-  margin: 0;
-}
-.app__more-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-.app__more-row {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
 }
 
 /* ── Upload screen ── */
@@ -133,9 +111,9 @@
   margin-inline: auto;
   padding-inline: max(var(--gutter), var(--safe-left, 0px)) max(var(--gutter), var(--safe-right, 0px));
   padding-block-end: max(var(--chrome-2), var(--safe-bottom, 0px));
-  background: var(--canvas);
-  /* A divider, not a frame: the thin weight. */
-  border-block-start: var(--bw-thin) solid var(--line);
+  /* Plane 1 (editor.css): one step up from the stage. The change of fill is
+     the edge; a rule there was one more line the width of the screen. */
+  background: var(--ed-tray);
 }
 
 /* Sliding panel — the grid-rows trick gives a symmetric open / close. */
@@ -222,6 +200,12 @@
 
 /* ── Bottom row: the tool tray, the full width of the column ── */
 .app__tools { margin-block-start: var(--space-1); }
+/* Under an open panel, a hairline keeps the tools (where you go) apart from
+   the panel (what you set). */
+.app__panel--open + .app__tools {
+  border-block-start: var(--bw-thin) solid var(--ed-hair);
+  padding-block-start: var(--space-1);
+}
 /* The tray loses the toolbar's frame here: the rule above the dock already
    says where the controls begin, and a box inside it was a third heavy line
    around the same edge. */
@@ -267,7 +251,3 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
-
-/* A popover the card styling would otherwise keep on screen: the card sets
-   `display`, which outranks the browser's own popover-hidden rule. */
-.app__more:not(:popover-open) { display: none; }
