@@ -21,26 +21,38 @@
 .controls__section {
   display: flex;
   flex-direction: column;
-  gap: var(--ed-gap);
+  gap: var(--ed-band-pad);
 }
+/* The tabs' band: its hairline runs the full width of the dock (the panel's
+   gutters are given back as padding). */
 .controls__head {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  block-size: var(--ed-head-h);
+  min-block-size: var(--ed-head-h);
+  margin-inline: calc(-1 * var(--gutter));
+  padding-inline: var(--gutter);
+  border-block-end: var(--bw-thin) solid var(--ed-hair);
   min-inline-size: 0;
 }
 .controls__head > .tabs { flex: 1 1 auto; min-inline-size: 0; }
-/* The content area: options at the top, the parameter strip at the bottom.
-   min-, not block-size: at large text the rows grow, and growing is better
-   than clipping. At 100% every panel's rows fit exactly this height. */
+/* The settings band: its rows in the middle, so a panel with less in it has
+   the same room above its rows as below them. min-, not block-size: at large
+   text the rows grow, and growing is better than clipping. At 100% every
+   panel's rows fit inside this height. */
 .controls__panel {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: var(--ed-gap);
   min-block-size: var(--ed-content-h);
 }
-.controls__panel > .paramstrip { margin-block-start: auto; }
+/* The hairline between two settings: inset to the gutters, as in a list. */
+.controls__rule {
+  flex: none;
+  block-size: 0;
+  border-block-start: var(--bw-thin) solid var(--ed-hair);
+}
 
 /* Nothing to edit yet: one line in the middle of the content area. */
 .controls__empty {
@@ -388,3 +400,14 @@
   white-space: nowrap;
 }
 .controls__group-head > :not(.t-label) { flex: none; }
+
+/* The ratios: six choices across the width of a phone, so the chosen one is
+   never the one cut off at the edge. Tighter sides, and the chosen ratio is
+   its fill and its flip cue (the check in front would make it the widest
+   chip by far). On a phone narrower than 375px the row scrolls. */
+.controls__ratios {
+  justify-content: space-between;
+  gap: var(--chrome-1);
+}
+.controls__ratios .chip { --_px: var(--chrome-3); }
+.controls__ratios .chip::before { display: none; }

@@ -539,7 +539,7 @@ function ColorSliders({ hex, onColor, compact = false }) {
 
   // In the dock: the hex field is the options row and the channels share one
   // parameter strip, pinned under it like every other panel's.
-  if (compact) return <>{hexRow}<ParamRows params={channels} /></>
+  if (compact) return <>{hexRow}<Rule /><ParamRows params={channels} /></>
 
   return (
     <div className="controls__hsl">
@@ -679,6 +679,7 @@ function FrameControls({ borderThickness, cornerRadius, cropRatio = 'free', aspe
       {sub === 'border' && (
         <>
           <Switch label="Show photo" checked={showMedia} onChange={v => onUpdate('showMedia', v)} />
+          <Rule />
           <ParamRows params={[
             { key: 'border', label: 'Border', suffix: 'px', min: 0, max: 400, step: 1, def: 150,
               value: borderThickness, onChange: v => onUpdate('borderThickness', v) },
@@ -691,21 +692,10 @@ function FrameControls({ borderThickness, cornerRadius, cropRatio = 'free', aspe
 
       {sub === 'crop' && (
         <>
-          {/* What the chosen ratio applies to: trim the photo, or matte it into
-              a frame of that ratio (photo keeps its own aspect, uncropped). The
-              sentence that said so is for a screen reader; on screen the photo
-              shows it, and the line cost the panel a row. */}
-          <Segmented label="Aspect mode" value={aspectMode === 'fit' ? 'fit' : 'crop'}
-            onChange={v => onUpdate('aspectMode', v)} describedBy="frame-aspect-hint"
-            options={[{ id: 'crop', label: 'Crop photo' }, { id: 'fit', label: 'Fit photo' }]} />
-          <p className="sr-only" id="frame-aspect-hint">
-            {aspectMode === 'fit'
-              ? 'The frame takes the ratio; the photo is matted inside it, uncropped.'
-              : 'The photo is trimmed to the ratio.'}
-          </p>
-          {/* Choice chips on one scrolling line. The chosen ratio carries a flip
-              cue: tap it again to turn it on its side. */}
-          <div className="chips scroller controls__chips" role="group" aria-label={ratioName}>
+          {/* The ratio is what you came for, so it leads: choice chips on one
+              scrolling line. The chosen ratio carries a flip cue: tap it again
+              to turn it on its side. */}
+          <div className="chips scroller controls__chips controls__ratios" role="group" aria-label={ratioName}>
             {CROP_RATIOS.map(r => {
               const isPortrait  = cropRatio === r.id
               const isLandscape = r.alt !== null && cropRatio === r.alt
@@ -725,6 +715,23 @@ function FrameControls({ borderThickness, cornerRadius, cropRatio = 'free', aspe
               )
             })}
           </div>
+          <Rule />
+          {/* What the ratio does to the photo: trim it, or matte it inside a
+              frame of that ratio, uncropped. A setting of the ratio, so a row
+              like any other setting: its name, then the choice. The sentence
+              that explains it is for a screen reader; on screen the photo
+              shows it. */}
+          <div className="controls__row">
+            <span className="controls__label" aria-hidden="true">Photo</span>
+            <Segmented label="Photo" value={aspectMode === 'fit' ? 'fit' : 'crop'} block={false}
+              onChange={v => onUpdate('aspectMode', v)} describedBy="frame-aspect-hint"
+              options={[{ id: 'crop', label: 'Crop' }, { id: 'fit', label: 'Fit' }]} />
+          </div>
+          <p className="sr-only" id="frame-aspect-hint">
+            {aspectMode === 'fit'
+              ? 'The frame takes the ratio; the photo is matted inside it, uncropped.'
+              : 'The photo is trimmed to the ratio.'}
+          </p>
         </>
       )}
 
@@ -732,11 +739,14 @@ function FrameControls({ borderThickness, cornerRadius, cropRatio = 'free', aspe
         <>
           <Switch label="Snap to grid" checked={!!snapEnabled} onChange={() => onSnapToggle?.()} />
           {snapEnabled && (
-            <div className="controls__row">
-              <span className="controls__label" id="frame-divisions">Divisions</span>
-              <Segmented label="Grid divisions" value={gridDivisions} onChange={n => onGridDivisions?.(n)}
-                block={false} options={GRID_OPTIONS.map(n => ({ id: n, label: `${n}×${n}` }))} />
-            </div>
+            <>
+              <Rule />
+              <div className="controls__row">
+                <span className="controls__label" aria-hidden="true">Divisions</span>
+                <Segmented label="Grid divisions" value={gridDivisions} onChange={n => onGridDivisions?.(n)}
+                  block={false} options={GRID_OPTIONS.map(n => ({ id: n, label: `${n}×${n}` }))} />
+              </div>
+            </>
           )}
         </>
       )}
@@ -768,6 +778,7 @@ function GrainControls({ grainAmount, grainVariability, grainSpread, grainMonoch
       {sub === 'texture' && (
         <>
           <Switch label="Monochrome" checked={grainMonochrome} onChange={v => onUpdate('grainMonochrome', v)} />
+          <Rule />
           <ParamRows params={[
             { key: 'spread', label: 'Spread', min: 0, max: 100, step: 1, def: 0,
               format: v => v === 0 ? 'Off' : `${v}%`,
@@ -805,6 +816,12 @@ function DockPanel({ label, lead, tabs, sub, onSub, idBase, children }) {
 /** Nothing to edit yet: one line in the middle of the content area. */
 function DockEmpty({ children }) {
   return <p className="controls__empty">{children}</p>
+}
+
+/** The hairline between two settings in a panel (decoration: the rows are
+ *  already separate controls to a screen reader). */
+function Rule() {
+  return <div className="controls__rule" aria-hidden="true" />
 }
 
 /**
@@ -952,6 +969,7 @@ function MarkControls({ layers, selectedId, selected, ul, onAdd, onRemove, onSel
               </div>
             </div>
             <p className="sr-only" id="mark-blend-hint">Multiply is how real highlighter ink behaves: it only darkens.</p>
+            <Rule />
             <ParamRows params={[
               { key: 'opacity', label: 'Opacity', suffix: '%', min: 5, max: 100, step: 1, def: 85,
                 value: selected.opacity ?? 85, onChange: v => ul('opacity', v) },
@@ -966,6 +984,7 @@ function MarkControls({ layers, selectedId, selected, ul, onAdd, onRemove, onSel
             <Segmented label="Edge style" value={selected.edge ?? 'marker'} onChange={v => ul('edge', v)}
               options={MARK_EDGES} describedBy="mark-edge-hint" />
             <p className="sr-only" id="mark-edge-hint">{EDGE_HINT[selected.edge ?? 'marker']}</p>
+            {(selected.edge ?? 'marker') !== 'clean' && <Rule />}
             {(selected.edge ?? 'marker') !== 'clean' && (
               <ParamRows params={[
                 { key: 'edgeAmount', label: 'Edge amount', suffix: '%', min: 0, max: 100, step: 1, def: 45,
@@ -991,6 +1010,7 @@ function MarkControls({ layers, selectedId, selected, ul, onAdd, onRemove, onSel
             <p className="sr-only" id="mark-riso-hint">
               Rotated halftone screen, uneven drum coverage, and a misregistered pass.
             </p>
+            <Rule />
             <ParamRows params={[
               { key: 'grain', label: 'Grain', min: 0, max: 100, step: 1, def: 0,
                 format: v => v === 0 ? 'Off' : `${v}%`,
@@ -1112,6 +1132,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                 <Segmented label="Alignment" value={L.align} onChange={v => ul('align', v)} options={ALIGNS} />
               </div>
             </div>
+            <Rule />
             <ParamRows params={[
               { key: 'size', label: 'Size', min: 20, max: 300, step: 2, def: 80,
                 value: L.size, onChange: v => ul('size', v) },
@@ -1147,6 +1168,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                   onClick={() => ul('stroke', !L.stroke)}>Outline</button>
               </div>
             </div>
+            {L.stroke && <Rule />}
             {L.stroke && (
               <ParamRows lead={<ColorField value={L.strokeColor} label="Outline color" onChange={v => ul('strokeColor', v)} />}
                 params={[
@@ -1167,6 +1189,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                 <ColorField value={L.bgColor} label="Background color" onChange={v => ul('bgColor', v)} />
               )}
             </div>
+            {L.bg !== 'none' && <Rule />}
             {L.bg !== 'none' && (
               <ParamRows params={[
                 { key: 'bgOpacity', label: 'Opacity', suffix: '%', min: 10, max: 100, step: 1, def: 50,
@@ -1194,6 +1217,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                 </div>
               )}
             </div>
+            {L.blobStroke && <Rule />}
             {L.blobStroke && (
               <ParamRows lead={<ColorField value={L.blobColor ?? '#000000'} label="Blob color" onChange={v => ul('blobColor', v)} />}
                 params={[
@@ -1230,6 +1254,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                 </div>
               )}
             </div>
+            {L.motionBlur && <Rule />}
             {L.motionBlur && (
               <ParamRows params={[
                 // Direction snaps to 5° so the streak stays put when you lift your thumb
@@ -1275,6 +1300,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                 </div>
               )}
             </div>
+            {L.echo && <Rule />}
             {L.echo && (
               <ParamRows params={[
                 { key: 'echoCount', label: 'Amount', min: 1, max: 16, step: 1, def: 5,

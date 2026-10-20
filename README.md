@@ -46,12 +46,14 @@ rebuild the style guide, then run `node scripts/sync-styleguide.mjs ../styleguid
 - Everything that opens on top of the editor (the parameter picker, More, the
   layer list) is the style guide's menu presented as an action sheet, on a
   modal `<dialog>`.
-- The dock is one geometry for every tool and tab: a head row (the tabs, and
-  for Mark and Text a button naming the layer being edited) over one content
-  area of a fixed height, an options row at the top and the parameter strip
-  pinned to the bottom. So the photo is the same size and place in every
-  state, and the slider is always under the same spot. The regression suite
-  checks the photo's rectangle across every tool and tab.
+- The dock is one geometry for every tool and tab: three bands with a
+  full-width hairline between each (the tabs, and for Mark and Text a button
+  naming the layer being edited; the settings; the tools). The settings band
+  is one fixed height, so the photo is the same size and place in every
+  state; in it each setting is a row (its name at the start, its control at
+  the end) with a hairline between rows, centred so the room above equals
+  the room below. The regression suite checks the photo's rectangle across
+  every tool and tab.
 - The look is set on `<html>`: `data-palette="sand"` — a warm-tinted neutral
   with an ink accent, so the chrome carries no colour beside the photo.
   Light / dark and higher contrast follow the device.

@@ -24,11 +24,13 @@
      words on controls (14px), the tabs (12px capitals), hints (13px, muted),
      the tool names (12px, muted until chosen). Typed text is 16px, so iOS
      never zooms on focus.
-   - ONE GEOMETRY. Every panel is a 40px head row (tabs, and a layer button
-     for the tools that have layers) and one content area of a fixed height:
-     an options row at the top, the parameter strip pinned to the bottom. So
-     the photo is the same size in every tool and every tab, and the slider
-     is always in the same place.
+   - ONE GEOMETRY. The dock is three bands with a full-width hairline between
+     each: the tabs (and a layer button, for the tools that have layers), the
+     settings, the tools. The settings band is one fixed height in every
+     panel, so the photo is the same size in every tool and every tab. In it,
+     each setting is a row (its name at the start, its control at the end)
+     with a hairline between rows, and the rows sit in the middle of the band,
+     so the space above them is the space below.
 
    Roles only: every colour here is a style-guide role, or a mix of two. */
 
@@ -42,15 +44,16 @@
   --ed-t-caps: 600 0.75rem / 1 var(--font-sans);
   --ed-t-tool: 500 0.75rem / 1.2 var(--font-sans);
 
-  /* The dock's geometry (see the header): a head row, then the content
-     area, which is one options row and the strip (a 36px line for the name
-     and value over the 44px slider row). */
-  --ed-head-h: 2.5rem;
+  /* The dock's geometry (see the header): the tabs' band, then the content
+     area: one options row, the hairline between settings, and the strip (a
+     36px line for the name and value over the 44px slider row). */
+  --ed-head-h: var(--hit);
   --ed-gap: var(--space-2);
+  --ed-band-pad: var(--space-3);
   --ed-row-h: var(--hit);
   --ed-strip-head-h: 2.25rem;
   --ed-strip-h: calc(var(--ed-strip-head-h) + var(--chrome-hit));
-  --ed-content-h: calc(var(--ed-row-h) + var(--ed-gap) + var(--ed-strip-h));
+  --ed-content-h: calc(var(--ed-row-h) + 2 * var(--ed-gap) + var(--bw-thin) + var(--ed-strip-h));
 
   --ed-tray: var(--paper);
   --ed-well: var(--paper-3);
@@ -129,10 +132,13 @@
   text-decoration: none;
 }
 
-/* The panel's tabs: small capitals in muted ink, the chosen one in ink with
-   a short bar under its word. The full-width rule under the row was one more
-   line the length of the screen. */
-.app__overlay .tabs[data-variant="underline"] .tabs__bar { border-block-end-color: transparent; }
+/* The panel's tabs: small capitals in muted ink, the chosen one in ink with a
+   bar under its word that sits on the band's hairline (the style guide's
+   underline tabs, with the hairline drawn by the band, controls__head, so it
+   runs under the layer button too and the full width of the dock). The tab
+   is centred in the band, so its word has the same room above and below. */
+.app__overlay .tabs[data-variant="underline"] .tabs__bar { border-block-end-width: 0; }
+.app__overlay .tabs[data-variant="underline"] .tabs__list { margin-block: calc(-1 * var(--chrome-2)); }
 .app__overlay .tabs[data-variant="underline"] .tabs__tab {
   --_rest-ink: var(--ink-mute);
   font: var(--ed-t-caps);
@@ -172,9 +178,9 @@
 }
 .app__overlay .tabs[data-variant="underline"] .tabs__tab::before {
   inset-inline: calc(50% - var(--chrome-3));
-  inset-block-end: 0;
+  /* from the tab's padding box down to the band's hairline */
+  inset-block-end: calc(-1 * ((var(--ed-head-h) - var(--_bar-h)) / 2 + var(--bw)));
   background: var(--ink);
-  border-radius: var(--radius-pill);
 }
 
 /* Segmented controls: the well is the track, the chosen cell the ink. */
