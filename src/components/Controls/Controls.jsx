@@ -106,10 +106,6 @@ const TEXT_BG_MODES = [
 // Auto ties every box to the line height, so the block is always one solid
 // slab. Manual scales off that auto box, which is how you pull the lines apart
 // into separate bars (or widen them into banners).
-const TEXT_BOX_SIZES = [
-  { id: 'auto',   label: 'Auto'   },
-  { id: 'manual', label: 'Manual' },
-]
 
 const ECHO_BLENDS = [
   { id: 'stack',   label: 'Stack'   },
@@ -525,13 +521,29 @@ function ColorSliders({ hex, onColor, compact = false }) {
       value: l, onChange: v => setChan('l', v), sliderClass: 'controls__slider--tint', sliderStyle: { '--track': trackLit } },
   ]
 
+  const hexRow = (
+    <div className="controls__hexrow">
+      <div className="input-group controls__hexfield">
+        <span className="input-group__start t-mono" aria-hidden="true">#</span>
+        <input className="input t-mono controls__hexinput" value={hexDraft} onChange={e => onHexInput(e.target.value)}
+          spellCheck={false} autoCapitalize="none" autoCorrect="off" inputMode="text"
+          aria-label="Hex color" />
+        {/* No maxLength: the browser applies it to the raw paste, so '#ff4d8d'
+            would arrive already cut to '#ff4d8'. onHexInput does the clamping. */}
+      </div>
+      <button type="button" className="btn" data-size="sm" onClick={copy} aria-label="Copy hex color">
+        <span className="btn__label"><Icon name={copied ? 'check' : 'copy'} />{copied ? 'Copied' : 'Copy'}</span>
+      </button>
+    </div>
+  )
+
+  // In the dock: the hex field is the options row and the channels share one
+  // parameter strip, pinned under it like every other panel's.
+  if (compact) return <>{hexRow}<ParamRows params={channels} /></>
+
   return (
     <div className="controls__hsl">
-      {compact ? (
-        // In the dock: one channel at a time (the parameter strip), so the
-        // panel never scrolls the hex field out of reach.
-        <ParamRows params={channels} />
-      ) : channels.map(c => (
+      {channels.map(c => (
         <div key={c.key}>
           <div className="controls__row"><span className="controls__label">{c.label}</span>
             <EditableValue value={c.value} min={c.min} max={c.max} suffix={c.suffix} label={c.label} onChange={c.onChange} /></div>
@@ -539,20 +551,7 @@ function ColorSliders({ hex, onColor, compact = false }) {
             def={c.def} value={c.value} on={c.onChange} label={c.label} />
         </div>
       ))}
-
-      <div className="controls__hexrow">
-        <div className="input-group controls__hexfield">
-          <span className="input-group__start t-mono" aria-hidden="true">#</span>
-          <input className="input t-mono controls__hexinput" value={hexDraft} onChange={e => onHexInput(e.target.value)}
-            spellCheck={false} autoCapitalize="none" autoCorrect="off" inputMode="text"
-            aria-label="Hex color" />
-          {/* No maxLength: the browser applies it to the raw paste, so '#ff4d8d'
-              would arrive already cut to '#ff4d8'. onHexInput does the clamping. */}
-        </div>
-        <button type="button" className="btn" data-size="sm" onClick={copy} aria-label="Copy hex color">
-          <span className="btn__label"><Icon name={copied ? 'check' : 'copy'} />{copied ? 'Copied' : 'Copy'}</span>
-        </button>
-      </div>
+      {hexRow}
     </div>
   )
 }
@@ -626,13 +625,9 @@ function BgControls({ settings, onUpdate, pickMode, onPickMode, borderSuggestion
   )
 
   return (
-    <section className="controls__section controls__section--dock" aria-label="Border fill">
-      <Tabs label="Border fill" tabs={BG_SUBTABS} value={sub} onChange={pick} idBase="fill" />
-      <div role="tabpanel" id="fill-panel" aria-labelledby={`fill-tab-${sub}`}
-        className="controls__panel">
-
+    <DockPanel label="Border fill" tabs={BG_SUBTABS} sub={sub} onSub={pick} idBase="fill">
       {sub === 'photo' && (
-        <SwatchGroup title="From your photo" hint="tap to apply" items={tones}
+        <SwatchGroup title="From your photo" hint="Tap to apply" items={tones}
           bgMode={bgMode} bgColor={bgColor} onApply={onApplyBorderColor} />
       )}
 
@@ -664,8 +659,7 @@ function BgControls({ settings, onUpdate, pickMode, onPickMode, borderSuggestion
             value: frostVibrance, onChange: v => onUpdate('frostVibrance', v) },
         ]} />
       )}
-      </div>
-    </section>
+    </DockPanel>
   )
 }
 
@@ -679,15 +673,12 @@ const FRAME_SUBTABS = [
 function FrameControls({ borderThickness, cornerRadius, cropRatio = 'free', aspectMode = 'crop', showMedia, onUpdate,
                          snapEnabled, onSnapToggle, gridDivisions, onGridDivisions,
                          sub = 'border', onSub }) {
-  const setSub = onSub
+  const ratioName = cropRatio === 'free' ? 'Aspect ratio' : (aspectMode === 'fit' ? 'Frame ratio' : 'Crop ratio')
   return (
-    <section className="controls__section controls__section--dock" aria-label="Frame">
-      <Tabs label="Frame" tabs={FRAME_SUBTABS} value={sub} onChange={setSub} idBase="frame" />
-      <div role="tabpanel" id="frame-panel" aria-labelledby={`frame-tab-${sub}`}
-        className="controls__panel">
-
+    <DockPanel label="Frame" tabs={FRAME_SUBTABS} sub={sub} onSub={onSub} idBase="frame">
       {sub === 'border' && (
         <>
+          <Switch label="Show photo" checked={showMedia} onChange={v => onUpdate('showMedia', v)} />
           <ParamRows params={[
             { key: 'border', label: 'Border', suffix: 'px', min: 0, max: 400, step: 1, def: 150,
               value: borderThickness, onChange: v => onUpdate('borderThickness', v) },
@@ -695,34 +686,31 @@ function FrameControls({ borderThickness, cornerRadius, cropRatio = 'free', aspe
               format: v => v === 0 ? 'Square' : v === 100 ? 'Round' : `${v}%`,
               value: cornerRadius, onChange: v => onUpdate('cornerRadius', v) },
           ]} />
-
-          <Switch label="Show photo" checked={showMedia} onChange={v => onUpdate('showMedia', v)} />
         </>
       )}
 
       {sub === 'crop' && (
         <>
           {/* What the chosen ratio applies to: trim the photo, or matte it into
-              a frame of that ratio (photo keeps its own aspect, uncropped). */}
+              a frame of that ratio (photo keeps its own aspect, uncropped). The
+              sentence that said so is for a screen reader; on screen the photo
+              shows it, and the line cost the panel a row. */}
           <Segmented label="Aspect mode" value={aspectMode === 'fit' ? 'fit' : 'crop'}
-            onChange={v => onUpdate('aspectMode', v)}
+            onChange={v => onUpdate('aspectMode', v)} describedBy="frame-aspect-hint"
             options={[{ id: 'crop', label: 'Crop photo' }, { id: 'fit', label: 'Fit photo' }]} />
-          <p className="controls__hint">
+          <p className="sr-only" id="frame-aspect-hint">
             {aspectMode === 'fit'
-              ? 'Frame takes this ratio; photo is matted inside, uncropped.'
-              : 'Photo is trimmed to this ratio.'}
+              ? 'The frame takes the ratio; the photo is matted inside it, uncropped.'
+              : 'The photo is trimmed to the ratio.'}
           </p>
-          <label className="controls__label">
-            {cropRatio === 'free' ? 'Aspect ratio' : (aspectMode === 'fit' ? 'Frame ratio' : 'Crop ratio')}
-          </label>
           {/* Choice chips on one scrolling line. The chosen ratio carries a flip
               cue: tap it again to turn it on its side. */}
-          <div className="chips scroller controls__chips" role="group" aria-label="Ratio">
+          <div className="chips scroller controls__chips" role="group" aria-label={ratioName}>
             {CROP_RATIOS.map(r => {
               const isPortrait  = cropRatio === r.id
               const isLandscape = r.alt !== null && cropRatio === r.alt
               const isActive    = isPortrait || isLandscape
-              const displayLabel = isLandscape ? r.alt : r.id
+              const displayLabel = isLandscape ? r.alt : r.label
               const canFlip = r.alt !== null
               const handleClick = () => {
                 if (!isActive) { onUpdate('cropRatio', r.id) }
@@ -744,16 +732,15 @@ function FrameControls({ borderThickness, cornerRadius, cropRatio = 'free', aspe
         <>
           <Switch label="Snap to grid" checked={!!snapEnabled} onChange={() => onSnapToggle?.()} />
           {snapEnabled && (
-            <>
-              <label className="controls__label">Divisions</label>
+            <div className="controls__row">
+              <span className="controls__label" id="frame-divisions">Divisions</span>
               <Segmented label="Grid divisions" value={gridDivisions} onChange={n => onGridDivisions?.(n)}
-                options={GRID_OPTIONS.map(n => ({ id: n, label: `${n}×${n}` }))} />
-            </>
+                block={false} options={GRID_OPTIONS.map(n => ({ id: n, label: `${n}×${n}` }))} />
+            </div>
           )}
         </>
       )}
-      </div>
-    </section>
+    </DockPanel>
   )
 }
 
@@ -766,75 +753,115 @@ const GRAIN_SUBTABS = [
 function GrainControls({ grainAmount, grainVariability, grainSpread, grainMonochrome, onUpdate }) {
   const [sub, setSub] = useState('amount')
   return (
-    <section className="controls__section controls__section--dock" aria-label="Grain">
-      <Tabs label="Grain" tabs={GRAIN_SUBTABS} value={sub} onChange={setSub} idBase="grain" />
-      <div role="tabpanel" id="grain-panel" aria-labelledby={`grain-tab-${sub}`}
-        className="controls__panel">
-
+    <DockPanel label="Grain" tabs={GRAIN_SUBTABS} sub={sub} onSub={setSub} idBase="grain">
       {sub === 'amount' && (
-        <>
-          <ParamRows params={[
-            { key: 'amount', label: 'Amount', min: 0, max: 100, step: 1, def: 0,
-              format: v => v === 0 ? 'Off' : `${v}%`,
-              value: grainAmount, onChange: v => onUpdate('grainAmount', v) },
-            { key: 'variability', label: 'Variability', min: 0, max: 100, step: 1, def: 0,
-              format: v => v === 0 ? 'Uniform' : `${v}%`,
-              value: grainVariability, onChange: v => onUpdate('grainVariability', v) },
-          ]} />
-        </>
+        <ParamRows params={[
+          { key: 'amount', label: 'Amount', min: 0, max: 100, step: 1, def: 0,
+            format: v => v === 0 ? 'Off' : `${v}%`,
+            value: grainAmount, onChange: v => onUpdate('grainAmount', v) },
+          { key: 'variability', label: 'Variability', min: 0, max: 100, step: 1, def: 0,
+            format: v => v === 0 ? 'Uniform' : `${v}%`,
+            value: grainVariability, onChange: v => onUpdate('grainVariability', v) },
+        ]} />
       )}
 
       {sub === 'texture' && (
         <>
-          <div className="controls__row">
-            <label className="controls__label" htmlFor="spread-slider">Spread</label>
-            <EditableValue value={grainSpread} min={0} max={100} label="Spread"
-              format={v => v === 0 ? 'Off' : `${v}%`}
-              onChange={v => onUpdate('grainSpread', v)} />
-          </div>
-          <Slider id="spread-slider" label="Spread" min={0} max={100} step={1} def={0}
-            value={grainSpread} on={v => onUpdate('grainSpread', v)} />
-
           <Switch label="Monochrome" checked={grainMonochrome} onChange={v => onUpdate('grainMonochrome', v)} />
+          <ParamRows params={[
+            { key: 'spread', label: 'Spread', min: 0, max: 100, step: 1, def: 0,
+              format: v => v === 0 ? 'Off' : `${v}%`,
+              value: grainSpread, onChange: v => onUpdate('grainSpread', v) },
+          ]} />
         </>
       )}
+    </DockPanel>
+  )
+}
+
+/**
+ * Every panel is the same two parts at the same heights (editor.css): a head
+ * row (the layer button, for a tool that has layers, then the tabs) and the
+ * content area under it: an options row at the top and the parameter strip
+ * pinned to the bottom. The content area is one fixed height in every panel,
+ * so the photo above never changes size when you switch tools or tabs, and
+ * the slider is always in the same place under your thumb.
+ */
+function DockPanel({ label, lead, tabs, sub, onSub, idBase, children }) {
+  return (
+    <section className="controls__section" aria-label={label}>
+      <div className="controls__head">
+        {lead}
+        <Tabs label={label} tabs={tabs} value={sub} onChange={onSub} idBase={idBase} />
+      </div>
+      <div role="tabpanel" id={`${idBase}-panel`} aria-labelledby={`${idBase}-tab-${sub}`}
+        className="controls__panel">
+        {children}
       </div>
     </section>
   )
 }
 
+/** Nothing to edit yet: one line in the middle of the content area. */
+function DockEmpty({ children }) {
+  return <p className="controls__empty">{children}</p>
+}
+
 /**
- * The layers of one kind (marks, text) as one scrolling row: Add, then a chip
- * per layer — the chosen one is the layer the panel edits — then Remove for
- * that chosen layer. One remove control at full target size, instead of a
- * small × inside every chip (those were 20px targets).
+ * The layers of one kind (marks, text): a button at the start of the head row
+ * naming the layer the panel edits. It opens a sheet to switch layer, add one
+ * or remove this one. With none yet, it adds the first. (A row of chips for
+ * this cost every Mark and Text panel a row, which is what made the photo
+ * jump when you changed tools.)
  */
-function LayerStrip({ kind, layers, selectedId, labelFor, dotFor, onAdd, onSelect, onRemove }) {
-  const selIndex = layers.findIndex(l => l.id === selectedId)
-  const sel = selIndex >= 0 ? layers[selIndex] : null
-  return (
-    <div className="controls__layers">
-      <button type="button" className="btn" data-size="sm" onClick={onAdd} aria-label={`Add ${kind}`}>
+function LayerPicker({ kind, title, layers, selectedId, labelFor, dotFor, onAdd, onSelect, onRemove }) {
+  const [open, setOpen] = useState(false)
+  const i = layers.findIndex(l => l.id === selectedId)
+  const sel = i >= 0 ? layers[i] : null
+  const close = () => setOpen(false)
+  const dot = (l) => dotFor && <span className="controls__markdot" style={{ '--swatch': dotFor(l) }} aria-hidden="true" />
+
+  if (!layers.length) {
+    return (
+      <button type="button" className="btn controls__layerbtn" data-size="sm" onClick={onAdd} aria-label={`Add ${kind}`}>
         <span className="btn__label"><Icon name="plus" />Add</span>
       </button>
-      {layers.length > 0 && (
-        <div className="chips scroller controls__layer-chips" role="group" aria-label={`${kind}s`}>
-          {layers.map((l, i) => (
-            <button key={l.id} type="button" className="chip" aria-pressed={l.id === selectedId}
-              onClick={() => onSelect(l.id)}>
-              {dotFor && <span className="controls__markdot" style={{ '--swatch': dotFor(l) }} aria-hidden="true" />}
-              <span className="truncate">{labelFor(l, i)}</span>
+    )
+  }
+  // The words on the button start its name (WCAG 2.5.3), so a voice user can
+  // say what they see.
+  const shown = sel ? labelFor(sel, i) : `${layers.length} ${kind}${layers.length === 1 ? '' : 's'}`
+  return (
+    <>
+      <button type="button" className="btn controls__layerbtn" data-size="sm" onClick={() => setOpen(true)}
+        aria-haspopup="dialog" aria-expanded={open}
+        aria-label={`${shown}: switch, add or remove ${kind}s`}>
+        <span className="btn__label">{sel && dot(sel)}<span className="controls__layername">{shown}</span></span>
+        <Icon name="chevron-down" />
+      </button>
+      {open && createPortal(
+        <ActionSheet open onClose={close} title={title}>
+          <div className="menu__group" role="group" aria-label={title}>
+            {layers.map((l, j) => (
+              <button key={l.id} type="button" className="menu__item" role="menuitemradio"
+                aria-checked={l.id === selectedId} onClick={() => { onSelect(l.id); close() }}>
+                <Icon name="check" className="menu__check" />{dot(l)}{labelFor(l, j)}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="menu__item" role="menuitem" onClick={() => { close(); onAdd() }}>
+            <Icon name="plus" />New {kind}
+          </button>
+          {sel && (
+            <button type="button" className="menu__item" role="menuitem" data-tone="bad"
+              onClick={() => { close(); onRemove(sel.id) }}>
+              <Icon name="trash-2" />Remove {labelFor(sel, i)}
             </button>
-          ))}
-        </div>
+          )}
+        </ActionSheet>,
+        document.body,
       )}
-      {sel && (
-        <button type="button" className="btn ed-bare" data-shape="circle" data-size="sm"
-          onClick={() => onRemove(sel.id)} aria-label={`Remove ${labelFor(sel, selIndex)}`}>
-          <Icon name="trash-2" />
-        </button>
-      )}
-    </div>
+    </>
   )
 }
 
@@ -842,7 +869,7 @@ const MARK_SUBTABS = [
   { id: 'shape',   label: 'Shape'   },
   { id: 'ink',     label: 'Ink'     },
   { id: 'edge',    label: 'Edge'    },
-  { id: 'texture', label: 'Riso'    },
+  { id: 'texture', label: 'Texture' },
 ]
 
 // A highlighter only ever darkens in the real world (multiply / darken /
@@ -873,28 +900,25 @@ const EDGE_HINT = {
 function MarkControls({ layers, selectedId, selected, ul, onAdd, onRemove, onSelect }) {
   const [sub, setSub] = useState('shape')
   const [addOpen, setAddOpen] = useState(false)
+  const labelFor = (l, i) => `Mark ${i + 1}`
 
-  const noneHint = (
-    <p className="controls__hint" data-align="center">
-      {layers.length === 0 ? 'Tap Add to lay down a highlight.' : 'Tap a mark above to edit it.'}
-    </p>
+  const picker = (
+    <LayerPicker kind="mark" title="Marks" layers={layers} selectedId={selectedId}
+      labelFor={labelFor} dotFor={l => l.color}
+      onAdd={() => layers.length ? setAddOpen(true) : onAdd()}
+      onSelect={onSelect} onRemove={onRemove} />
   )
+  const grain = selected?.grain ?? 0
+  const riso = (selected?.texture ?? 'none') === 'riso'
 
   return (
-    <section className="controls__section controls__section--dock" aria-label="Highlight marks">
-      <LayerStrip kind="mark" layers={layers} selectedId={selectedId}
-        labelFor={(l, i) => `Mark ${i + 1}`} dotFor={l => l.color}
-        onAdd={() => layers.length ? setAddOpen(true) : onAdd()}
-        onSelect={onSelect} onRemove={onRemove} />
-
-      <Tabs label="Mark" tabs={MARK_SUBTABS} value={sub} onChange={setSub} idBase="mark" />
-      <div role="tabpanel" id="mark-panel" aria-labelledby={`mark-tab-${sub}`}
-        className="controls__panel">
-
-      {!selected ? noneHint : (<>
+    <DockPanel label="Mark" lead={picker} tabs={MARK_SUBTABS} sub={sub} onSub={setSub} idBase="mark">
+      {!selected ? (
+        <DockEmpty>{layers.length === 0 ? 'Tap Add to lay down a highlight.' : 'Tap a mark on the photo to edit it.'}</DockEmpty>
+      ) : (<>
         {sub === 'shape' && (
           <>
-            <p className="controls__hint">Drag the mark on the photo, or tap a value.</p>
+            <p className="controls__hint">Drag the mark on the photo, or set it here.</p>
             <ParamRows params={[
               { key: 'w', label: 'Width', suffix: '%', min: 4, max: 100, step: 1, def: 62,
                 value: Math.round((selected.w ?? 0.62) * 100), onChange: v => ul('w', v / 100) },
@@ -912,14 +936,13 @@ function MarkControls({ layers, selectedId, selected, ul, onAdd, onRemove, onSel
 
         {sub === 'ink' && (
           <>
-            {/* The ink colour leads the blend row: one row instead of two. Six
-                blends are past the segmented control's four, and a scrolling row
-                of chips ended in a sliver at the edge — so the style guide's
-                native select: the picker that opens is the system's own (the
-                wheel on an iPhone). */}
-            <div className="controls__color-row">
+            {/* The ink colour leads the blend row. Six blends are past the
+                segmented control's four, so the style guide's native select:
+                the picker that opens is the system's own (the wheel on an
+                iPhone). */}
+            <div className="controls__row controls__row--start">
               <ColorField value={selected.color} label="Ink color" onChange={v => ul('color', v)} />
-              <label className="controls__color-hint" htmlFor="mark-blend">Blend</label>
+              <label className="controls__label" htmlFor="mark-blend">Blend</label>
               <div className="select controls__select">
                 <select id="mark-blend" value={selected.blend ?? 'multiply'} onChange={e => ul('blend', e.target.value)}
                   aria-describedby="mark-blend-hint">
@@ -939,63 +962,64 @@ function MarkControls({ layers, selectedId, selected, ul, onAdd, onRemove, onSel
         {sub === 'edge' && (
           <>
             {/* The words describe the edge to a screen reader; on screen the
-                photo shows it, and a line of prose here cost the photo a row. */}
+                photo shows it. */}
             <Segmented label="Edge style" value={selected.edge ?? 'marker'} onChange={v => ul('edge', v)}
               options={MARK_EDGES} describedBy="mark-edge-hint" />
             <p className="sr-only" id="mark-edge-hint">{EDGE_HINT[selected.edge ?? 'marker']}</p>
-
-            <ParamRows params={[
-              (selected.edge ?? 'marker') !== 'clean' && {
-                key: 'edgeAmount', label: 'Edge amount', suffix: '%', min: 0, max: 100, step: 1, def: 45,
-                value: selected.edgeAmount ?? 45, onChange: v => ul('edgeAmount', v) },
-              { key: 'grain', label: 'Grain', min: 0, max: 100, step: 1, def: 0,
-                format: v => v === 0 ? 'Off' : `${v}%`,
-                value: selected.grain ?? 0, onChange: v => ul('grain', v) },
-              (selected.grain ?? 0) > 0 && {
-                key: 'grainSize', label: 'Grain size', min: 0, max: 100, step: 1, def: 30,
-                value: selected.grainSize ?? 30, onChange: v => ul('grainSize', v) },
-            ]} />
-
-            {(selected.grain ?? 0) > 0 && (
-              <Switch label="Dissolve" checked={!!selected.grainDissolve} onChange={v => ul('grainDissolve', v)} />
-            )}
-          </>
-        )}
-
-        {sub === 'texture' && (
-          <>
-            <Switch label="Riso print" checked={(selected.texture ?? 'none') === 'riso'}
-              onChange={v => ul('texture', v ? 'riso' : 'none')} describedBy="mark-riso-hint" />
-            <p className="sr-only" id="mark-riso-hint">
-              Rotated halftone screen, uneven drum coverage, and a misregistered pass.
-            </p>
-
-            {(selected.texture ?? 'none') === 'riso' && (
+            {(selected.edge ?? 'marker') !== 'clean' && (
               <ParamRows params={[
-                { key: 'risoScale', label: 'Dot size', min: 0, max: 100, step: 1, def: 40,
-                  value: selected.risoScale ?? 40, onChange: v => ul('risoScale', v) },
-                { key: 'risoAngle', label: 'Screen angle', suffix: '°', min: 0, max: 90, step: 1, def: 45,
-                  value: selected.risoAngle ?? 45, onChange: v => ul('risoAngle', v) },
-                { key: 'risoOffset', label: 'Misregister', min: 0, max: 100, step: 1, def: 30,
-                  format: v => v === 0 ? 'Aligned' : `${v}%`,
-                  value: selected.risoOffset ?? 30, onChange: v => ul('risoOffset', v) },
+                { key: 'edgeAmount', label: 'Edge amount', suffix: '%', min: 0, max: 100, step: 1, def: 45,
+                  value: selected.edgeAmount ?? 45, onChange: v => ul('edgeAmount', v) },
               ]} />
             )}
           </>
         )}
+
+        {/* Everything that breaks up the ink: the riso print and the grain. */}
+        {sub === 'texture' && (
+          <>
+            <div className="controls__row controls__row--start">
+              <Switch layout="start" label="Riso print" checked={riso}
+                onChange={v => ul('texture', v ? 'riso' : 'none')} describedBy="mark-riso-hint" />
+              {grain > 0 && (
+                <div className="chips controls__chips controls__push" role="group" aria-label="Grain">
+                  <button type="button" className="chip" aria-pressed={!!selected.grainDissolve}
+                    onClick={() => ul('grainDissolve', !selected.grainDissolve)}>Dissolve</button>
+                </div>
+              )}
+            </div>
+            <p className="sr-only" id="mark-riso-hint">
+              Rotated halftone screen, uneven drum coverage, and a misregistered pass.
+            </p>
+            <ParamRows params={[
+              { key: 'grain', label: 'Grain', min: 0, max: 100, step: 1, def: 0,
+                format: v => v === 0 ? 'Off' : `${v}%`,
+                value: grain, onChange: v => ul('grain', v) },
+              grain > 0 && {
+                key: 'grainSize', label: 'Grain size', min: 0, max: 100, step: 1, def: 30,
+                value: selected.grainSize ?? 30, onChange: v => ul('grainSize', v) },
+              riso && { key: 'risoScale', label: 'Dot size', min: 0, max: 100, step: 1, def: 40,
+                value: selected.risoScale ?? 40, onChange: v => ul('risoScale', v) },
+              riso && { key: 'risoAngle', label: 'Screen angle', suffix: '°', min: 0, max: 90, step: 1, def: 45,
+                value: selected.risoAngle ?? 45, onChange: v => ul('risoAngle', v) },
+              riso && { key: 'risoOffset', label: 'Misregister', min: 0, max: 100, step: 1, def: 30,
+                format: v => v === 0 ? 'Aligned' : `${v}%`,
+                value: selected.risoOffset ?? 30, onChange: v => ul('risoOffset', v) },
+            ]} />
+          </>
+        )}
       </>)}
 
-      </div>
       {addOpen && (
         <AddLayerSheet
           title="New highlight" layers={layers}
-          labelFor={(l, i) => `Mark ${i + 1}`} dotFor={l => l.color}
+          labelFor={labelFor} dotFor={l => l.color}
           onDefault={() => { setAddOpen(false); onAdd() }}
           onCopy={(id) => { setAddOpen(false); onAdd(id) }}
           onClose={() => setAddOpen(false)}
         />
       )}
-    </section>
+    </DockPanel>
   )
 }
 
@@ -1017,311 +1041,279 @@ const TEXT_SUBTABS = [
 function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLayer, onRemoveLayer, onSelectLayer }) {
   const [sub, setSub] = useState('content')
   const [addOpen, setAddOpen] = useState(false)
+  const labelFor = (l, i) => (l.content?.trim() ? l.content.trim().slice(0, 18) : `Layer ${i + 1}`)
+  const L = selectedLayer
 
-  const noLayerHint = (
-    <p className="controls__hint" data-align="center">
-      {textLayers.length === 0 ? 'Tap Add to create a text layer.' : 'Tap a layer above to edit it.'}
-    </p>
+  const picker = (
+    <LayerPicker kind="text layer" title="Text layers" layers={textLayers} selectedId={selectedLayerId}
+      labelFor={labelFor}
+      onAdd={() => textLayers.length ? setAddOpen(true) : onAddLayer()}
+      onSelect={onSelectLayer} onRemove={onRemoveLayer} />
   )
+  const tabs = TEXT_SUBTABS.map(t => ({ ...t, on: !!(L && t.isOn?.(L)) }))
+
+  // A box's size is Auto until you change it: Auto is the manual size at
+  // 100% (one line tall, the text's width), which renders identically, so the
+  // strip says "Auto" there instead of a separate Auto / Manual control.
+  const manual = (L?.boxSize ?? 'auto') === 'manual'
+  const boxDim = (key) => ({
+    value: manual ? (L[key] ?? 100) : 100,
+    format: v => v === 100 ? 'Auto' : `${v}%`,
+    onChange: v => ul(manual ? { [key]: v } : { boxSize: 'manual', boxWidth: 100, boxHeight: 100, [key]: v }),
+  })
 
   return (
-    <section className="controls__section controls__section--dock" aria-label="Text layers">
-      {/* Layer strip — always visible */}
-      <LayerStrip kind="text layer" layers={textLayers} selectedId={selectedLayerId}
-        labelFor={(l, i) => (l.content.trim() ? l.content.trim().slice(0, 14) : `Layer ${i + 1}`)}
-        onAdd={() => textLayers.length ? setAddOpen(true) : onAddLayer()}
-        onSelect={onSelectLayer} onRemove={onRemoveLayer} />
-
-      {/* Sub-tab bar */}
-      <Tabs label="Text" tabs={TEXT_SUBTABS.map(t => ({ ...t, on: !!(selectedLayer && t.isOn?.(selectedLayer)) }))}
-        value={sub} onChange={setSub} idBase="text" block={false} />
-      <div role="tabpanel" id="text-panel" aria-labelledby={`text-tab-${sub}`}
-        className="controls__panel">
-
-      {/* Content sub-tab */}
-      {sub === 'content' && (
-        selectedLayer ? (
+    <DockPanel label="Text" lead={picker} tabs={tabs} sub={sub} onSub={setSub} idBase="text">
+      {!L ? (
+        <DockEmpty>{textLayers.length === 0 ? 'Tap Add to create a text layer.' : 'Tap text on the photo to edit it.'}</DockEmpty>
+      ) : (<>
+        {sub === 'content' && (
           <>
             <textarea
-              className="input controls__textarea" aria-label="Text"
+              className="input controls__textarea" aria-label="Text" aria-describedby="text-content-hint"
               placeholder="Type something…"
-              value={selectedLayer.content}
+              value={L.content}
               onChange={e => ul('content', e.target.value)}
-              rows={3}
+              rows={2}
               spellCheck={false}
             />
-            <p className="controls__hint" data-align="center">
-              Tap text on canvas to reposition
-            </p>
+            <p className="controls__hint" id="text-content-hint">Drag the text on the photo to move it.</p>
           </>
-        ) : noLayerHint
-      )}
+        )}
 
-      {/* Style sub-tab */}
-      {sub === 'font' && (
-        selectedLayer ? (
-          <>
-            <div className="controls__fontlist controls__fontlist--solo" role="radiogroup" aria-label={`Font family, ${FONTS.length} families`}
-              onScroll={(e) => {
-                const el = e.currentTarget
-                const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 8
-                el.classList.toggle('controls__fontlist--atend', atEnd)
-              }}>
-              {FONT_GROUPS.map(group => (
-                <div key={group.name} className="controls__font-group">
-                  <div className="controls__font-group-label">{group.name}</div>
-                  {group.fonts.map(f => (
-                    <button key={f.id} role="radio" aria-checked={selectedLayer.font === f.id}
-                      className={`controls__font-item${selectedLayer.font === f.id ? ' controls__font-item--active' : ''}`}
-                      style={{ fontFamily: f.id }} onClick={() => ul('font', f.id)}>{f.label}</button>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </>
-        ) : noLayerHint
-      )}
+        {sub === 'font' && (
+          <div className="controls__fontlist" role="radiogroup" aria-label={`Font family, ${FONTS.length} families`}>
+            {FONT_GROUPS.map(group => (
+              <div key={group.name} className="controls__font-group">
+                <div className="controls__font-group-label">{group.name}</div>
+                {group.fonts.map(f => (
+                  <button key={f.id} role="radio" aria-checked={L.font === f.id}
+                    className="controls__font-item"
+                    style={{ fontFamily: f.id }} onClick={() => ul('font', f.id)}>{f.label}</button>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
 
-      {sub === 'format' && (
-        selectedLayer ? (
+        {sub === 'format' && (
           <>
-            <div className="controls__text-row">
+            <div className="controls__row controls__row--start">
               {/* Bold and italic are toggles, each a circle holding its letter. */}
               <div className="controls__toggles" role="group" aria-label="Style">
                 <button type="button" className="btn controls__letter" data-shape="circle" data-size="sm"
-                  style={{ fontWeight: 800 }} onClick={() => ul('bold', !selectedLayer.bold)}
-                  aria-pressed={!!selectedLayer.bold} aria-label="Bold">B</button>
+                  style={{ fontWeight: 800 }} onClick={() => ul('bold', !L.bold)}
+                  aria-pressed={!!L.bold} aria-label="Bold">B</button>
                 <button type="button" className="btn controls__letter" data-shape="circle" data-size="sm"
-                  style={{ fontStyle: 'italic' }} onClick={() => ul('italic', !selectedLayer.italic)}
-                  aria-pressed={!!selectedLayer.italic} aria-label="Italic">I</button>
+                  style={{ fontStyle: 'italic' }} onClick={() => ul('italic', !L.italic)}
+                  aria-pressed={!!L.italic} aria-label="Italic">I</button>
               </div>
-              <Segmented label="Alignment" value={selectedLayer.align} onChange={v => ul('align', v)}
-                options={ALIGNS} />
+              <div className="controls__grow">
+                <Segmented label="Alignment" value={L.align} onChange={v => ul('align', v)} options={ALIGNS} />
+              </div>
             </div>
-
             <ParamRows params={[
               { key: 'size', label: 'Size', min: 20, max: 300, step: 2, def: 80,
-                value: selectedLayer.size, onChange: v => ul('size', v) },
+                value: L.size, onChange: v => ul('size', v) },
               { key: 'opacity', label: 'Opacity', suffix: '%', min: 10, max: 100, step: 1, def: 100,
-                value: selectedLayer.opacity, onChange: v => ul('opacity', v) },
+                value: L.opacity, onChange: v => ul('opacity', v) },
               { key: 'x', label: 'Position X', suffix: '%', min: 0, max: 100, step: 1, def: 50,
-                value: Math.round((selectedLayer.x ?? 0.5) * 100), onChange: v => ul('x', v / 100) },
+                value: Math.round((L.x ?? 0.5) * 100), onChange: v => ul('x', v / 100) },
               { key: 'y', label: 'Position Y', suffix: '%', min: 0, max: 100, step: 1, def: 88,
-                value: Math.round((selectedLayer.y ?? 0.88) * 100), onChange: v => ul('y', v / 100) },
+                value: Math.round((L.y ?? 0.88) * 100), onChange: v => ul('y', v / 100) },
               { key: 'letterSpacing', label: 'Letter spacing', min: -5, max: 40, step: 1, def: 0,
                 format: v => v === 0 ? 'Normal' : `${v}px`,
-                value: selectedLayer.letterSpacing, onChange: v => ul('letterSpacing', v) },
+                value: L.letterSpacing, onChange: v => ul('letterSpacing', v) },
               { key: 'wordSpacing', label: 'Word spacing', min: -10, max: 80, step: 1, def: 0,
                 format: v => v === 0 ? 'Normal' : `${v}px`,
-                value: selectedLayer.wordSpacing ?? 0, onChange: v => ul('wordSpacing', v) },
+                value: L.wordSpacing ?? 0, onChange: v => ul('wordSpacing', v) },
               { key: 'lineHeight', label: 'Line height', min: 0.8, max: 2.5, step: 0.05, def: 1.3,
                 format: v => v.toFixed(2),
-                value: selectedLayer.lineHeight ?? 1.3, onChange: v => ul('lineHeight', v) },
+                value: L.lineHeight ?? 1.3, onChange: v => ul('lineHeight', v) },
             ]} />
           </>
-        ) : noLayerHint
-      )}
+        )}
 
-      {/* The effects: one tab each. */}
-      {['color', 'box', 'blob', 'motion', 'echo'].includes(sub) && (
-        selectedLayer ? (
+        {sub === 'color' && (
           <>
-            {sub === 'color' && (
-              <>
-                {/* One row: the text's colour and the two effects. The outline's
-                    colour leads its own width slider, beside what it belongs to. */}
-                <div className="controls__color-row">
-                  <ColorField value={selectedLayer.color} label="Text color" onChange={v => ul('color', v)} />
-                  <div className="chips controls__effects-inline" role="group" aria-label="Effects">
-                    <button type="button" className="chip" aria-pressed={!!selectedLayer.shadow}
-                      onClick={() => ul('shadow', !selectedLayer.shadow)}>Shadow</button>
-                    <button type="button" className="chip" aria-pressed={!!selectedLayer.stroke}
-                      onClick={() => ul('stroke', !selectedLayer.stroke)}>Outline</button>
-                  </div>
-                </div>
-                {selectedLayer.stroke && (
-                  <ParamRows lead={<ColorField value={selectedLayer.strokeColor} label="Outline color" onChange={v => ul('strokeColor', v)} />}
-                    params={[
-                    { key: 'strokeWidth', label: 'Outline width', suffix: '%', min: 0, max: 100, step: 1, def: 35,
-                      value: selectedLayer.strokeWidth ?? 35, onChange: v => ul('strokeWidth', v) },
-                  ]} />
-                )}
-              </>
-            )}
-
-            {sub === 'box' && (
-              <>
-                <Segmented label="Text background" value={selectedLayer.bg} onChange={v => ul('bg', v)}
-                  options={TEXT_BG_MODES} />
-                {selectedLayer.bg !== 'none' && (
-                  <>
-                    <div className="controls__color-row">
-                      <ColorField value={selectedLayer.bgColor} label="Background color" onChange={v => ul('bgColor', v)} />
-                      <span className="controls__color-hint">Size</span>
-                      <Segmented label="Box size" value={selectedLayer.boxSize ?? 'auto'} onChange={v => ul('boxSize', v)}
-                        options={TEXT_BOX_SIZES} block={false} />
-                    </div>
-                    <ParamRows params={[
-                      { key: 'bgOpacity', label: 'Opacity', suffix: '%', min: 10, max: 100, step: 1, def: 50,
-                        value: selectedLayer.bgOpacity, onChange: v => ul('bgOpacity', v) },
-                      (selectedLayer.boxSize ?? 'auto') === 'manual' && {
-                        key: 'boxHeight', label: 'Box height', suffix: '%', min: 20, max: 200, step: 1, def: 100,
-                        value: selectedLayer.boxHeight ?? 100, onChange: v => ul('boxHeight', v) },
-                      (selectedLayer.boxSize ?? 'auto') === 'manual' && {
-                        key: 'boxWidth', label: 'Box width', suffix: '%', min: 20, max: 300, step: 1, def: 100,
-                        value: selectedLayer.boxWidth ?? 100, onChange: v => ul('boxWidth', v) },
-                    ]} />
-                  </>
-                )}
-              </>
-            )}
-
-            {sub === 'blob' && (
-              <>
-                {/* Gooey distance-based outline that merges nearby letters */}
-                {/* One row: the switch, and once it is on, the blob's colour and its
-                    grain toggles beside it. */}
-                <div className="controls__color-row">
-                  <div className="controls__grow"><Switch layout="start" label="Blob stroke" checked={!!selectedLayer.blobStroke}
-                    onChange={v => ul('blobStroke', v)} /></div>
-                  {selectedLayer.blobStroke && (
-                    <ColorField value={selectedLayer.blobColor ?? '#000000'} label="Blob color" onChange={v => ul('blobColor', v)} />
-                  )}
-                </div>
-                {selectedLayer.blobStroke && (
-                  <>
-                    {(selectedLayer.blobGrain ?? 0) > 0 && (
-                      <div className="chips controls__chips" role="group" aria-label="Blob grain">
-                        <button type="button" className="chip" aria-pressed={!!selectedLayer.blobGrainDissolve}
-                          onClick={() => ul('blobGrainDissolve', !selectedLayer.blobGrainDissolve)}>Dissolve</button>
-                        <button type="button" className="chip" aria-pressed={selectedLayer.blobGrainMono ?? true}
-                          onClick={() => ul('blobGrainMono', !(selectedLayer.blobGrainMono ?? true))}>Mono</button>
-                      </div>
-                    )}
-                    <ParamRows params={[
-                      { key: 'blobDistance', label: 'Distance', suffix: '%', min: 0, max: 100, step: 1, def: 40,
-                        value: selectedLayer.blobDistance ?? 40, onChange: v => ul('blobDistance', v) },
-                      { key: 'blobCurve', label: 'Curviness', suffix: '%', min: 0, max: 100, step: 1, def: 30,
-                        value: selectedLayer.blobCurve ?? 30, onChange: v => ul('blobCurve', v) },
-                      { key: 'blobGrain', label: 'Grain', min: 0, max: 100, step: 1, def: 0,
-                        format: v => v === 0 ? 'Off' : `${v}%`,
-                        value: selectedLayer.blobGrain ?? 0, onChange: v => ul('blobGrain', v) },
-                      (selectedLayer.blobGrain ?? 0) > 0 && {
-                        key: 'blobGrainSize', label: 'Grain size', suffix: '%', min: 0, max: 100, step: 1, def: 30,
-                        value: selectedLayer.blobGrainSize ?? 30, onChange: v => ul('blobGrainSize', v) },
-                      (selectedLayer.blobGrain ?? 0) > 0 && {
-                        key: 'blobGrainRough', label: 'Roughness', min: 0, max: 100, step: 1, def: 0,
-                        format: v => v === 0 ? 'Smooth' : `${v}%`,
-                        value: selectedLayer.blobGrainRough ?? 0, onChange: v => ul('blobGrainRough', v) },
-                    ]} />
-                  </>
-                )}
-              </>
-            )}
-
-            {sub === 'motion' && (
-              <>
-                {/* Rear-curtain-sync motion blur: sharp text with a fading trail */}
-                <Switch label="Motion blur" checked={!!selectedLayer.motionBlur} onChange={v => ul('motionBlur', v)} />
-                {selectedLayer.motionBlur && (
-                  <>
-                    <ParamRows params={[
-                      // Direction snaps to 5° so the streak stays put when you lift your thumb
-                      { key: 'motionAngle', label: 'Direction', suffix: '°', min: 0, max: 360, step: 5, def: 0,
-                        value: selectedLayer.motionAngle ?? 0, onChange: v => ul('motionAngle', v) },
-                      { key: 'motionLength', label: 'Distance', min: 0, max: 400, step: 2, def: 60,
-                        format: v => v === 0 ? 'Off' : `${v}px`,
-                        value: selectedLayer.motionLength ?? 0, onChange: v => ul('motionLength', v) },
-                      { key: 'motionSpeed', label: 'Speed', suffix: '%', min: 0, max: 100, step: 1, def: 60,
-                        value: selectedLayer.motionSpeed ?? 60, onChange: v => ul('motionSpeed', v) },
-                      { key: 'trailGrain', label: 'Trail grain', min: 0, max: 100, step: 1, def: 0,
-                        format: v => v === 0 ? 'Off' : `${v}%`,
-                        value: selectedLayer.trailGrain ?? 0, onChange: v => ul('trailGrain', v) },
-                      (selectedLayer.trailGrain ?? 0) > 0 && {
-                        key: 'trailGrainSize', label: 'Grain size', suffix: '%', min: 0, max: 100, step: 1, def: 30,
-                        value: selectedLayer.trailGrainSize ?? 30, onChange: v => ul('trailGrainSize', v) },
-                      (selectedLayer.trailGrain ?? 0) > 0 && {
-                        key: 'trailGrainVariability', label: 'Roughness', min: 0, max: 100, step: 1, def: 0,
-                        format: v => v === 0 ? 'Smooth' : `${v}%`,
-                        value: selectedLayer.trailGrainVariability ?? 0, onChange: v => ul('trailGrainVariability', v) },
-                      (selectedLayer.trailGrain ?? 0) > 0 && {
-                        key: 'trailGrainSpread', label: 'Spread', min: 0, max: 100, step: 1, def: 0,
-                        format: v => v === 0 ? 'Even' : `${v}%`,
-                        value: selectedLayer.trailGrainSpread ?? 0, onChange: v => ul('trailGrainSpread', v) },
-                    ]} />
-                    {(selectedLayer.trailGrain ?? 0) > 0 && (
-                      <div className="chips controls__chips" role="group" aria-label="Trail grain">
-                        <button type="button" className="chip" aria-pressed={!!selectedLayer.trailGrainDissolve}
-                          onClick={() => ul('trailGrainDissolve', !selectedLayer.trailGrainDissolve)}>Dissolve</button>
-                        <button type="button" className="chip" aria-pressed={selectedLayer.trailGrainMono ?? true}
-                          onClick={() => ul('trailGrainMono', !(selectedLayer.trailGrainMono ?? true))}>Mono</button>
-                      </div>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-
-            {sub === 'echo' && (
-              <>
-                {/* Discrete decaying ghost copies (After Effects-style) */}
-                {/* One row: the switch, and once it is on, how the copies blend. */}
-                <div className="controls__color-row">
-                  <div className="controls__grow"><Switch layout="start" label="Echo" checked={!!selectedLayer.echo} onChange={v => ul('echo', v)} /></div>
-                  {selectedLayer.echo && (
-                    <div className="select controls__select">
-                      <select value={selectedLayer.echoBlend ?? 'stack'} onChange={e => ul('echoBlend', e.target.value)}
-                        aria-label="Echo blend">
-                        {ECHO_BLENDS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-                      </select>
-                      <Icon name="chevron-down" />
-                    </div>
-                  )}
-                </div>
-                {selectedLayer.echo && (
-                  <>
-                    <ParamRows params={[
-                      { key: 'echoCount', label: 'Amount', min: 1, max: 16, step: 1, def: 5,
-                        format: v => `${v}×`, value: selectedLayer.echoCount ?? 5, onChange: v => ul('echoCount', v) },
-                      { key: 'echoAngle', label: 'Direction', suffix: '°', min: 0, max: 360, step: 5, def: 0,
-                        value: selectedLayer.echoAngle ?? 0, onChange: v => ul('echoAngle', v) },
-                      { key: 'echoSpacing', label: 'Spacing', suffix: 'px', min: 0, max: 200, step: 1, def: 40,
-                        value: selectedLayer.echoSpacing ?? 40, onChange: v => ul('echoSpacing', v) },
-                      { key: 'echoEase', label: 'Curve', min: -100, max: 100, step: 1, def: 50,
-                        format: v => v === 0 ? 'Linear' : `${v > 0 ? '+' : '−'}${Math.abs(v)}`,
-                        value: selectedLayer.echoEase ?? 50, onChange: v => ul('echoEase', v) },
-                      { key: 'echoGhosting', label: 'Ghosting', suffix: '%', min: 0, max: 100, step: 1, def: 60,
-                        value: selectedLayer.echoGhosting ?? 60, onChange: v => ul('echoGhosting', v) },
-                      { key: 'echoBlur', label: 'Blur', min: 0, max: 60, step: 1, def: 0,
-                        format: v => v === 0 ? 'Off' : `${v}`, value: selectedLayer.echoBlur ?? 0, onChange: v => ul('echoBlur', v) },
-                      { key: 'echoZoom', label: 'Zoom', min: -50, max: 100, step: 1, def: 0,
-                        format: v => v === 0 ? 'Off' : `${v > 0 ? '+' : '−'}${Math.abs(v)}%`,
-                        value: selectedLayer.echoZoom ?? 0, onChange: v => ul('echoZoom', v) },
-                      { key: 'echoSpin', label: 'Spin', min: -30, max: 30, step: 1, def: 0,
-                        format: v => v === 0 ? 'Off' : `${v > 0 ? '+' : '−'}${Math.abs(v)}°`,
-                        value: selectedLayer.echoSpin ?? 0, onChange: v => ul('echoSpin', v) },
-                      { key: 'echoHue', label: 'Chromatic', min: 0, max: 90, step: 1, def: 0,
-                        format: v => v === 0 ? 'Off' : `${v}°`, value: selectedLayer.echoHue ?? 0, onChange: v => ul('echoHue', v) },
-                    ]} />
-                  </>
-                )}
-              </>
+            {/* The text's colour and the two effects on one row; the outline's
+                colour leads its width, beside what it belongs to. */}
+            <div className="controls__row controls__row--start">
+              <ColorField value={L.color} label="Text color" onChange={v => ul('color', v)} />
+              <div className="chips controls__chips" role="group" aria-label="Effects">
+                <button type="button" className="chip" aria-pressed={!!L.shadow}
+                  onClick={() => ul('shadow', !L.shadow)}>Shadow</button>
+                <button type="button" className="chip" aria-pressed={!!L.stroke}
+                  onClick={() => ul('stroke', !L.stroke)}>Outline</button>
+              </div>
+            </div>
+            {L.stroke && (
+              <ParamRows lead={<ColorField value={L.strokeColor} label="Outline color" onChange={v => ul('strokeColor', v)} />}
+                params={[
+                { key: 'strokeWidth', label: 'Outline width', suffix: '%', min: 0, max: 100, step: 1, def: 35,
+                  value: L.strokeWidth ?? 35, onChange: v => ul('strokeWidth', v) },
+              ]} />
             )}
           </>
-        ) : noLayerHint
-      )}
+        )}
 
-      </div>
+        {sub === 'box' && (
+          <>
+            <div className="controls__row controls__row--start">
+              <div className="controls__grow">
+                <Segmented label="Text background" value={L.bg} onChange={v => ul('bg', v)} options={TEXT_BG_MODES} />
+              </div>
+              {L.bg !== 'none' && (
+                <ColorField value={L.bgColor} label="Background color" onChange={v => ul('bgColor', v)} />
+              )}
+            </div>
+            {L.bg !== 'none' && (
+              <ParamRows params={[
+                { key: 'bgOpacity', label: 'Opacity', suffix: '%', min: 10, max: 100, step: 1, def: 50,
+                  value: L.bgOpacity, onChange: v => ul('bgOpacity', v) },
+                { key: 'boxHeight', label: 'Box height', suffix: '%', min: 20, max: 200, step: 1, def: 100, ...boxDim('boxHeight') },
+                { key: 'boxWidth', label: 'Box width', suffix: '%', min: 20, max: 300, step: 1, def: 100, ...boxDim('boxWidth') },
+              ]} />
+            )}
+          </>
+        )}
+
+        {sub === 'blob' && (
+          <>
+            {/* A gooey distance-based outline that merges nearby letters. Its
+                colour leads the strip; its grain toggles share the switch's
+                row once there is grain. */}
+            <div className="controls__row controls__row--start">
+              <Switch layout="start" label="Blob" checked={!!L.blobStroke} onChange={v => ul('blobStroke', v)} />
+              {L.blobStroke && (L.blobGrain ?? 0) > 0 && (
+                <div className="chips scroller controls__chips controls__push" role="group" aria-label="Blob grain">
+                  <button type="button" className="chip" aria-pressed={!!L.blobGrainDissolve}
+                    onClick={() => ul('blobGrainDissolve', !L.blobGrainDissolve)}>Dissolve</button>
+                  <button type="button" className="chip" aria-pressed={L.blobGrainMono ?? true}
+                    onClick={() => ul('blobGrainMono', !(L.blobGrainMono ?? true))}>Mono</button>
+                </div>
+              )}
+            </div>
+            {L.blobStroke && (
+              <ParamRows lead={<ColorField value={L.blobColor ?? '#000000'} label="Blob color" onChange={v => ul('blobColor', v)} />}
+                params={[
+                { key: 'blobDistance', label: 'Distance', suffix: '%', min: 0, max: 100, step: 1, def: 40,
+                  value: L.blobDistance ?? 40, onChange: v => ul('blobDistance', v) },
+                { key: 'blobCurve', label: 'Curviness', suffix: '%', min: 0, max: 100, step: 1, def: 30,
+                  value: L.blobCurve ?? 30, onChange: v => ul('blobCurve', v) },
+                { key: 'blobGrain', label: 'Grain', min: 0, max: 100, step: 1, def: 0,
+                  format: v => v === 0 ? 'Off' : `${v}%`,
+                  value: L.blobGrain ?? 0, onChange: v => ul('blobGrain', v) },
+                (L.blobGrain ?? 0) > 0 && {
+                  key: 'blobGrainSize', label: 'Grain size', suffix: '%', min: 0, max: 100, step: 1, def: 30,
+                  value: L.blobGrainSize ?? 30, onChange: v => ul('blobGrainSize', v) },
+                (L.blobGrain ?? 0) > 0 && {
+                  key: 'blobGrainRough', label: 'Roughness', min: 0, max: 100, step: 1, def: 0,
+                  format: v => v === 0 ? 'Smooth' : `${v}%`,
+                  value: L.blobGrainRough ?? 0, onChange: v => ul('blobGrainRough', v) },
+              ]} />
+            )}
+          </>
+        )}
+
+        {sub === 'motion' && (
+          <>
+            {/* Rear-curtain-sync motion blur: sharp text with a fading trail. */}
+            <div className="controls__row controls__row--start">
+              <Switch layout="start" label="Motion blur" checked={!!L.motionBlur} onChange={v => ul('motionBlur', v)} />
+              {L.motionBlur && (L.trailGrain ?? 0) > 0 && (
+                <div className="chips scroller controls__chips controls__push" role="group" aria-label="Trail grain">
+                  <button type="button" className="chip" aria-pressed={!!L.trailGrainDissolve}
+                    onClick={() => ul('trailGrainDissolve', !L.trailGrainDissolve)}>Dissolve</button>
+                  <button type="button" className="chip" aria-pressed={L.trailGrainMono ?? true}
+                    onClick={() => ul('trailGrainMono', !(L.trailGrainMono ?? true))}>Mono</button>
+                </div>
+              )}
+            </div>
+            {L.motionBlur && (
+              <ParamRows params={[
+                // Direction snaps to 5° so the streak stays put when you lift your thumb
+                { key: 'motionAngle', label: 'Direction', suffix: '°', min: 0, max: 360, step: 5, def: 0,
+                  value: L.motionAngle ?? 0, onChange: v => ul('motionAngle', v) },
+                { key: 'motionLength', label: 'Distance', min: 0, max: 400, step: 2, def: 60,
+                  format: v => v === 0 ? 'Off' : `${v}px`,
+                  value: L.motionLength ?? 0, onChange: v => ul('motionLength', v) },
+                { key: 'motionSpeed', label: 'Speed', suffix: '%', min: 0, max: 100, step: 1, def: 60,
+                  value: L.motionSpeed ?? 60, onChange: v => ul('motionSpeed', v) },
+                { key: 'trailGrain', label: 'Trail grain', min: 0, max: 100, step: 1, def: 0,
+                  format: v => v === 0 ? 'Off' : `${v}%`,
+                  value: L.trailGrain ?? 0, onChange: v => ul('trailGrain', v) },
+                (L.trailGrain ?? 0) > 0 && {
+                  key: 'trailGrainSize', label: 'Grain size', suffix: '%', min: 0, max: 100, step: 1, def: 30,
+                  value: L.trailGrainSize ?? 30, onChange: v => ul('trailGrainSize', v) },
+                (L.trailGrain ?? 0) > 0 && {
+                  key: 'trailGrainVariability', label: 'Roughness', min: 0, max: 100, step: 1, def: 0,
+                  format: v => v === 0 ? 'Smooth' : `${v}%`,
+                  value: L.trailGrainVariability ?? 0, onChange: v => ul('trailGrainVariability', v) },
+                (L.trailGrain ?? 0) > 0 && {
+                  key: 'trailGrainSpread', label: 'Spread', min: 0, max: 100, step: 1, def: 0,
+                  format: v => v === 0 ? 'Even' : `${v}%`,
+                  value: L.trailGrainSpread ?? 0, onChange: v => ul('trailGrainSpread', v) },
+              ]} />
+            )}
+          </>
+        )}
+
+        {sub === 'echo' && (
+          <>
+            {/* Discrete decaying ghost copies (After Effects-style), and once
+                it is on, how the copies blend. */}
+            <div className="controls__row controls__row--start">
+              <Switch layout="start" label="Echo" checked={!!L.echo} onChange={v => ul('echo', v)} />
+              {L.echo && (
+                <div className="select controls__select controls__push">
+                  <select value={L.echoBlend ?? 'stack'} onChange={e => ul('echoBlend', e.target.value)}
+                    aria-label="Echo blend">
+                    {ECHO_BLENDS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                  </select>
+                  <Icon name="chevron-down" />
+                </div>
+              )}
+            </div>
+            {L.echo && (
+              <ParamRows params={[
+                { key: 'echoCount', label: 'Amount', min: 1, max: 16, step: 1, def: 5,
+                  format: v => `${v}×`, value: L.echoCount ?? 5, onChange: v => ul('echoCount', v) },
+                { key: 'echoAngle', label: 'Direction', suffix: '°', min: 0, max: 360, step: 5, def: 0,
+                  value: L.echoAngle ?? 0, onChange: v => ul('echoAngle', v) },
+                { key: 'echoSpacing', label: 'Spacing', suffix: 'px', min: 0, max: 200, step: 1, def: 40,
+                  value: L.echoSpacing ?? 40, onChange: v => ul('echoSpacing', v) },
+                { key: 'echoEase', label: 'Curve', min: -100, max: 100, step: 1, def: 50,
+                  format: v => v === 0 ? 'Linear' : `${v > 0 ? '+' : '−'}${Math.abs(v)}`,
+                  value: L.echoEase ?? 50, onChange: v => ul('echoEase', v) },
+                { key: 'echoGhosting', label: 'Ghosting', suffix: '%', min: 0, max: 100, step: 1, def: 60,
+                  value: L.echoGhosting ?? 60, onChange: v => ul('echoGhosting', v) },
+                { key: 'echoBlur', label: 'Blur', min: 0, max: 60, step: 1, def: 0,
+                  format: v => v === 0 ? 'Off' : `${v}`, value: L.echoBlur ?? 0, onChange: v => ul('echoBlur', v) },
+                { key: 'echoZoom', label: 'Zoom', min: -50, max: 100, step: 1, def: 0,
+                  format: v => v === 0 ? 'Off' : `${v > 0 ? '+' : '−'}${Math.abs(v)}%`,
+                  value: L.echoZoom ?? 0, onChange: v => ul('echoZoom', v) },
+                { key: 'echoSpin', label: 'Spin', min: -30, max: 30, step: 1, def: 0,
+                  format: v => v === 0 ? 'Off' : `${v > 0 ? '+' : '−'}${Math.abs(v)}°`,
+                  value: L.echoSpin ?? 0, onChange: v => ul('echoSpin', v) },
+                { key: 'echoHue', label: 'Chromatic', min: 0, max: 90, step: 1, def: 0,
+                  format: v => v === 0 ? 'Off' : `${v}°`, value: L.echoHue ?? 0, onChange: v => ul('echoHue', v) },
+              ]} />
+            )}
+          </>
+        )}
+      </>)}
+
       {addOpen && (
         <AddLayerSheet
           title="New text layer" layers={textLayers}
-          labelFor={(l, i) => (l.content?.trim() ? l.content.trim().slice(0, 18) : `Layer ${i + 1}`)}
+          labelFor={labelFor}
           onDefault={() => { setAddOpen(false); onAddLayer() }}
           onCopy={(id) => { setAddOpen(false); onAddLayer(id) }}
           onClose={() => setAddOpen(false)}
         />
       )}
-    </section>
+    </DockPanel>
   )
 }
 

@@ -109,7 +109,9 @@
      bar instead of running edge to edge. */
   max-inline-size: var(--container-sm);
   margin-inline: auto;
-  padding-inline: max(var(--gutter), var(--safe-left, 0px)) max(var(--gutter), var(--safe-right, 0px));
+  /* The panel and the tools set their own sides (below), so the hairline
+     between them can run the full width of the tray. */
+  padding-inline: var(--safe-left, 0px) var(--safe-right, 0px);
   padding-block-end: max(var(--chrome-2), var(--safe-bottom, 0px));
   /* Plane 1 (editor.css): one step up from the stage. The change of fill is
      the edge; a rule there was one more line the width of the screen. */
@@ -134,12 +136,15 @@
   overflow: hidden;
   min-block-size: 0;
 }
+.app__panel-inner { padding-inline: var(--gutter); }
 .app__panel--open .app__panel-inner {
   overflow-y: auto;
-  /* A bounded sheet: the photo above always stays large. */
-  max-block-size: min(42dvh, 27rem);
+  /* Every panel is one height (editor.css), well under this. The bound only
+     matters at large text, where the rows grow: the panel then scrolls
+     rather than pushing the photo off the screen. */
+  max-block-size: min(50dvh, 32rem);
   overscroll-behavior: contain;
-  padding-block: var(--space-2) var(--space-1);
+  padding-block: var(--space-1) var(--space-3);
 }
 
 /* The grabber is decoration from the glass era; the 2px rule above the tray
@@ -199,13 +204,16 @@
 }
 
 /* ── Bottom row: the tool tray, the full width of the column ── */
-.app__tools { margin-block-start: var(--space-1); }
-/* Under an open panel, a hairline keeps the tools (where you go) apart from
-   the panel (what you set). */
-.app__panel--open + .app__tools {
-  border-block-start: var(--bw-thin) solid var(--ed-hair);
+/* The tray runs closer to the screen's edges than the panels do: on a 320px
+   phone the gutters were the 4px between five whole tools and two-at-a-time
+   pages. */
+.app__tools {
   padding-block-start: var(--space-1);
+  padding-inline: var(--chrome-2);
 }
+/* Under an open panel, a hairline the full width of the tray keeps the tools
+   (where you go) apart from the panel (what you set). */
+.app__panel--open + .app__tools { border-block-start: var(--bw-thin) solid var(--ed-hair); }
 /* The tray loses the toolbar's frame here: the rule above the dock already
    says where the controls begin, and a box inside it was a third heavy line
    around the same edge. */
@@ -215,10 +223,6 @@
   padding-inline: 0;
   background: transparent;
 }
-/* The tray runs closer to the screen's edges than the panels do: on a 320px
-   phone the gutters were the 4px between five whole tools and two-at-a-time
-   pages. */
-.app__tools { margin-inline: calc(var(--chrome-2) - var(--gutter)); }
 /* Five tools in a tray wider than they need: spread them so the row reads as
    one set rather than a set and a gap. While the toolbar script pages the
    list (a narrow phone), it does its own spreading, so this steps aside. */
@@ -243,6 +247,9 @@
   padding: 0;
   border-radius: var(--radius-pill);
   --ic-size: var(--chrome-ic-sm);
+  /* and so does its target: at 200% text a target that grew with the text
+     (88px) covered More beside it */
+  --_hit: var(--chrome-hit);
 }
 .app__bar:is([data-fit="compact"], [data-fit="tight"]) .app__save-word {
   position: absolute;

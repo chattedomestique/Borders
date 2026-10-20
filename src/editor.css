@@ -18,13 +18,40 @@
    - NOTHING LIFTS IN THE TRAY. The style guide's hard shadow says "this can be
      pressed" on a page of mixed content; in a tray where everything is a
      control it repeated itself forty times. Focus keeps its ring.
-   - ONE TYPE SCALE, strongest first: the value being set (20px), its name
-     (16px), the panel's tabs (13px capitals), the labels beside controls
-     (14px, soft ink), the tool names (13px, muted until chosen).
+   - ONE TYPE SCALE, strongest first, and set by size and ink more than by
+     weight (nothing in the tray is heavier than 500 but the tabs' capitals):
+     the value being set (18px), the names of things you set (15px), the
+     words on controls (14px), the tabs (12px capitals), hints (13px, muted),
+     the tool names (12px, muted until chosen). Typed text is 16px, so iOS
+     never zooms on focus.
+   - ONE GEOMETRY. Every panel is a 40px head row (tabs, and a layer button
+     for the tools that have layers) and one content area of a fixed height:
+     an options row at the top, the parameter strip pinned to the bottom. So
+     the photo is the same size in every tool and every tab, and the slider
+     is always in the same place.
 
    Roles only: every colour here is a style-guide role, or a mix of two. */
 
 :root {
+  /* The type scale (see the header). */
+  --ed-t-value: 500 1.125rem / 1 var(--font-sans);
+  --ed-t-name: 500 0.9375rem / 1.2 var(--font-sans);
+  --ed-t-ctl: 500 0.875rem / 1.15 var(--font-sans);
+  --ed-t-field: 400 1rem / 1.3 var(--font-sans);
+  --ed-t-hint: 400 0.8125rem / 1.35 var(--font-sans);
+  --ed-t-caps: 600 0.75rem / 1 var(--font-sans);
+  --ed-t-tool: 500 0.75rem / 1.2 var(--font-sans);
+
+  /* The dock's geometry (see the header): a head row, then the content
+     area, which is one options row and the strip (a 36px line for the name
+     and value over the 44px slider row). */
+  --ed-head-h: 2.5rem;
+  --ed-gap: var(--space-2);
+  --ed-row-h: var(--hit);
+  --ed-strip-head-h: 2.25rem;
+  --ed-strip-h: calc(var(--ed-strip-head-h) + var(--chrome-hit));
+  --ed-content-h: calc(var(--ed-row-h) + var(--ed-gap) + var(--ed-strip-h));
+
   --ed-tray: var(--paper);
   --ed-well: var(--paper-3);
   /* Up is lighter in the dark (as the style guide's own cards over its
@@ -93,7 +120,7 @@
 
 /* The tools: muted names, the chosen one in ink under its disc. */
 .app__tray .toolbar__label {
-  font: 500 var(--text-xs) / var(--lh-snug) var(--font-sans);
+  font: var(--ed-t-tool);
   color: var(--ink-mute);
   text-decoration: none;
 }
@@ -108,9 +135,40 @@
 .app__overlay .tabs[data-variant="underline"] .tabs__bar { border-block-end-color: transparent; }
 .app__overlay .tabs[data-variant="underline"] .tabs__tab {
   --_rest-ink: var(--ink-mute);
-  font: var(--type-label);
+  font: var(--ed-t-caps);
   letter-spacing: var(--ls-label);
   text-transform: uppercase;
+}
+
+/* The words on the tray's controls: one size, one weight. */
+.app__overlay :is(.btn, .chip, .segmented) { font: var(--ed-t-ctl); }
+.app__overlay :is(.select, .input, .input-group) { font: var(--ed-t-field); }
+.app__overlay .switch__label { font: var(--ed-t-name); }
+.app__overlay .swatch-set__name { font: var(--ed-t-hint); color: var(--ink-soft); }
+/* A group's name (the swatch sets) reads like the tabs: small capitals. */
+.app__overlay .t-label {
+  font: var(--ed-t-caps);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.app__overlay .t-meta { font: var(--ed-t-hint); color: var(--ink-mute); }
+/* A row of tabs wider than the panel scrolls; it snaps so a whole tab always
+   starts the row (a sliver of a word beside the layer button read as broken)
+   and the cut one is at the far end, where it says "more". */
+.app__overlay .tabs[data-variant="underline"] .tabs__list {
+  gap: var(--chrome-4);
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: var(--chrome-2);
+  scrollbar-width: none;
+}
+.app__overlay .tabs__list::-webkit-scrollbar { display: none; }
+.app__overlay .tabs__tab {
+  scroll-snap-align: start;
+  /* A short word ("Ink") is as wide as its word; the style guide's ::after
+     still makes its target 44px. A 44px box around it pushed the last tab of
+     a row off the panel. */
+  min-inline-size: 0;
 }
 .app__overlay .tabs[data-variant="underline"] .tabs__tab::before {
   inset-inline: calc(50% - var(--chrome-3));
@@ -208,9 +266,10 @@ dialog.dialog.actsheet {
 }
 .actsheet .menu__item {
   min-block-size: var(--chrome-ctl-lg);
-  font-size: var(--text-lg);
+  font: 500 var(--text-md) / var(--lh-snug) var(--font-sans);
 }
-.actsheet .menu__item .menu__meta { font-size: var(--text-md); }
+.actsheet .menu__item[aria-checked="true"] { font-weight: 650; }
+.actsheet .menu__item .menu__meta { font: 400 var(--text-sm) / var(--lh-snug) var(--font-sans); }
 .actsheet .menu__item[data-variant="cancel"] {
   justify-content: center;
   border-block-start: var(--bw) solid var(--line);

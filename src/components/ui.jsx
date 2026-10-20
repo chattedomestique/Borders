@@ -43,13 +43,25 @@ export function Segmented({ label, options, value, onChange, size = 'sm', block 
  * The panel is the caller's next sibling; give it role="tabpanel" with
  * aria-labelledby = tabId(value) so the pairing is announced.
  */
-export function Tabs({ label, tabs, value, onChange, idBase, block = true }) {
+export function Tabs({ label, tabs, value, onChange, idBase, block = false }) {
   const listRef = useRef(null)
   // A bar wider than the screen scrolls; keep the chosen tab in view (the
-  // style guide's tabs script does this, and it is not loaded here).
+  // style guide's tabs script does this, and it is not loaded here). The row
+  // is scrolled to the first tab START from which the chosen tab is whole, so
+  // the row always begins with a whole word: "nearest" stopped wherever the
+  // chosen tab came into view, and the row began with a sliver of another.
   useEffect(() => {
-    const el = listRef.current?.querySelector('[aria-selected="true"]')
-    el?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+    const list = listRef.current
+    const el = list?.querySelector('[aria-selected="true"]')
+    if (!el || list.scrollWidth <= list.clientWidth) return
+    const box = list.getBoundingClientRect()
+    const pad = parseFloat(getComputedStyle(list).paddingInlineStart) || 0
+    const at = (t) => t.getBoundingClientRect().left - box.left + list.scrollLeft - pad
+    const start = at(el), end = start + el.getBoundingClientRect().width + 2 * pad
+    const starts = [...list.querySelectorAll('[role="tab"]')].map(at)
+    const whole = (x) => x <= start && end - x <= list.clientWidth
+    if (whole(list.scrollLeft) && starts.some(x => Math.abs(x - list.scrollLeft) < 1)) return
+    list.scrollTo({ left: starts.find(whole) ?? start })
   }, [value])
   const onKeyDown = (e) => {
     const i = tabs.findIndex(t => t.id === value)

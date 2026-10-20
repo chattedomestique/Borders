@@ -15,71 +15,87 @@
   flex-direction: column;
 }
 
-/* One panel: a column with the style guide's rhythm. */
+/* ── A panel: the head row, then the content area ──
+   The heights are editor.css's (--ed-*): the same in every panel, so the
+   photo above never changes size when you switch tools or tabs. */
 .controls__section {
   display: flex;
   flex-direction: column;
-  /* One step tighter than the style guide's card rhythm: every row here comes
-     straight off the photo, and the 44px targets already space them. */
-  gap: var(--space-2);
+  gap: var(--ed-gap);
 }
-
-/* The panel under a tab bar keeps the section's rhythm. */
+.controls__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  block-size: var(--ed-head-h);
+  min-inline-size: 0;
+}
+.controls__head > .tabs { flex: 1 1 auto; min-inline-size: 0; }
+/* The content area: options at the top, the parameter strip at the bottom.
+   min-, not block-size: at large text the rows grow, and growing is better
+   than clipping. At 100% every panel's rows fit exactly this height. */
 .controls__panel {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--ed-gap);
+  min-block-size: var(--ed-content-h);
+}
+.controls__panel > .paramstrip { margin-block-start: auto; }
+
+/* Nothing to edit yet: one line in the middle of the content area. */
+.controls__empty {
+  margin: auto;
+  font: var(--ed-t-hint);
+  color: var(--ink-soft);
+  text-align: center;
 }
 
-/* ── Rows: a label, then whatever sets it ── */
+/* ── Rows: an options row is one 44px line ── */
 .controls__row {
   display: flex;
+  /* One line at every phone width at 100% text (the dock is built so); at
+     large text a row that cannot hold its controls wraps rather than
+     running off the side. */
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
-  min-block-size: var(--hit);
+  gap: var(--space-2) var(--space-3);
+  min-block-size: var(--ed-row-h);
+  min-inline-size: 0;
 }
-.controls__row--spaced { margin-block-start: var(--space-1); }
-.controls__row--seg { justify-content: space-between; }
-.controls__row--seg .segmented { flex: 0 1 auto; }
+.controls__row--start { justify-content: flex-start; }
+.controls__push { margin-inline-start: auto; }
+.controls__grow { flex: 1 1 auto; min-inline-size: 0; }
 
 .controls__label {
-  font: var(--type-ctl);
+  font: var(--ed-t-name);
   color: var(--ink);
 }
 .controls__hint {
-  font: var(--type-meta);
-  color: var(--ink-soft);
+  font: var(--ed-t-hint);
+  color: var(--ink-mute);
   margin: 0;
 }
-.controls__hint[data-align="center"] { text-align: center; }
-.controls__spaced { margin-block-start: var(--space-2); }
 .controls__group-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  min-block-size: var(--hit);
-}
-
-.controls__divider {
-  border: 0;
-  border-block-start: var(--bw-thin) solid var(--line-soft);
-  margin-block: var(--space-1);
+  min-block-size: var(--ed-row-h);
 }
 
 /* ── The value beside a slider's name ──
    The style guide's slider readout (plain text, tabular), made a button so
-   you can tap it to type an exact number. No frame: it reads as the value,
-   and the target is still 44px. It is the largest words in the tray: the
-   number you are changing is what the eye should find first. */
+   you can tap it to type an exact number. No frame: it reads as the value.
+   The largest words in the tray, because the number you are changing is what
+   the eye should find first. Its target reaches 44px past the line's 36. */
 .controls__value {
+  position: relative;
   flex: 0 0 auto;
   min-inline-size: var(--chrome-hit);
-  min-block-size: var(--chrome-hit);
+  min-block-size: var(--ed-strip-head-h);
   padding: 0;
-  font: var(--type-ctl);
-  font-size: var(--text-lg);
+  font: var(--ed-t-value);
   font-variant-numeric: tabular-nums lining-nums;
   color: var(--ink);
   text-align: end;
@@ -90,6 +106,12 @@
 }
 @media (hover: hover) {
   .controls__value:hover { text-decoration: underline; text-underline-offset: 0.2em; }
+}
+:is(.controls__value, .paramstrip__pick)::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  inset-block: min(0px, calc((100% - var(--chrome-hit)) / 2));
 }
 
 /* ── Sliders ── */
@@ -106,30 +128,31 @@
     #0000ff 67%, #ff00ff 83%, #ff0000 100%);
 }
 
-/* ── The parameter strip: one parameter on screen, the rest one tap away ── */
+/* ── The parameter strip: one parameter on screen, the rest one tap away ──
+   A 36px line (the name, the value) over the 44px slider row. */
 .paramstrip {
   display: flex;
   flex-direction: column;
-  gap: 0;
 }
 .paramstrip__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  min-block-size: var(--hit);
+  min-block-size: var(--ed-strip-head-h);
 }
 /* The name opens the picker. It is the slider's label, so it reads as one —
    words, with the up/down chevrons that say "there are more" — rather than a
    second framed control beside the value. Pressed, it tints at once. */
 .paramstrip__pick {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: var(--chrome-2);
-  min-block-size: var(--chrome-hit);
+  min-block-size: var(--ed-strip-head-h);
   margin-inline-start: calc(-1 * var(--chrome-2));
   padding-inline: var(--chrome-2) var(--chrome-3);
-  font: var(--type-ctl);
+  font: var(--ed-t-name);
   color: var(--ink);
   background: none;
   border: 0;
@@ -139,34 +162,29 @@
 }
 .paramstrip__pick .ic { --ic-size: 1em; color: var(--ink-mute); }
 @media (hover: hover) {
-  .paramstrip__pick:hover { background: var(--paper-2); }
+  .paramstrip__pick:hover { background: var(--ed-tint); }
 }
-.paramstrip__pick:active { background: var(--paper-3); }
-.paramstrip__name { font: var(--type-ctl); color: var(--ink); }
+.paramstrip__pick:active { background: var(--ed-tint-2); }
+.paramstrip__name { font: var(--ed-t-name); color: var(--ink); }
 /* A colour leading the strip (the outline's colour before its width): the
    name follows it, the value keeps the far end. */
+.paramstrip__head > .controls__colorbtn { margin-block: calc((var(--ed-strip-head-h) - var(--chrome-ctl)) / 2); }
 .paramstrip__head > .controls__colorbtn + * { margin-inline-end: auto; }
 
-/* ── Layers: Add, a chip per layer, Remove for the chosen one ── */
-.controls__layers {
-  display: flex;
+/* ── The layer button at the start of the head row ── */
+.controls__layerbtn { flex: 0 0 auto; max-inline-size: 42%; --_px: var(--chrome-3); }
+.controls__layerbtn > .btn__label {
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
   min-inline-size: 0;
 }
-/* Add and Remove keep their size; only the chips between them give way (they
-   scroll), so a long label never pushes Add's word under its icon. */
-.controls__layers > .btn { flex: 0 0 auto; }
-.controls__layer-chips {
-  flex: 1 1 auto;
+.controls__layername {
   min-inline-size: 0;
-  flex-wrap: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.controls__layer-chips .chip { flex: 0 0 auto; max-inline-size: 11rem; }
-/* A mark's chip leads with its ink colour; the chip's own check would make
-   two symbols in front of one word. Chosen still reads as the fill and the
-   doubled frame. */
-.controls__layer-chips .chip:has(.controls__markdot)::before { display: none; }
+.controls__layerbtn > .ic { --ic-size: 1em; color: var(--ink-mute); }
 .controls__markdot {
   display: inline-block;
   inline-size: 0.75em;
@@ -175,18 +193,13 @@
   background: var(--swatch);
   border: var(--bw-thin) solid var(--ink-faint);
   flex: 0 0 auto;
-  margin-inline-end: var(--chrome-1);
+  margin-inline-end: var(--chrome-2);
 }
 
 /* ── Chip rows that scroll on one line ── */
-.controls__chips { flex-wrap: nowrap; }
+.controls__chips { flex-wrap: nowrap; min-inline-size: 0; }
 .controls__chips .chip { flex: 0 0 auto; }
 .controls__flip { --ic-size: 0.9em; margin-inline-start: var(--chrome-1); }
-.controls__effects { flex: 1 1 auto; min-inline-size: 0; }
-/* Toggles that share a row with a colour: they keep their size, the hint
-   between them gives way. */
-.controls__effects-inline { flex: 0 0 auto; flex-wrap: nowrap; }
-.controls__color-row .segmented { flex: 0 0 auto; }
 
 /* A tab whose effect is on: a small dot after its name (the words ", on" are
    there for a screen reader). A dot, because the underline already means
@@ -200,36 +213,21 @@
   background: currentColor;
 }
 
-/* ── Text format row: B / I toggles, then alignment ── */
-.controls__text-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-.controls__text-row .segmented { flex: 1 1 auto; min-inline-size: 0; }
+/* ── Text: B / I toggles, the text field ── */
 .controls__toggles { display: flex; gap: var(--chrome-2); flex: 0 0 auto; }
 .controls__letter { font-family: var(--font-sans); }
 
+/* The text field takes the content area that the hint under it leaves. */
 .controls__textarea {
+  flex: 1 1 0;
   inline-size: 100%;
-  resize: vertical;
-  min-block-size: 5.5rem;
+  min-block-size: 0;
+  resize: none;
 }
 
 /* ── Colours ── */
-.controls__color-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-.controls__color-hint {
-  flex: 1 1 auto;
-  /* a label beside a control on a shared row: one step below a slider's name */
-  font: 500 var(--text-sm) / var(--lh-snug) var(--font-sans);
-  color: var(--ink-soft);
-}
 /* A circle you press to edit a colour, filled with that colour. The chip has
-   its own frame so a colour as pale as the paper still has an edge (1.4.11). */
+   its own edge so a colour as pale as the tray still has one (1.4.11). */
 .controls__colorbtn { flex: 0 0 auto; }
 .controls__colorchip {
   display: block;
@@ -251,38 +249,31 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin-block-start: var(--space-2);
+  min-block-size: var(--ed-row-h);
 }
+.controls__hsl .controls__hexrow { margin-block-start: var(--space-2); }
 .controls__hexfield { flex: 1 1 auto; min-inline-size: 0; }
 .controls__hexinput { text-transform: lowercase; }
 
-/* ── Font list (its own sub-tab): each family drawn in its own face ──
-   The faces are the user's content, so they are previewed in themselves;
-   everything around them is the style guide's list styling. */
-.controls__fontlist-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-.controls__fontlist-count { font: var(--type-meta); color: var(--ink-soft); }
-.controls__fontlist--solo {
-  /* Sized so the Text panel (layers, tabs, this list) fits the dock. */
-  max-block-size: min(20dvh, 10.5rem);
+/* ── Font list (its own tab): each family drawn in its own face ──
+   The faces are the user's content, so they are previewed in themselves. The
+   list fills the content area and scrolls inside it, as any list does. */
+.controls__fontlist {
+  flex: 1 1 0;
+  min-block-size: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border: var(--bw) solid var(--line);
   border-radius: var(--radius-tile);
-  background: var(--paper);
+  background: var(--ed-well);
 }
 .controls__font-group + .controls__font-group {
-  border-block-start: var(--bw-thin) solid var(--line-soft);
+  border-block-start: var(--bw-thin) solid var(--ed-hair);
 }
 .controls__font-group-label {
-  font: var(--type-label);
+  font: var(--ed-t-caps);
   text-transform: uppercase;
   letter-spacing: var(--ls-label);
-  color: var(--ink-soft);
+  color: var(--ink-mute);
   padding: var(--chrome-3) var(--chrome-4) var(--chrome-1);
 }
 /* A list row lives inside a frame and does not lift: hover tints, pressed
@@ -295,7 +286,7 @@
   inline-size: 100%;
   min-block-size: var(--hit);
   padding: var(--chrome-2) var(--chrome-4);
-  font-size: 1.125rem;
+  font-size: 1.0625rem;
   line-height: 1.15;
   text-align: start;
   color: var(--ink);
@@ -363,8 +354,6 @@
   margin: calc(-1 * var(--chrome-2));
 }
 
-.controls__grow { flex: 1 1 auto; min-inline-size: 0; }
-
 /* Swatches on one scrolling line in the dock: a second row of six colour
    chips cost the photo ~90px. The chip cut at the edge says "more"; the
    padding keeps the rings and the chosen chip's second ring unclipped. */
@@ -382,3 +371,20 @@
 .controls__section .swatch-set__list::-webkit-scrollbar { display: none; }
 .controls__section .swatch-set__opt { flex: 0 0 auto; min-inline-size: 4.5rem; }
 .controls__select { flex: 0 0 auto; min-inline-size: 9rem; }
+
+/* In the dock the swatch cell is one 44px chip and its name, close under it:
+   the style guide's roomier cell made the two swatch panels 22px taller than
+   every other, and the photo jumped for them. The top padding still clears
+   the chosen swatch's second ring. */
+.controls__section .swatch-set__opt { padding-block: var(--chrome-2) var(--chrome-1); row-gap: var(--chrome-1); }
+.controls__section .controls__group-head { min-block-size: var(--ed-strip-head-h); }
+/* One line each, so a narrow phone never makes these rows (and with them the
+   panel) taller: the button keeps its words, the group's name gives way. */
+.controls__hexrow > .btn { flex: none; white-space: nowrap; }
+.controls__group-head > .t-label {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.controls__group-head > :not(.t-label) { flex: none; }

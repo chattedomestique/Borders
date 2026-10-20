@@ -288,11 +288,13 @@ export default function App() {
 
   // One updater for both layer kinds: the canvas drag handler doesn't care which
   // array an id lives in, so route by whichever holds it.
+  // One key and its value, or a patch of several (one undo step for both).
   const updateTextLayer = useCallback((id, key, value) => {
+    const patch = typeof key === 'object' ? key : { [key]: value }
     setSettings(prev => (
       (prev.highlightLayers ?? []).some(l => l.id === id)
-        ? { ...prev, highlightLayers: prev.highlightLayers.map(l => l.id === id ? { ...l, [key]: value } : l) }
-        : { ...prev, textLayers: prev.textLayers.map(l => l.id === id ? { ...l, [key]: value } : l) }
+        ? { ...prev, highlightLayers: prev.highlightLayers.map(l => l.id === id ? { ...l, ...patch } : l) }
+        : { ...prev, textLayers: prev.textLayers.map(l => l.id === id ? { ...l, ...patch } : l) }
     ))
   }, [setSettings])
 

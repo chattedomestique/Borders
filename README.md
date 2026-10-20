@@ -43,8 +43,15 @@ rebuild the style guide, then run `node scripts/sync-styleguide.mjs ../styleguid
   top": controls resting in the tray have none, an icon is a bare glyph, a
   word control sits in a well, and the chosen one is the ink fill. The rules
   and the one type scale are in `src/editor.css`.
-- Everything that opens on top of the editor (the parameter picker, More) is
-  the style guide's menu presented as an action sheet, on a modal `<dialog>`.
+- Everything that opens on top of the editor (the parameter picker, More, the
+  layer list) is the style guide's menu presented as an action sheet, on a
+  modal `<dialog>`.
+- The dock is one geometry for every tool and tab: a head row (the tabs, and
+  for Mark and Text a button naming the layer being edited) over one content
+  area of a fixed height, an options row at the top and the parameter strip
+  pinned to the bottom. So the photo is the same size and place in every
+  state, and the slider is always under the same spot. The regression suite
+  checks the photo's rectangle across every tool and tab.
 - The look is set on `<html>`: `data-palette="sand"` — a warm-tinted neutral
   with an ink accent, so the chrome carries no colour beside the photo.
   Light / dark and higher contrast follow the device.
