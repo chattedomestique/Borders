@@ -1,5 +1,4 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { createPortal } from 'react-dom'
 import Uploader from './components/Uploader/Uploader'
 import BorderCanvas from './components/BorderCanvas/BorderCanvas'
 import Controls from './components/Controls/Controls'
@@ -7,6 +6,8 @@ import { useHistory } from './useHistory'
 import { buildSuggestionsFromColor } from './palette'
 import { saveSettings, seedForNewMedia, loadSettings, loadPresets, savePreset, deletePreset, applyPresetLook } from './persist'
 import PresetSheet from './components/PresetSheet/PresetSheet'
+import { Icon, Segmented } from './components/ui'
+import { useModalDialog } from './components/useModalDialog'
 import './App.css'
 
 const STEPS = { UPLOAD: 'upload', EDIT: 'edit', SAVING: 'saving' }
@@ -61,63 +62,45 @@ const DEFAULT_HIGHLIGHT = (id, index = 0) => ({
   texture: 'none', risoScale: 40, risoAngle: 45, risoOffset: 30,
 })
 
+// The editor's tools. Each is a style-guide mask on its 24px grid; Grain and
+// Mark are drawn here (index.css) because the icon set has no film grain or
+// highlighter.
 const TABS = [
-  {
-    id: 'frame', label: 'Frame',
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <rect x="2" y="2" width="16" height="16" rx="3" stroke="currentColor" strokeWidth="1.75"/>
-        <rect x="6" y="6" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.25" opacity="0.5"/>
-      </svg>
-    ),
-  },
-  {
-    id: 'bg', label: 'Fill',
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <rect x="2" y="2" width="16" height="16" rx="3" stroke="currentColor" strokeWidth="1.75"/>
-        <path d="M2 12 C6 7 9 13 12 9 C14 6.5 17 11 18 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-      </svg>
-    ),
-  },
-  {
-    id: 'grain', label: 'Grain',
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <circle cx="4.5" cy="4.5" r="1.3" fill="currentColor"/>
-        <circle cx="10"  cy="3"   r="1"   fill="currentColor" opacity="0.5"/>
-        <circle cx="15.5" cy="5" r="1.3"  fill="currentColor"/>
-        <circle cx="3"   cy="10" r="1"    fill="currentColor" opacity="0.5"/>
-        <circle cx="9"   cy="9.5" r="1.6" fill="currentColor"/>
-        <circle cx="15"  cy="10" r="1.1"  fill="currentColor" opacity="0.7"/>
-        <circle cx="5.5" cy="15.5" r="1.3" fill="currentColor"/>
-        <circle cx="11"  cy="14.5" r="1"  fill="currentColor" opacity="0.5"/>
-        <circle cx="16"  cy="15.5" r="1.3" fill="currentColor"/>
-      </svg>
-    ),
-  },
-  {
-    id: 'mark', label: 'Mark',
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <path d="M3.5 12.5 11 5a2 2 0 0 1 2.8 0l.7.7a2 2 0 0 1 0 2.8L7 16H4a.5.5 0 0 1-.5-.5z"
-          stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
-        <path d="M10.5 5.5 14 9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" opacity="0.55"/>
-        <path d="M3 18h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" opacity="0.4"/>
-      </svg>
-    ),
-  },
-  {
-    id: 'text', label: 'Text',
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <path d="M4 5h12"  stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
-        <path d="M10 5v10" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
-        <path d="M7 15h6"  stroke="currentColor" strokeWidth="1.5"  strokeLinecap="round" opacity="0.55"/>
-      </svg>
-    ),
-  },
+  { id: 'frame', label: 'Frame', icon: 'crop' },
+  { id: 'bg',    label: 'Fill',  icon: 'droplet' },
+  { id: 'grain', label: 'Grain', icon: 'grain' },
+  { id: 'mark',  label: 'Mark',  icon: 'highlighter' },
+  { id: 'text',  label: 'Text',  icon: 'type' },
 ]
+
+// Starting over: the style guide's confirm dialog — a card on a native
+// <dialog>, so the page behind is inert and Esc / a backdrop tap cancel. The
+// safe choice (keep what you built) is the primary one and takes focus.
+function NewChoiceDialog({ open, onClose, onChoose }) {
+  const ref = useModalDialog(open, onClose)
+  return (
+    <dialog ref={ref} className="dialog card" data-size="sm"
+      aria-labelledby="new-photo-t" aria-describedby="new-photo-d">
+      <header className="card__bar">
+        <p className="card__label">New photo</p>
+        <button className="card__ctl" type="button" onClick={onClose} aria-label="Cancel">
+          <Icon name="close" />
+        </button>
+      </header>
+      <div className="card__body">
+        <h2 className="card__title" id="new-photo-t">Start a new photo</h2>
+        <p className="card__text" id="new-photo-d">
+          Keep your border, colors, text and effects for the next photo, or start clean.
+        </p>
+      </div>
+      <div className="dialog__actions">
+        <button className="btn" type="button" onClick={() => onChoose('default')}>Reset to defaults</button>
+        <button className="btn" type="button" data-variant="primary" autoFocus
+          onClick={() => onChoose('full')}>Keep my settings</button>
+      </div>
+    </dialog>
+  )
+}
 
 export default function App() {
   const [step, setStep] = useState(STEPS.UPLOAD)
@@ -145,6 +128,7 @@ export default function App() {
     try { return Number(localStorage.getItem('bs-grid')) || 3 } catch { return 3 }
   })
   const canvasRef = useRef(null)
+  const toolsRef = useRef(null)
   const appRef = useRef(null)
   const overlayRef = useRef(null)
 
@@ -156,7 +140,11 @@ export default function App() {
     const root = appRef.current
     if (!el || !root) return
     const ro = new ResizeObserver(entries => {
-      const h = `${Math.round(entries[0].contentRect.height)}px`
+      // The BORDER box: the overlay has a top rule and safe-area padding, and
+      // contentRect leaves both out — on a phone with a home indicator that put
+      // the bottom ~36px of the photo under the dock.
+      const box = entries[0].borderBoxSize?.[0]
+      const h = `${Math.round(box ? box.blockSize : el.getBoundingClientRect().height)}px`
       root.style.setProperty('--overlay-h', h)
       // Also on :root — portalled overlays (the parameter picker) live outside
       // .app and would otherwise fall back to a wrong default and overrun the dock.
@@ -390,72 +378,76 @@ export default function App() {
 
   const saving = step === STEPS.SAVING
 
+  // The tray mounts after the page has loaded (once there is a photo), so the
+  // style guide's toolbar script never saw it. Its documented hook for a
+  // toolbar added later: roving focus, and paging when the tools cannot fit.
+  const hasTray = step !== STEPS.UPLOAD && !!media
+  useEffect(() => {
+    if (hasTray && toolsRef.current) window.SG?.toolbar?.init(toolsRef.current)
+  }, [hasTray])
+
   return (
     <div className="app" ref={appRef}>
-      <header className="app__header">
-        <div className="app__header-inner">
-          <div className="app__logo" aria-label="Border Studio">
-            <svg className="app__logo-icon" width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-              <rect x="1" y="1" width="20" height="20" rx="5" stroke="currentColor" strokeWidth="2.5"/>
-              <rect x="6" y="6" width="10" height="10" rx="2.5" fill="currentColor"/>
-            </svg>
-            <span className="app__logo-text">Border Studio</span>
+      {/* App bar: the page heading, the two edits you reach for constantly, and
+          Save. Everything rarer (a new photo, presets, how the canvas sits) is
+          one tap away under More, so the bar stays one row on a 320px phone. */}
+      <header className="appbar app__bar">
+        <h1 className="appbar__title">Border Studio</h1>
+        {step !== STEPS.UPLOAD && (
+          <div className="appbar__end">
+            <button className="btn" type="button" data-shape="circle" data-size="sm"
+              onClick={undo} disabled={!canUndo} aria-label="Undo">
+              <Icon name="undo-2" />
+            </button>
+            <button className="btn" type="button" data-shape="circle" data-size="sm"
+              onClick={redo} disabled={!canRedo} aria-label="Redo">
+              <Icon name="redo-2" />
+            </button>
+            <button className="btn" type="button" data-shape="circle" data-size="sm"
+              popoverTarget="app-more" aria-label="More">
+              <Icon name="ellipsis" />
+            </button>
+            {/* Save is the one action of the screen, so it is the one filled
+                shape, at the bar's end where photo editors put Export. Busy,
+                it says how far a video has got. */}
+            <button className="btn app__save" type="button" data-variant="primary" data-size="sm"
+              id="tool-save" onClick={() => { if (!saving) handleSave() }}
+              aria-busy={saving || undefined} aria-disabled={saving || undefined}
+              aria-label={saving ? 'Saving to Photos' : 'Save to Photos'}>
+              <span className="btn__label num">
+                <Icon name="download" />
+                <span className="app__save-word">
+                  {saving ? (recordingProgress > 0 ? `${Math.round(recordingProgress * 100)}%` : 'Saving') : 'Save'}
+                </span>
+              </span>
+            </button>
           </div>
-          {step !== STEPS.UPLOAD && (
-            <div className="app__header-actions">
-              <button className="app__icon-btn" onClick={() => setPresetsOpen(true)} aria-label="Presets">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-                </svg>
-              </button>
-              <button className="app__icon-btn" onClick={undo} disabled={!canUndo} aria-label="Undo">
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M3 7v6h6"/>
-                  <path d="M3 13a9 9 0 1 0 3-7.7L3 8"/>
-                </svg>
-              </button>
-              <button className="app__icon-btn" onClick={redo} disabled={!canRedo} aria-label="Redo">
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M21 7v6h-6"/>
-                  <path d="M21 13a9 9 0 1 1-3-7.7L21 8"/>
-                </svg>
-              </button>
-              <button
-                className={`app__icon-btn${snapEnabled ? ' app__icon-btn--active' : ''}`}
-                onClick={() => setSnapEnabled(s => !s)}
-                aria-label={snapEnabled ? 'Snapping on (tap to disable)' : 'Snapping off (tap to enable)'}
-                aria-pressed={snapEnabled}
-                onContextMenu={(e) => { e.preventDefault(); setGridDivisions(d => d >= 8 ? 3 : d + 1) }}
-                title={`Snap to grid (${gridDivisions}×${gridDivisions})`}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                  <path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>
-                </svg>
-              </button>
-              <button
-                className={`app__icon-btn${viewMode === 'fit' ? ' app__icon-btn--active' : ''}`}
-                onClick={() => setViewMode(v => v === 'fit' ? 'fill' : 'fit')}
-                aria-label={viewMode === 'fit' ? 'View: Fit (tap for Fill)' : 'View: Fill (tap for Fit)'}
-              >
-                {viewMode === 'fit' ? (
-                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
-                    <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
-                  </svg>
-                ) : (
-                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/>
-                    <line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/>
-                  </svg>
-                )}
-              </button>
-              <button className="app__reset-btn" onClick={() => setNewChoiceOpen(true)} aria-label="Start over">
-                New
-              </button>
-            </div>
-          )}
-        </div>
+        )}
       </header>
+
+      {/* More: a native popover, so light-dismiss, Esc and focus return are the
+          browser's. A card, because it holds a group of things. */}
+      {step !== STEPS.UPLOAD && (
+        <div id="app-more" className="card app__more" popover="auto" aria-label="More">
+          <div className="card__body app__more-body">
+            <button className="btn" type="button" data-block="" data-variant="primary"
+              popoverTarget="app-more" popoverTargetAction="hide"
+              onClick={() => setNewChoiceOpen(true)}>
+              <span className="btn__label"><Icon name="plus" />New photo</span>
+            </button>
+            <button className="btn" type="button" data-block=""
+              popoverTarget="app-more" popoverTargetAction="hide"
+              onClick={() => setPresetsOpen(true)}>
+              <span className="btn__label"><Icon name="bookmark" />Presets</span>
+            </button>
+            <div className="app__more-row">
+              <span className="t-label" id="app-more-view">Canvas</span>
+              <Segmented label="Canvas" value={viewMode} onChange={setViewMode}
+                options={[{ id: 'fit', label: 'Fit' }, { id: 'fill', label: 'Fill' }]} />
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="app__main">
         {step === STEPS.UPLOAD ? (
@@ -484,25 +476,8 @@ export default function App() {
         ) : null}
       </main>
 
-      {newChoiceOpen && createPortal(
-        <div className="app__choice" role="dialog" aria-modal="true" aria-label="Start a new photo"
-          onPointerDown={(e) => { if (e.target === e.currentTarget) setNewChoiceOpen(false) }}>
-          <div className="app__choice-card">
-            <div className="app__choice-title">Start a new photo</div>
-            <p className="app__choice-note">Keep your current border, colors, text &amp; effects — or start clean.</p>
-            <button className="app__choice-btn app__choice-btn--primary" onClick={() => handleReset('full')}>
-              Keep my settings
-            </button>
-            <button className="app__choice-btn" onClick={() => handleReset('default')}>
-              Reset to defaults
-            </button>
-            <button className="app__choice-btn app__choice-btn--ghost" onClick={() => setNewChoiceOpen(false)}>
-              Cancel
-            </button>
-          </div>
-        </div>,
-        document.body,
-      )}
+      <NewChoiceDialog open={newChoiceOpen} onClose={() => setNewChoiceOpen(false)}
+        onChoose={handleReset} />
 
       {presetsOpen && (
         <PresetSheet
@@ -518,27 +493,15 @@ export default function App() {
 
       {/* §10.1 live region — a single persistent role=status the app writes
           state changes into ("Saved"). Visible only when it has content. */}
-      <div className={`app__toast${toast ? ' app__toast--show' : ''}`} role="status" aria-live="polite">
-        {toast && (
-          <>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-            {toast}
-          </>
-        )}
+      <div className={`card app__toast${toast ? ' app__toast--show' : ''}`} role="status" aria-live="polite">
+        {toast && <span className="app__toast-body"><Icon name="check" />{toast}</span>}
       </div>
 
       {/* Gesture hint — shown once per session after first image load */}
       {showHint && (
-        <div className="app__gesture-hint" aria-hidden="true">
-          <span>Pinch to zoom</span>
-          <span className="app__gesture-sep">·</span>
-          <span>Drag to pan</span>
-          <span className="app__gesture-sep">·</span>
-          <span>Double-tap to reset</span>
-        </div>
+        <p className="card app__hint" aria-hidden="true">
+          Pinch to zoom · Drag to pan · Double-tap to reset
+        </p>
       )}
 
       {/* Frosted glass overlay — direct child of .app so absolute bottom:0 is viewport bottom */}
@@ -575,44 +538,32 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Toolbar — always visible */}
-              <div className="app__toolbar">
-                <div className="app__toolbar-tabs">
-                  {TABS.map(t => (
-                    <button
-                      key={t.id}
-                      className={`app__toolbar-tab${activeTab === t.id ? ' app__toolbar-tab--active' : ''}`}
-                      onClick={() => toggleTab(t.id)}
-                      aria-pressed={activeTab === t.id}
-                    >
-                      {t.icon}
-                      <span>{t.label}</span>
-                    </button>
-                  ))}
+              {/* The editor's tools: the style guide's toolbar — "the tools of a
+                  photo editor". Each tool is a toggle (tap it again to close its
+                  panel), named by a real <label for> under it. Save is the one
+                  action in the tray, so it is the one filled shape at rest. */}
+              <div className="app__tools">
+                <div className="toolbar app__tray">
+                  <button className="btn toolbar__scroll" type="button" data-shape="circle" data-size="sm"
+                    data-dir="back" aria-label="Scroll tools back" tabIndex={-1} hidden>
+                    <Icon name="chevron-left" />
+                  </button>
+                  <div className="toolbar__list" role="toolbar" aria-label="Edit tools" ref={toolsRef}>
+                    {TABS.map(t => (
+                      <div className="toolbar__item" key={t.id}>
+                        <button className="btn" type="button" data-shape="circle" id={`tool-${t.id}`}
+                          aria-pressed={activeTab === t.id} onClick={() => toggleTab(t.id)}>
+                          <Icon name={t.icon} />
+                        </button>
+                        <label className="toolbar__label" htmlFor={`tool-${t.id}`}>{t.label}</label>
+                      </div>
+                    ))}
+                  </div>
+                  <button className="btn toolbar__scroll" type="button" data-shape="circle" data-size="sm"
+                    data-dir="forward" aria-label="Scroll tools forward" tabIndex={-1} hidden>
+                    <Icon name="chevron-right" />
+                  </button>
                 </div>
-
-                <button
-                  className={`app__toolbar-save${saving ? ' app__toolbar-save--saving' : ''}`}
-                  onClick={handleSave}
-                  disabled={saving}
-                  aria-label="Save to Photos"
-                >
-                  {saving ? (
-                    <>
-                      <span className="app__toolbar-save-spinner"/>
-                      <span>{recordingProgress > 0 ? `${Math.round(recordingProgress * 100)}%` : '…'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                        <polyline points="7 10 12 15 17 10"/>
-                        <line x1="12" y1="15" x2="12" y2="3"/>
-                      </svg>
-                      <span>Save</span>
-                    </>
-                  )}
-                </button>
               </div>
         </div>
       )}

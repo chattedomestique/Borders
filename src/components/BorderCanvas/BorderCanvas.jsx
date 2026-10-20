@@ -2294,14 +2294,14 @@ const BorderCanvas = forwardRef(function BorderCanvas(
         )}
       </div>
       {viewZoom > 1 && (
-        <button className="border-canvas__zoombadge" onClick={resetView}
-          aria-label={`Inspect zoom ${viewZoom.toFixed(1)} times — tap to reset`}>
-          {viewZoom.toFixed(1)}× · Reset
+        <button className="btn border-canvas__zoombadge" type="button" data-size="sm" onClick={resetView}
+          aria-label={`Inspect zoom ${viewZoom.toFixed(1)} times, reset to fit`}>
+          <span className="btn__label num">{viewZoom.toFixed(1)}× · Reset</span>
         </button>
       )}
       {!ready && (
         <div className="border-canvas__loading" aria-hidden="true">
-          <div className="border-canvas__spinner"/>
+          <span className="spinner" />
         </div>
       )}
     </div>

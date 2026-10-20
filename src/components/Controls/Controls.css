@@ -1,950 +1,388 @@
-/* ── Controls (content only, no card — rendered inside frosted overlay) ── */
+/* ── The editor's panels, on the style guide ─────────────────────────────────
+   The controls themselves are the style guide's elements — .btn, .tabs,
+   .segmented, .slider, .switch, .chip, .swatch-set, .input, .card / .dialog —
+   so this file holds no button, toggle or slider styling of its own. It lays
+   those elements out for a short panel above the photo, and draws the few
+   things the style guide has no element for: the one-line parameter strip,
+   the parameter picker over the photo, the font list, and the colour editor.
+
+   Roles only: no colour literals except where the colour IS the data (a hue
+   track shows the hues it reaches, like a swatch shows its colour). */
+
 .controls {
-  width: 100%;
   display: flex;
   flex-direction: column;
 }
 
+/* One panel: a column with the style guide's rhythm. */
 .controls__section {
-  padding: 10px 20px 14px;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  /* One step tighter than the style guide's card rhythm: every row here comes
+     straight off the photo, and the 44px targets already space them. */
+  gap: var(--space-2);
 }
 
-/* Border-fill dock: tighter so each sub-tab view fits without scrolling, and a
-   steady height so switching sub-tabs never resizes the photo above. */
-.controls__section--dock {
-  padding: 8px 16px 12px;
-  gap: 8px;
-  /* Sized for the one-line parameter strip. Kept as a floor (not a fixed
-     height) so switching sub-tabs never resizes the photo above. */
-  min-height: 132px;
+/* The panel under a tab bar keeps the section's rhythm. */
+.controls__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
-.controls__divider {
-  height: 1px;
-  background: var(--border);
-  margin: 0;
-}
-
-.controls__divider--inset {
-  margin: 2px 0;
-  opacity: 0.7;
-}
-
+/* ── Rows: a label, then whatever sets it ── */
 .controls__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-3);
+  min-block-size: var(--hit);
 }
+.controls__row--spaced { margin-block-start: var(--space-1); }
+.controls__row--seg { justify-content: space-between; }
+.controls__row--seg .segmented { flex: 0 1 auto; }
 
-.controls__row--spaced {
-  margin-top: 4px;
-}
-
-/* All labels stay sans (tabs provide the section heading hierarchy now) */
 .controls__label {
-  font-size: 14px;
-  font-weight: 600;
+  font: var(--type-ctl);
   color: var(--ink);
-  letter-spacing: -0.1px;
+}
+.controls__hint {
+  font: var(--type-meta);
+  color: var(--ink-soft);
+  margin: 0;
+}
+.controls__hint[data-align="center"] { text-align: center; }
+.controls__spaced { margin-block-start: var(--space-2); }
+.controls__group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-block-size: var(--hit);
 }
 
-.controls__value {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--accent);
-  background: var(--accent-subtle);
-  padding: 3px 10px;
-  border-radius: var(--r-pill);
-  min-width: 48px;
-  text-align: center;
-  letter-spacing: 0.02em;
+.controls__divider {
+  border: 0;
+  border-block-start: var(--bw-thin) solid var(--line-soft);
+  margin-block: var(--space-1);
 }
 
-/* Value control: [− value +]. The value opens a modal; the ± nudge by step. */
+/* ── [−] value [+] beside a label ── */
 .controls__valuectl {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--chrome-2);
   flex: 0 0 auto;
 }
-.controls__value--btn {
-  border: none;
-  font-family: inherit;
+/* The readout is a button (tap to type a value), drawn as text: it is a
+   value you read first and press second. Its target is still 44px. */
+.controls__value {
+  min-inline-size: max(4.5ch, var(--chrome-hit));
+  min-block-size: var(--chrome-hit);
+  padding-inline: var(--chrome-1);
+  font: var(--type-ctl);
+  color: var(--ink);
+  text-align: center;
+  background: none;
+  border: 0;
+  border-block-end: var(--bw-thin) dashed var(--line-soft);
   cursor: pointer;
-  -webkit-appearance: none;
-  appearance: none;
-  transition: background 0.12s ease, transform 0.15s ease;
 }
-.controls__value--btn:active { transform: scale(0.96); }
+@media (hover: hover) {
+  .controls__value:hover { border-block-end-color: var(--line); }
+}
 
-.controls__stepbtn {
-  flex: 0 0 auto;
-  width: 26px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 17px;
-  font-weight: 600;
-  line-height: 1;
-  color: var(--accent);
-  background: var(--accent-subtle);
-  border: none;
-  border-radius: var(--r-sm, 7px);
-  -webkit-tap-highlight-color: transparent;
-  transition: background 0.12s ease, transform 0.15s ease, opacity 0.12s ease;
-}
-.controls__stepbtn:active:not(:disabled) { transform: scale(0.88); background: var(--accent-dim, var(--accent-subtle)); }
-.controls__stepbtn:disabled { opacity: 0.3; }
+/* ── Sliders ── */
+.controls__slider { inline-size: 100%; }
 
-/* ── Precise-value modal ── */
-.valuemodal {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  /* §user: darken ~10% and blur the backdrop. */
-  background: rgba(20, 16, 12, 0.32);
-  backdrop-filter: blur(4px) saturate(115%);
-  -webkit-backdrop-filter: blur(4px) saturate(115%);
-  animation: valuemodal-fade 0.16s ease;
+/* A colour channel's track shows the colours it reaches, so the filled part
+   (which means "how much") would only hide them. */
+.controls__slider--hue .slider__track::after,
+.controls__slider--tint .slider__track::after { display: none; }
+.controls__slider--tint .slider__track::before { background: var(--track); }
+.controls__slider--hue .slider__track::before {
+  background: linear-gradient(to right,
+    #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%,
+    #0000ff 67%, #ff00ff 83%, #ff0000 100%);
 }
-@keyframes valuemodal-fade { from { opacity: 0; } to { opacity: 1; } }
-.valuemodal__card {
-  width: min(300px, 100%);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg, 16px);
-  box-shadow: var(--shadow-lg, 0 20px 60px rgba(0, 0, 0, 0.35));
-  padding: 18px 18px 14px;
+
+/* ── The parameter strip: one parameter on screen, the rest one tap away ── */
+.paramstrip {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  animation: valuemodal-pop 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  gap: 0;
 }
-@keyframes valuemodal-pop { from { transform: scale(0.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-.valuemodal__title {
-  font-size: 13px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--ink-3);
-  text-align: center;
-}
-.valuemodal__field {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.valuemodal__step {
-  flex: 0 0 auto;
-  width: 44px;
-  height: 44px;
-  font-size: 24px;
-  font-weight: 500;
-  color: var(--accent);
-  background: var(--accent-subtle);
-  border: none;
-  border-radius: var(--r-md, 10px);
-  -webkit-tap-highlight-color: transparent;
-  transition: transform 0.15s ease, background 0.12s ease;
-}
-.valuemodal__step:active { transform: scale(0.9); }
-.valuemodal__input {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 44px;
-  text-align: center;
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 22px;               /* >=16px so iOS never auto-zooms */
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--seg-track, var(--bg));
-  border: 1.5px solid var(--accent);
-  border-radius: var(--r-md, 10px);
-  outline: none;
-  -moz-appearance: textfield;
-  appearance: textfield;
-}
-.valuemodal__input::-webkit-outer-spin-button,
-.valuemodal__input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.valuemodal__range {
-  font-size: 11px;
-  color: var(--ink-3);
-  text-align: center;
-}
-.valuemodal__actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 2px;
-}
-.valuemodal__btn {
-  height: 44px;
-  font-size: 15px;
-  font-weight: 700;
-  border: none;
-  border-radius: var(--r-md, 10px);
-  color: var(--ink-2);
-  background: var(--seg-track, var(--bg));
-  -webkit-tap-highlight-color: transparent;
-  transition: transform 0.15s ease, filter 0.12s ease;
-}
-.valuemodal__btn--primary { color: #fff; background: var(--accent); }
-.valuemodal__btn:active { transform: scale(0.97); }
-@media (prefers-reduced-motion: reduce) {
-  .valuemodal, .valuemodal__card { animation: none; }
-}
-
-.controls__hint {
-  font-size: 12px;
-  color: var(--ink-3);
-  margin-top: -4px;
-}
-
-/* ── Font picker (scrollable, grouped, live previews) ── */
-.controls__fontlist-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  padding: 0 4px 5px;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--ink-3);
-}
-.controls__fontlist-count {
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: none;
-  opacity: 0.75;
-}
-.controls__fontlist {
-  /* Compact internal scroller so the font picker never dominates the dock:
-   * shows ~5 families and scrolls for the rest, leaving the format controls
-   * below it reachable. */
-  max-height: min(24dvh, 186px);
-}
-/* In its own Font sub-tab the list is the only control, so give it more room. */
-.controls__fontlist--solo {
-  max-height: min(42dvh, 360px);
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-  background: var(--seg-track);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  padding: 4px;
-  /* Bottom fade cue that more fonts lie below the fold. */
-  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
-          mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
-}
-/* Drop the fade once scrolled to the end (no more content below). */
-.controls__fontlist--atend {
-  -webkit-mask-image: none;
-          mask-image: none;
-}
-.controls__font-group + .controls__font-group { margin-top: 2px; }
-.controls__font-group-label {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--ink-3);
-  padding: 6px 8px 2px;
-}
-.controls__font-item {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 9px 10px;
-  border-radius: calc(var(--r-md) - 3px);
-  font-size: 17px;
-  line-height: 1.15;
-  color: var(--ink);
-  -webkit-tap-highlight-color: transparent;
-  transition: background 0.12s;
-}
-.controls__font-item:active { background: var(--accent-subtle); }
-.controls__font-item--active {
-  background: var(--accent);
-  color: #fff;
-}
-
-/* ── Segmented Control ── */
-.controls__seg {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 3px;
-  padding: 3px;
-  background: var(--seg-track);
-  border-radius: var(--r-md);
-  border: 1px solid var(--border);
-}
-
-.controls__seg-btn {
-  padding: 8px 4px;
-  border-radius: calc(var(--r-md) - 3px);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-2);
-  letter-spacing: -0.1px;
-  transition: background 0.15s, color 0.15s, box-shadow 0.15s,
-              transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-  -webkit-tap-highlight-color: transparent;
-  line-height: 1.2;
-  text-align: center;
-}
-
-.controls__seg-btn:active {
-  transform: scale(0.94);
-}
-
-.controls__seg-btn--active {
-  background: var(--surface-raised);
-  color: var(--ink);
-  box-shadow: var(--shadow-sm);
-}
-
-/* ── Custom Color Row ── */
-/* ── Add-layer chooser (default vs copy an existing layer) ── */
-.addsheet {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(20, 16, 12, 0.34);
-  backdrop-filter: blur(4px) saturate(115%);
-  -webkit-backdrop-filter: blur(4px) saturate(115%);
-}
-.addsheet__card {
-  width: min(320px, 100%);
-  max-height: 76vh;
-  overflow-y: auto;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg, 18px);
-  box-shadow: var(--shadow-lg);
-  padding: 18px 16px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.addsheet__title {
-  font-family: var(--font-serif, serif);
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--ink);
-  text-align: center;
-  margin-bottom: 2px;
-}
-.addsheet__sep {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--ink-3);
-  text-align: center;
-  margin-top: 4px;
-}
-.addsheet__list { display: flex; flex-direction: column; gap: 6px; }
-.addsheet__item {
-  display: flex;
-  align-items: center;
-  min-height: var(--touch-min, 44px);
-  padding: 10px 14px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--ink);
-  text-align: left;
-  background: var(--seg-track, var(--bg));
-  border: none;
-  border-radius: var(--r-md, 10px);
-  -webkit-tap-highlight-color: transparent;
-}
-.addsheet__item:active { background: var(--accent-subtle); }
-.addsheet__btn {
-  min-height: var(--touch-min, 44px);
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--seg-track, var(--bg));
-  border: none;
-  border-radius: var(--r-md, 12px);
-  -webkit-tap-highlight-color: transparent;
-  transition: transform 0.15s ease;
-}
-.addsheet__btn--primary { color: #fff; background: var(--accent); }
-.addsheet__btn--ghost { background: none; color: var(--ink-3); font-weight: 600; }
-.addsheet__btn:active { transform: scale(0.98); }
-
-/* ── Parameter control strip: one parameter, one line (Snapseed model) ── */
-.paramstrip { display: flex; flex-direction: column; }
 .paramstrip__head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: var(--touch-min, 44px);
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-block-size: var(--hit);
 }
+/* The name opens the picker, so it is a control: a pill you can see is one. */
 .paramstrip__pick {
-  flex: 1 1 auto;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-height: var(--touch-min, 44px);
-  padding: 0;
-  font-size: 15px;
-  font-weight: 700;
+  gap: var(--chrome-2);
+  min-block-size: var(--chrome-hit);
+  padding-inline: var(--chrome-3) var(--chrome-4);
+  font: var(--type-ctl);
   color: var(--ink);
-  background: none;
-  border: none;
-  text-align: left;
-  -webkit-tap-highlight-color: transparent;
+  background: var(--paper);
+  border: var(--bw) solid var(--line);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  touch-action: none;   /* a swipe up on the name opens the picker */
 }
-.paramstrip__pick svg { color: var(--accent); flex: 0 0 auto; }
-.paramstrip__pick:active { opacity: 0.6; }
-.paramstrip__name {
-  flex: 1 1 auto;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--ink);
+@media (hover: hover) {
+  .paramstrip__pick:hover { background: var(--paper-2); }
 }
+.paramstrip__pick:active { background: var(--paper-3); }
+.paramstrip__name { font: var(--type-ctl); color: var(--ink); }
 
-/* ── Parameter picker: floats over the photo, costs no layout ── */
+/* ── The parameter picker: floats over the photo, costs no layout ──
+   Text over a photo needs a scrim (house rule): --scrim behind, --on-media
+   words. The current row is a paper plate with ink, so it is a shape and a
+   colour, never colour alone. */
 .parampick {
   position: fixed;
-  left: 0;
-  right: 0;
-  top: 0;
-  /* Sit above the dock, over the image — never pushing it. */
-  bottom: var(--overlay-h, 96px);
+  inset-inline: 0;
+  inset-block-start: 0;
+  inset-block-end: var(--overlay-h);
   z-index: 60;
   display: flex;
   align-items: flex-end;
-  justify-content: stretch;
-  padding: 0 0 8px;
-  /* Dark enough for the row labels to clear contrast over a busy photo,
-     light enough that you still see what you're adjusting. */
-  background: linear-gradient(to bottom, rgba(20, 16, 12, 0.38), rgba(20, 16, 12, 0.66));
-  animation: parampick-in 0.14s ease;
+  padding-block-end: var(--space-2);
+  background: var(--scrim);
+  animation: parampick-in var(--dur-hover) var(--ease-out);
 }
 @keyframes parampick-in { from { opacity: 0; } to { opacity: 1; } }
 .parampick__rows {
-  width: 100%;
-  max-height: 100%;
+  inline-size: 100%;
+  max-inline-size: var(--container-sm);
+  margin-inline: auto;
+  max-block-size: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
-  touch-action: none;   /* let a vertical drag pick a row instead of scrolling */
+  gap: var(--chrome-1);
+  padding-inline: var(--gutter);
+  touch-action: none;   /* a vertical drag picks a row instead of scrolling */
 }
 .parampick__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  min-height: var(--touch-min, 44px);
-  padding: 10px 20px;
-  font-size: 16px;
-  font-weight: 600;
-  color: #fff;
+  gap: var(--space-3);
+  inline-size: 100%;
+  min-block-size: var(--hit);
+  padding: var(--chrome-2) var(--chrome-4);
+  font: var(--type-ctl);
+  color: var(--on-media);
   background: none;
-  border: none;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-  -webkit-tap-highlight-color: transparent;
+  border: var(--bw) solid transparent;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
 }
-.parampick__row--on {
-  background: var(--accent);
-  color: #fff;
-  text-shadow: none;
+.parampick__row--on,
+.parampick__row[aria-current="true"] {
+  color: var(--ink);
+  background: var(--paper);
+  border-color: var(--line);
 }
-.parampick__val { font-variant-numeric: tabular-nums; opacity: 0.95; }
-@media (prefers-reduced-motion: reduce) { .parampick { animation: none; } }
+.parampick__val { font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .parampick { animation-duration: 1ms; } }
 
-/* Ink dot on a highlight layer chip, so marks are identifiable at a glance. */
+/* ── Layers: Add, a chip per layer, Remove for the chosen one ── */
+.controls__layers {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+/* Add and Remove keep their size; only the chips between them give way (they
+   scroll), so a long label never pushes Add's word under its icon. */
+.controls__layers > .btn { flex: 0 0 auto; }
+.controls__layer-chips {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  flex-wrap: nowrap;
+}
+.controls__layer-chips .chip { flex: 0 0 auto; max-inline-size: 11rem; }
 .controls__markdot {
   display: inline-block;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  margin-right: 6px;
-  vertical-align: baseline;
-  border: 1px solid rgba(0, 0, 0, 0.18);
-}
-
-/* ── Suggested border swatches (palette from the photo) ── */
-.controls__swatch-head { padding-bottom: 0; align-items: center; }
-/* Compact "pick from photo" tool that lives in the accents header. */
-.controls__eyedropper-mini {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 9px;
-  border-radius: var(--r-pill);
-  border: 1px solid var(--border-strong);
-  background: var(--seg-track);
-  color: var(--ink-2);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  text-transform: none;
-  -webkit-tap-highlight-color: transparent;
-  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.15s;
-}
-.controls__eyedropper-mini:active { transform: scale(0.94); }
-.controls__eyedropper-mini--active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-.controls__swatches {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 6px;
-  margin: 0;
-}
-/* Fall back to 3-up on very narrow screens so chips stay tappable. */
-@media (max-width: 360px) {
-  .controls__swatches { grid-template-columns: repeat(3, 1fr); }
-}
-.controls__swatch {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 0;
-  background: none;
-  border: none;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.controls__swatch-chip {
-  width: 100%;
-  height: 38px;
-  border-radius: var(--r-md);
-  border: 2px solid var(--border-strong);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.15s;
-}
-.controls__swatch:active .controls__swatch-chip { transform: scale(0.9); }
-.controls__swatch--active .controls__swatch-chip {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent), inset 0 0 0 1px rgba(0, 0, 0, 0.08);
-}
-.controls__swatch-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--ink-3);
-  letter-spacing: 0.01em;
-}
-.controls__swatch--active .controls__swatch-label { color: var(--accent); }
-
-/* ── Hue / Saturation / Brightness fine-tune sliders ── */
-.controls__hsl {
-  margin: 0;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.controls__hsl .controls__row { margin-top: 4px; }
-
-/* Hex input + copy, part of every colour editor. */
-.controls__hexrow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  padding: 4px 4px 4px 10px;
-  background: var(--seg-track, var(--bg));
-  border: 1px solid var(--border);
-  border-radius: var(--r-md, 10px);
-}
-.controls__hexhash { font-family: var(--font-mono, monospace); font-size: 14px; font-weight: 700; color: var(--ink-3); }
-.controls__hexinput {
-  flex: 1 1 auto;
-  min-width: 0;
-  border: none;
-  background: none;
-  outline: none;
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 16px;                 /* >=16 so iOS doesn't auto-zoom */
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: lowercase;
-  color: var(--ink);
-}
-.controls__hexcopy {
+  inline-size: 0.75em;
+  block-size: 0.75em;
+  border-radius: var(--radius-pill);
+  background: var(--swatch);
+  border: var(--bw-thin) solid var(--line);
   flex: 0 0 auto;
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--accent);
-  background: var(--accent-subtle);
-  border: none;
-  border-radius: var(--r-sm, 7px);
-  -webkit-tap-highlight-color: transparent;
-  transition: transform 0.15s ease;
-}
-.controls__hexcopy:active { transform: scale(0.94); }
-
-/* Colour swatch rendered as a button (opens the colour modal). */
-.controls__color-swatch--btn {
-  -webkit-appearance: none;
-  appearance: none;
-  padding: 0;
+  margin-inline-end: var(--chrome-1);
 }
 
-.colormodal__card { width: min(320px, 100%); }
-.colormodal__preview {
-  height: 44px;
-  border-radius: var(--r-md, 10px);
-  border: 1px solid var(--border-strong, var(--border));
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
-}
-.controls__hsl input[type="range"] { margin: 2px 0 4px; height: 6px; }
-/* Gradient tracks so the sliders read as colour, not just position. */
-.controls__slider--tint { background: var(--track, var(--border)) !important; }
-.controls__slider--hue {
-  background: linear-gradient(to right,
-    #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%,
-    #0000ff 67%, #ff00ff 83%, #ff0000 100%) !important;
-}
+/* ── Chip rows that scroll on one line ── */
+.controls__chips { flex-wrap: nowrap; }
+.controls__chips .chip { flex: 0 0 auto; }
+.controls__flip { --ic-size: 0.9em; margin-inline-start: var(--chrome-1); }
+.controls__effects { flex: 1 1 auto; min-inline-size: 0; }
 
-.controls__color-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 6px;
-  border-radius: var(--r-md);
-  border: 1.5px solid transparent;
-  transition: border-color 0.15s, background 0.15s;
-  margin-top: 0;
-}
-
-.controls__color-row--active {
-  border-color: var(--accent);
-  background: var(--accent-subtle);
-}
-
-.controls__color-swatch {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--r-sm);
-  border: 2px solid var(--border-strong);
-  cursor: pointer;
-  flex-shrink: 0;
-  position: relative;
-  overflow: hidden;
-  transition: border-color 0.15s, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.controls__color-swatch:active {
-  transform: scale(0.92);
-}
-
-.controls__color-swatch input[type="color"] {
-  position: absolute;
-  inset: -4px;
-  width: calc(100% + 8px);
-  height: calc(100% + 8px);
-  opacity: 0;
-  cursor: pointer;
-  border: none;
-  padding: 0;
-}
-
-.controls__eyedropper {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--r-sm);
-  border: 1.5px solid var(--border);
-  background: var(--surface);
-  color: var(--ink-2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.15s, color 0.15s, border-color 0.15s,
-              transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-  -webkit-tap-highlight-color: transparent;
-}
-
-.controls__eyedropper:active {
-  transform: scale(0.92);
-}
-
-.controls__eyedropper--active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-
-.controls__color-hint {
-  font-size: 12px;
-  color: var(--ink-3);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.controls__color-row--active .controls__color-hint {
-  color: var(--accent);
-  font-weight: 600;
-}
-
-/* ── Layer Strip ── */
-.controls__layer-strip {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-.controls__layer-strip::-webkit-scrollbar { display: none; }
-
-/* ── Crop ratio chips ── */
-.controls__ratio-chip {
-  padding: 0 14px;
-  min-height: 44px;
-  border-radius: var(--r-pill);
-  border: 1.5px solid var(--border);
-  background: var(--bg);
-  color: var(--ink-2);
-  font-size: 12px;
-  font-weight: 600;
-  flex-shrink: 0;
-  letter-spacing: -0.1px;
-  transition: background 0.15s, color 0.15s, border-color 0.15s,
-              transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-  -webkit-tap-highlight-color: transparent;
-}
-.controls__ratio-chip:active { transform: scale(0.93); }
-.controls__ratio-chip--active {
-  border-color: var(--accent);
-  background: var(--accent-subtle);
-  color: var(--accent);
-}
-
-.controls__ratio-flip {
-  flex-shrink: 0;
-  margin-left: 3px;
-  opacity: 0.65;
-}
-
-.controls__layer-add {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 14px;
-  min-height: 44px;
-  border-radius: var(--r-pill);
-  border: 1.5px solid var(--accent);
-  background: var(--accent-subtle);
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 700;
-  flex-shrink: 0;
-  cursor: pointer;
-  letter-spacing: 0.02em;
-  transition: background 0.15s, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-  -webkit-tap-highlight-color: transparent;
-}
-.controls__layer-add:active { transform: scale(0.93); }
-
-.controls__layer-chip {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-  border-radius: var(--r-pill);
-  border: 1.5px solid var(--border);
-  background: var(--bg);
-  overflow: hidden;
-  flex-shrink: 0;
-  transition: border-color 0.15s, background 0.15s;
-}
-.controls__layer-chip--active {
-  border-color: var(--accent);
-  background: var(--accent-subtle);
-}
-
-.controls__layer-chip__label {
-  padding: 0 8px 0 14px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-2);
-  max-width: 100px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-}
-.controls__layer-chip--active .controls__layer-chip__label { color: var(--accent); }
-
-.controls__layer-chip__remove {
-  padding: 0 14px 0 6px;
-  font-size: 17px;
-  line-height: 1;
-  color: var(--ink-3);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: color 0.15s;
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-}
-.controls__layer-chip__remove:active { color: #A8200D; }
-
-/* ── Effects buttons (Shadow / Outline) ── */
-.controls__effects-row {
-  display: flex;
-  gap: 6px;
-  flex: 1;
-  min-width: 0;
-}
-
-.controls__effect-btn {
-  flex: 1;
-  padding: 7px 6px;
-  border-radius: var(--r-md);
-  border: 1.5px solid var(--border);
-  background: var(--surface);
-  color: var(--ink-2);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  letter-spacing: -0.1px;
-  transition: background 0.15s, color 0.15s, border-color 0.15s,
-              transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-  -webkit-tap-highlight-color: transparent;
-}
-
-.controls__effect-btn:active {
-  transform: scale(0.94);
-}
-
-.controls__effect-btn--active {
-  background: var(--accent-subtle);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-/* ── Text Controls ── */
-.controls__textarea {
-  width: 100%;
-  background: var(--bg);
-  border: 1.5px solid var(--border);
-  border-radius: var(--r-md);
-  padding: 10px 12px;
-  font-size: 15px;
-  color: var(--ink);
-  resize: none;
-  font-family: inherit;
-  line-height: 1.45;
-  transition: border-color 0.15s;
-  box-sizing: border-box;
-}
-
-.controls__textarea:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-.controls__textarea::placeholder {
-  color: var(--ink-3);
-}
-
+/* ── Text format row: B / I toggles, then alignment ── */
 .controls__text-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
+}
+.controls__text-row .segmented { flex: 1 1 auto; min-inline-size: 0; }
+.controls__toggles { display: flex; gap: var(--chrome-2); flex: 0 0 auto; }
+.controls__letter { font-family: var(--font-sans); }
+
+.controls__textarea {
+  inline-size: 100%;
+  resize: vertical;
+  min-block-size: 5.5rem;
 }
 
-.controls__seg--fill {
-  flex: 1;
-  min-width: 0;
+/* ── Colours ── */
+.controls__color-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.controls__color-hint {
+  flex: 1 1 auto;
+  font: var(--type-ctl);
+  color: var(--ink);
+}
+/* A circle you press to edit a colour, filled with that colour. The chip has
+   its own frame so a colour as pale as the paper still has an edge (1.4.11). */
+.controls__colorbtn { flex: 0 0 auto; }
+.controls__colorchip {
+  display: block;
+  /* chrome: a picture inside an icon-only circle stops at its 100% size */
+  inline-size: var(--chrome-ic);
+  block-size: var(--chrome-ic);
+  border-radius: var(--radius-pill);
+  background: var(--swatch);
+  border: var(--bw) solid var(--line);
 }
 
-.controls__text-move {
-  width: 100%;
-  padding: 11px;
-  border-radius: var(--r-md);
-  border: 1.5px solid var(--border);
-  background: var(--surface);
-  color: var(--ink-2);
-  font-size: 13px;
-  font-weight: 600;
+.controls__hsl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.controls__hexrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-block-start: var(--space-2);
+}
+.controls__hexfield { flex: 1 1 auto; min-inline-size: 0; }
+.controls__hexinput { text-transform: lowercase; }
+
+/* ── Font list (its own sub-tab): each family drawn in its own face ──
+   The faces are the user's content, so they are previewed in themselves;
+   everything around them is the style guide's list styling. */
+.controls__fontlist-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.controls__fontlist-count { font: var(--type-meta); color: var(--ink-soft); }
+.controls__fontlist--solo {
+  max-block-size: min(34dvh, 20rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: var(--bw) solid var(--line);
+  border-radius: var(--radius-tile);
+  background: var(--paper);
+}
+.controls__font-group + .controls__font-group {
+  border-block-start: var(--bw-thin) solid var(--line-soft);
+}
+.controls__font-group-label {
+  font: var(--type-label);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-label);
+  color: var(--ink-soft);
+  padding: var(--chrome-3) var(--chrome-4) var(--chrome-1);
+}
+/* A list row lives inside a frame and does not lift: hover tints, pressed
+   tints deeper, the chosen one is the ink fill with a check (house rules). */
+.controls__font-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  inline-size: 100%;
+  min-block-size: var(--hit);
+  padding: var(--chrome-2) var(--chrome-4);
+  font-size: 1.125rem;
+  line-height: 1.15;
+  text-align: start;
+  color: var(--ink);
+  background: none;
+  border: 0;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s,
-              transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-  -webkit-tap-highlight-color: transparent;
-  letter-spacing: -0.1px;
+}
+@media (hover: hover) {
+  .controls__font-item:hover { background: var(--paper-2); }
+}
+.controls__font-item:active { background: var(--paper-3); }
+.controls__font-item[aria-checked="true"] {
+  color: var(--paper);
+  background: var(--ink);
+}
+.controls__font-item[aria-checked="true"]::after {
+  content: '';
+  inline-size: var(--chrome-ic-sm);
+  block-size: var(--chrome-ic-sm);
+  flex: 0 0 auto;
+  background: currentColor;
+  -webkit-mask: var(--icon-check) center / contain no-repeat;
+          mask: var(--icon-check) center / contain no-repeat;
+}
+.controls__font-item:focus-visible { outline-offset: calc(-1 * var(--ring)); }
+@media (forced-colors: active) {
+  .controls__font-item[aria-checked="true"] { outline: var(--bw-heavy) solid Highlight; }
 }
 
-.controls__text-move:active {
-  transform: scale(0.97);
+/* ── Dialogs (cards on native <dialog>) ── */
+.valuemodal__body,
+.colormodal__body,
+.addsheet__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
-
-.controls__text-move--active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
+.valuemodal__field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
-
-/* ── Toggle Switch ── */
-.controls__toggle {
-  position: relative;
-  width: 46px;
-  height: 26px;
-  border-radius: var(--r-pill);
-  background: var(--border-strong);
-  border: none;
-  transition: background 0.2s;
-  flex-shrink: 0;
-  padding: 0;
-  cursor: pointer;
+.valuemodal__input {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  text-align: center;
+  font: var(--type-title);
+  font-variant-numeric: tabular-nums;
 }
-
-.controls__toggle--on {
-  background: var(--accent);
+.valuemodal__range { color: var(--ink-soft); text-align: center; margin: 0; }
+.colormodal__preview {
+  block-size: 3rem;
+  background: var(--swatch);
+  border: var(--bw) solid var(--line);
+  border-radius: var(--radius-tile);
 }
-
-.controls__toggle-thumb {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: white;
-  box-shadow: 0 1px 4px rgba(28, 23, 20, 0.22);
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.controls__toggle--on .controls__toggle-thumb {
-  transform: translateX(20px);
+.addsheet__sep { text-transform: uppercase; color: var(--ink-soft); margin: var(--space-1) 0 0; }
+.addsheet__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-block-size: 40dvh;
+  overflow-y: auto;
+  padding: var(--chrome-2);   /* room for the rings and lifts inside the scroller */
+  margin: calc(-1 * var(--chrome-2));
 }

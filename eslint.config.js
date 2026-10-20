@@ -6,7 +6,8 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
   // dist is built output; text-effects-pwa is a separate, gitignored spin-off.
-  globalIgnores(['dist', 'text-effects-pwa', 'dev']),
+  // public/sg is the vendored style guide's minified scripts (linted upstream).
+  globalIgnores(['dist', 'text-effects-pwa', 'dev', 'public/sg']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [

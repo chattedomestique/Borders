@@ -1,19 +1,16 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import { createPortal } from 'react-dom'
+import { Icon } from '../ui'
+import { useModalDialog } from '../useModalDialog'
 import './PresetSheet.css'
 
-// A modal for saving/loading the full "look" (text, effects, colours, fill).
-// The default behaviour carries only frame basics between photos; this is where
-// you opt into remembering everything.
+// Saving and loading the full "look" (text, effects, colors, fill). The
+// default carries only frame basics between photos; this is where you opt into
+// remembering everything. The style guide's form dialog: a card on a native
+// <dialog>, so Esc, the backdrop and the focus trap are the browser's.
 export default function PresetSheet({ presets, hasLast, onSave, onLoad, onDelete, onApplyLast, onClose }) {
   const [name, setName] = useState('')
-  const cardRef = useRef(null)
-
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); onClose() } }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  const ref = useModalDialog(true, onClose)
 
   const save = () => {
     const n = name.trim()
@@ -23,64 +20,51 @@ export default function PresetSheet({ presets, hasLast, onSave, onLoad, onDelete
   }
 
   return createPortal(
-    <div className="presetsheet" role="dialog" aria-modal="true" aria-label="Presets"
-      onPointerDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="presetsheet__card" ref={cardRef}>
-        <div className="presetsheet__head">
-          <span className="presetsheet__title">Presets</span>
-          <button className="presetsheet__close" onClick={onClose} aria-label="Close">×</button>
-        </div>
-
-        <p className="presetsheet__note">
-          New photos keep only your border &amp; crop. Save a preset to reuse text, effects, colors &amp; fill.
+    <dialog ref={ref} className="dialog card presetsheet" aria-labelledby="presets-t" aria-describedby="presets-d">
+      <header className="card__bar">
+        <p className="card__label" id="presets-t">Presets</p>
+        <button className="card__ctl" type="button" onClick={onClose} aria-label="Close">
+          <Icon name="close" />
+        </button>
+      </header>
+      <div className="card__body presetsheet__body">
+        <p className="card__text" id="presets-d">
+          New photos keep only your border and crop. Save a preset to reuse text, effects, colors and fill.
         </p>
 
-        <div className="presetsheet__saverow">
-          <input
-            className="presetsheet__input"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save() } }}
-            placeholder="Name this look…"
-            maxLength={40}
-            aria-label="Preset name"
-          />
-          <button className="presetsheet__btn presetsheet__btn--primary" onClick={save} disabled={!name.trim()}>
-            Save current
-          </button>
-        </div>
+        <form className="presetsheet__saverow" onSubmit={(e) => { e.preventDefault(); save() }}>
+          <label className="sr-only" htmlFor="preset-name">Preset name</label>
+          <input id="preset-name" className="input presetsheet__input" value={name}
+            onChange={(e) => setName(e.target.value)} placeholder="Name this look" maxLength={40}
+            autoComplete="off" />
+          <button className="btn" type="submit" data-variant="primary" disabled={!name.trim()}>Save</button>
+        </form>
 
         {hasLast && (
-          <button className="presetsheet__lastlook" onClick={onApplyLast}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-              strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M3 12a9 9 0 1 0 9-9 9.7 9.7 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
-            </svg>
-            Apply my last look
+          <button className="btn" type="button" data-block="" onClick={onApplyLast}>
+            <span className="btn__label"><Icon name="rotate-ccw" />Apply my last look</span>
           </button>
         )}
 
-        <div className="presetsheet__list">
-          {presets.length === 0 ? (
-            <p className="presetsheet__empty">No saved presets yet.</p>
-          ) : (
-            presets.map((p) => (
-              <div key={p.id} className="presetsheet__item">
-                <button className="presetsheet__load" onClick={() => onLoad(p)}>{p.name}</button>
-                <button className="presetsheet__del" onClick={() => onDelete(p.id)}
-                  aria-label={`Delete preset ${p.name}`}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <polyline points="3 6 5 6 21 6"/>
-                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                  </svg>
+        {presets.length === 0 ? (
+          <p className="t-meta presetsheet__empty">No saved presets yet.</p>
+        ) : (
+          <ul className="presetsheet__list" role="list" aria-label="Saved presets">
+            {presets.map((p) => (
+              <li key={p.id} className="presetsheet__item">
+                <button className="btn presetsheet__load" type="button" data-block="" onClick={() => onLoad(p)}>
+                  {p.name}
                 </button>
-              </div>
-            ))
-          )}
-        </div>
+                <button className="btn" type="button" data-shape="circle" data-size="sm"
+                  onClick={() => onDelete(p.id)} aria-label={`Delete preset ${p.name}`}>
+                  <Icon name="trash-2" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
-    </div>,
+    </dialog>,
     document.body,
   )
 }

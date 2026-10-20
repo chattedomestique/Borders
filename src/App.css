@@ -1,109 +1,68 @@
-/* ── App Shell ── */
+/* ── Border Studio: the editor shell ─────────────────────────────────────────
+   Built on the style guide's .app shell (a phone-width column, centred on a
+   wide screen, safe-area aware) and its appbar / toolbar / card / dialog. This
+   file only lays them out for an editor: the canvas takes everything between
+   the bar and the bottom overlay, and nothing ever scrolls the photo away.
+
+   Flat, as the style guide requires: no glass, no blur, no soft shadows. The
+   overlay sits on the canvas colour with a 2px rule, so the controls read as
+   a tray below the photo rather than a smoked pane over it. */
+
+/* ── Shell ── */
 .app {
+  /* The editor is the whole viewport, not a scrolling page: the overlay is
+     fixed to the bottom and the canvas sizes itself to what is left. */
+  block-size: 100%;
+  min-block-size: 0;
+  overflow: hidden;
   position: relative;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  width: 100%;
-  overflow: hidden;
 }
 
-/* ── Header ── */
-.app__header {
-  flex-shrink: 0;
-  z-index: 10;
-  width: 100%;
-  background: var(--glass-strong);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--border);
-  padding-top: env(safe-area-inset-top, 0px);
+/* The bar is part of the column, so it stays inside the gutters. */
+.app__bar {
+  flex: 0 0 auto;
+  padding-block-start: max(var(--chrome-2), var(--safe-top, 0px));
 }
 
-.app__header-inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  max-width: 480px;
-  margin: 0 auto;
-  padding: 0 20px;
-  height: 52px;
-}
-
-.app__logo {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-
-.app__logo-icon { flex-shrink: 0; color: var(--accent); }
-
-.app__logo-text {
-  font-family: var(--font-serif);
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.3px;
-  color: var(--ink);
-}
-
-.app__header-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.app__icon-btn {
-  width: 38px;
-  height: 38px;
-  border-radius: var(--r-pill);
-  color: var(--ink-2);
-  transition: background 0.15s, color 0.15s, opacity 0.15s,
-              transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-  -webkit-tap-highlight-color: transparent;
-}
-.app__icon-btn--active {
-  color: var(--accent);
-}
-.app__icon-btn:active:not(:disabled) {
-  background: var(--accent-dim);
-  color: var(--accent);
-  transform: scale(0.9);
-}
-.app__icon-btn:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-
-.app__reset-btn {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--accent);
-  padding: 8px 14px;
-  border-radius: var(--r-pill);
-  border: 1.5px solid var(--accent-dim);
-  transition: background 0.15s, border-color 0.15s,
-              transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.app__reset-btn:active {
-  background: var(--accent-dim);
-  transform: scale(0.95);
-}
-
-/* ── Main ── */
 .app__main {
-  flex: 1;
-  min-height: 0;
+  flex: 1 1 auto;
+  min-block-size: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* The style guide's .app__main pads for a dock; this app's overlay reserves
+     its own room (--overlay-h on the canvas wrap below). */
+  padding-block: 0;
+}
+
+/* ── More (a native popover) ── */
+.app__more {
+  /* Anchored under the bar's end without anchor positioning (not yet in every
+     engine): the bar is a fixed height, so a fixed offset is exact enough. */
+  position: fixed;
+  inset: auto;
+  inset-block-start: calc(var(--safe-top, 0px) + var(--space-8));
+  inset-inline-end: max(var(--gutter), var(--safe-right, 0px));
+  inline-size: min(20rem, calc(100vw - 2 * var(--gutter)));
+  margin: 0;
+}
+.app__more-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.app__more-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 /* ── Upload screen ── */
 .app__upload {
-  flex: 1;
+  flex: 1 1 auto;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 16px 20px 40px;
+  padding-block: var(--space-4) var(--space-7);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -111,33 +70,31 @@
 
 /* ── Edit screen canvas ── */
 .app__canvas-wrap {
-  flex: 1;
-  min-height: 0;
+  flex: 1 1 auto;
+  min-block-size: 0;
   display: flex;
-  /* `safe center` keeps the image centered without clipping the top when it
+  /* `safe center` keeps the image centred without clipping the top when it
      overflows (plain `center` would cut off the top of tall images). */
   align-items: safe center;
   justify-content: center;
   overflow-y: auto;
   overflow-x: hidden;
-  /* Reserve space for the toolbar + any open panel (height tracked live in JS)
-     so the controls never cover the part of the image you're editing. */
-  padding: 16px 0 calc(var(--overlay-h, 96px) + 16px);
+  /* Reserve space for the tray + any open panel (measured live in JS) so the
+     controls never cover the part of the image you're editing. */
+  padding-block: var(--space-2) calc(var(--overlay-h) + var(--space-2));
 }
 
-/* Fit view: canvas is contained to the visible area — no scrolling, you see
-   the full composition at once. The canvas element behaves like object-fit:
-   contain within the available space above the toolbar. */
+/* Fit view: the canvas is contained to the visible area — no scrolling, you
+   see the full composition at once. */
 .app__canvas-wrap--fit {
   overflow: hidden;
-  padding: 12px 12px calc(var(--overlay-h, 96px) + 12px);
 }
 
 .app__canvas-wrap--fit .border-canvas {
-  /* Fill the available area rather than hugging the image, so a zoomed document
-     can use the whole screen. The stage inside stays image-sized and centred. */
-  width: 100%;
-  height: 100%;
+  /* Fill the available area rather than hugging the image, so a zoomed
+     document can use the whole screen. The stage inside stays image-sized. */
+  inline-size: 100%;
+  block-size: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -145,309 +102,159 @@
 }
 
 .app__canvas-wrap--fit .border-canvas__stage {
-  /* The stage takes the role the container used to play: height-driven, width
-     shrunk to the document. NOT display:flex — a flex item's default
-     align-items:stretch overrides the canvas's `height: auto` and squashes the
-     aspect ratio, which is what happened when the dock height changed. */
+  /* Height-driven, width shrunk to the document. NOT display:flex — a flex
+     item's default align-items:stretch overrides the canvas's `height: auto`
+     and squashes the aspect ratio (the bug the tab switch exposed). */
   display: block;
-  width: auto;
-  height: 100%;
-  max-width: 100%;
+  inline-size: auto;
+  block-size: 100%;
+  max-inline-size: 100%;
 }
 
 .app__canvas-wrap--fit .border-canvas__el {
-  /* Scale proportionally to stay inside the available height and width */
-  width: auto;
-  height: auto;
-  max-width: 100%;
-  max-height: 100%;
+  /* Scale proportionally to stay inside the available height and width. */
+  inline-size: auto;
+  block-size: auto;
+  max-inline-size: 100%;
+  max-block-size: 100%;
 }
 
-/* ── Frosted Glass Overlay ── */
+/* ── Bottom overlay: the open panel above the tool tray ── */
 .app__overlay {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  inset-block-end: 0;
+  inset-inline: 0;
   z-index: 20;
   display: flex;
   flex-direction: column;
+  /* Same column as the shell, so on a wide screen the tray lines up with the
+     bar instead of running edge to edge. */
+  max-inline-size: var(--container-sm);
+  margin-inline: auto;
+  padding-inline: max(var(--gutter), var(--safe-left, 0px)) max(var(--gutter), var(--safe-right, 0px));
+  padding-block-end: max(var(--chrome-2), var(--safe-bottom, 0px));
+  background: var(--canvas);
+  border-block-start: var(--bw) solid var(--line);
 }
 
-/* Sliding panel — grid trick gives symmetric open/close animation */
+/* Sliding panel — the grid-rows trick gives a symmetric open / close. */
 .app__panel {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 0.36s cubic-bezier(0.4, 0, 0.2, 1);
-  background: var(--glass);
-  backdrop-filter: saturate(160%) blur(36px);
-  -webkit-backdrop-filter: saturate(160%) blur(36px);
-  border-top: 0.5px solid var(--glass-border);
+  transition: grid-template-rows var(--dur-enter) var(--ease-out);
 }
-
 .app__panel--open {
   grid-template-rows: 1fr;
 }
+@media (prefers-reduced-motion: reduce) {
+  .app__panel { transition-duration: 1ms; }
+}
 
-/* Inner wrapper allows grid row to collapse to 0 and provides scroll container */
+/* The inner wrapper lets the row collapse to 0 and is the scroll container. */
 .app__panel-inner {
   overflow: hidden;
-  min-height: 0;
+  min-block-size: 0;
 }
-
 .app__panel--open .app__panel-inner {
   overflow-y: auto;
-  /* Bounded bottom-sheet: the image above always stays large. Long tabs (e.g.
-     Fill) scroll inside the sheet rather than pushing the photo off-screen. */
-  max-height: min(42dvh, 430px);
+  /* A bounded sheet: the photo above always stays large. */
+  max-block-size: min(42dvh, 27rem);
   overscroll-behavior: contain;
+  padding-block: var(--space-2) var(--space-1);
 }
 
-/* Grabber — signals the sheet scrolls and gives it a proper bottom-sheet feel. */
-.app__panel-grab {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  display: flex;
-  justify-content: center;
-  padding: 7px 0 3px;
-  background: linear-gradient(var(--glass), color-mix(in srgb, var(--glass) 70%, transparent));
-  pointer-events: none;
-}
-.app__panel-grab::before {
-  content: '';
-  width: 36px;
-  height: 4px;
-  border-radius: var(--r-pill);
-  background: var(--border-strong);
-  opacity: 0.7;
-}
+/* The grabber is decoration from the glass era; the 2px rule above the tray
+   now says where the photo ends. */
+.app__panel-grab { display: none; }
 
-/* Toolbar — always visible, flush with screen bottom */
-.app__toolbar {
-  display: flex;
-  align-items: stretch;
-  background: var(--glass-toolbar);
-  backdrop-filter: saturate(200%) blur(40px);
-  -webkit-backdrop-filter: saturate(200%) blur(40px);
-  border-top: 0.5px solid var(--glass-border);
-}
-
-.app__toolbar-tabs {
-  display: flex;
-  flex: 1;
-}
-
-.app__toolbar-tab {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 10px 4px calc(12px + env(safe-area-inset-bottom, 0px));
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--ink-3);
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  position: relative;
-  transition: color 0.15s, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-  -webkit-tap-highlight-color: transparent;
-}
-
-.app__toolbar-tab::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 20%;
-  right: 20%;
-  height: 2px;
-  background: var(--accent);
-  border-radius: 0 0 var(--r-pill) var(--r-pill);
-  opacity: 0;
-  transform: scaleX(0.4);
-  transition: opacity 0.15s, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.app__toolbar-tab--active {
-  color: var(--accent);
-}
-
-.app__toolbar-tab--active::after {
-  opacity: 1;
-  transform: scaleX(1);
-}
-
-.app__toolbar-tab:active {
-  transform: scale(0.86);
-}
-
-/* Save button in toolbar */
-.app__toolbar-save {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 10px 20px calc(12px + env(safe-area-inset-bottom, 0px));
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--save-ink);
-  background: var(--save-bg);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  border-left: 0.5px solid rgba(255, 255, 255, 0.08);
-  transition: opacity 0.15s, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-  -webkit-tap-highlight-color: transparent;
-  min-width: 64px;
-}
-
-.app__toolbar-save:active {
-  opacity: 0.8;
-  transform: scale(0.94);
-}
-
-.app__toolbar-save--saving {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.app__toolbar-save-spinner {
-  width: 18px;
-  height: 18px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: toolbar-spin 0.7s linear infinite;
-}
-
-@keyframes toolbar-spin {
-  to { transform: rotate(360deg); }
-}
-
-/* ── Status toast (role=status live region) ── */
+/* ── Status toast (the role=status live region) ── */
 .app__toast {
   position: fixed;
-  bottom: calc(var(--overlay-h, 96px) + 20px);
-  left: 50%;
-  transform: translateX(-50%) translateY(8px);
+  inset-block-end: calc(var(--overlay-h) + var(--space-4));
+  inset-inline-start: 50%;
+  translate: -50% calc(var(--space-2) * var(--move, 1));
   z-index: 40;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 10px 18px 10px 14px;
-  background: var(--accent);
-  color: #fff;
-  border-radius: var(--r-pill);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
+  inline-size: max-content;
+  max-inline-size: calc(100vw - 2 * var(--gutter));
   pointer-events: none;
-  box-shadow: var(--shadow-md);
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.2s var(--ease, ease), transform 0.24s var(--ease, ease), visibility 0.2s;
+  transition: opacity var(--dur-hover) var(--ease-out),
+              translate var(--dur-enter) var(--ease-out),
+              visibility var(--dur-hover);
 }
 .app__toast--show {
   opacity: 1;
   visibility: visible;
-  transform: translateX(-50%) translateY(0);
+  translate: -50% 0;
 }
-@media (prefers-reduced-motion: reduce) {
-  .app__toast { transition: opacity 0.2s, visibility 0.2s; transform: translateX(-50%); }
-  .app__toast--show { transform: translateX(-50%); }
-}
-
-/* ── New-photo choice modal ── */
-.app__choice {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
+.app__toast-body {
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(20, 16, 12, 0.34);
-  backdrop-filter: blur(4px) saturate(115%);
-  -webkit-backdrop-filter: blur(4px) saturate(115%);
+  gap: var(--space-2);
+  padding: var(--chrome-3) var(--chrome-4);
+  font: var(--type-ctl);
 }
-.app__choice-card {
-  width: min(320px, 100%);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg, 18px);
-  box-shadow: var(--shadow-lg);
-  padding: 20px 18px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  animation: choice-pop 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-@keyframes choice-pop { from { transform: scale(0.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-.app__choice-title {
-  font-family: var(--font-serif, serif);
-  font-size: 19px;
-  font-weight: 600;
-  color: var(--ink);
-  text-align: center;
-}
-.app__choice-note {
-  font-size: 13px;
-  line-height: 1.4;
-  color: var(--ink-3);
-  text-align: center;
-  margin: 0 0 4px;
-}
-.app__choice-btn {
-  height: 46px;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--seg-track, var(--bg));
-  border: none;
-  border-radius: var(--r-md, 12px);
-  -webkit-tap-highlight-color: transparent;
-  transition: transform 0.15s ease, filter 0.12s ease;
-}
-.app__choice-btn--primary { color: #fff; background: var(--accent); }
-.app__choice-btn--ghost { background: none; color: var(--ink-3); height: 40px; font-weight: 600; }
-.app__choice-btn:active { transform: scale(0.98); }
-@media (prefers-reduced-motion: reduce) { .app__choice-card { animation: none; } }
 
-/* ── Gesture hint toast ── */
-.app__gesture-hint {
+/* ── Gesture hint (shown once per session) ── */
+.app__hint {
   position: fixed;
-  bottom: calc(var(--overlay-h, 96px) + 20px);
-  left: 50%;
-  transform: translateX(-50%);
+  inset-block-end: calc(var(--overlay-h) + var(--space-4));
+  inset-inline-start: 50%;
+  translate: -50% 0;
   z-index: 15;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 10px 18px;
-  background: var(--glass);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 0.5px solid var(--glass-border);
-  border-radius: var(--r-pill);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--ink-2);
-  white-space: nowrap;
+  inline-size: max-content;
+  max-inline-size: calc(100vw - 2 * var(--gutter));
+  padding: var(--chrome-3) var(--chrome-4);
+  font: var(--type-meta);
+  color: var(--ink-soft);
+  text-align: center;
   pointer-events: none;
-  box-shadow: var(--shadow-md);
-  animation: hint-in-out 2.8s ease-in-out forwards;
+  animation: hint-in-out 2.8s var(--ease-out) forwards;
 }
-
-.app__gesture-sep {
-  color: var(--ink-3);
-}
-
 @keyframes hint-in-out {
-  0%   { opacity: 0; transform: translateX(-50%) translateY(10px); }
-  14%  { opacity: 1; transform: translateX(-50%) translateY(0); }
-  75%  { opacity: 1; transform: translateX(-50%) translateY(0); }
-  100% { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+  0%   { opacity: 0; translate: -50% calc(var(--space-2) * var(--move, 1)); }
+  14%  { opacity: 1; translate: -50% 0; }
+  75%  { opacity: 1; translate: -50% 0; }
+  100% { opacity: 0; translate: -50% 0; }
 }
+
+/* ── Bottom row: the tool tray, the full width of the column ── */
+.app__tools { margin-block-start: var(--space-1); }
+.app__tray { inline-size: 100%; }
+/* Five tools in a tray wider than they need: spread them so the row reads as
+   one set rather than a set and a gap. While the toolbar script pages the
+   list (a narrow phone), it does its own spreading, so this steps aside. */
+.app__tray .toolbar__list:not([data-sg-paged]) { justify-content: space-around; }
+
+/* Save keeps one width whatever its label says ("Save", "Saving", "42%"),
+   so the bar never shifts while a video records. */
+.app__save { min-inline-size: 6.5rem; }
+
+/* The bar's layouts, chosen by SG.fit (main.jsx). While one is set the title
+   stays on one line, so "does not fit" shows up as overflow to the measure,
+   never as a word broken inside itself. */
+.app__bar[data-fit] .appbar__title { white-space: nowrap; }
+.app__bar[data-fit="tight"] .appbar__title { white-space: normal; overflow-wrap: normal; }
+/* Icon-only, Save is chrome like the circles beside it: it stops at its 100%
+   size instead of growing with the (now hidden) word. */
+.app__bar:is([data-fit="compact"], [data-fit="tight"]) .app__save {
+  min-inline-size: 0;
+  inline-size: var(--chrome-ctl-sm);
+  block-size: var(--chrome-ctl-sm);
+  min-block-size: 0;
+  padding: 0;
+  border-radius: var(--radius-pill);
+  --ic-size: var(--chrome-ic-sm);
+}
+.app__bar:is([data-fit="compact"], [data-fit="tight"]) .app__save-word {
+  position: absolute;
+  inline-size: 1px; block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* A popover the card styling would otherwise keep on screen: the card sets
+   `display`, which outranks the browser's own popover-hidden rule. */
+.app__more:not(:popover-open) { display: none; }

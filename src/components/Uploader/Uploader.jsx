@@ -63,38 +63,36 @@ export default function Uploader({ onMediaLoaded, initialError = null }) {
 
   return (
     <div className="uploader">
-      <div
-        className={`uploader__drop${dragging ? ' uploader__drop--active' : ''}${decoding ? ' uploader__drop--busy' : ''}`}
+      {/* The whole card is the button: a native <button> (Space and Enter come
+          free), drawn as a pressable card — it lifts on hover and focus, which in
+          the house rules is what says "you can press this". */}
+      <button type="button"
+        className={`card uploader__drop${dragging ? ' uploader__drop--active' : ''}`}
         onClick={() => !decoding && inputRef.current?.click()}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
-        role="button"
-        tabIndex={0}
-        aria-busy={decoding}
-        aria-label="Tap to choose a photo or video"
-        onKeyDown={(e) => e.key === 'Enter' && !decoding && inputRef.current?.click()}
+        aria-busy={decoding || undefined}
       >
         {decoding ? (
           <>
-            <span className="uploader__spinner" aria-hidden="true" />
-            <p className="uploader__title" role="status">Reading photo…</p>
-            <p className="uploader__subtitle">Optimizing for your device</p>
+            <span className="spinner" aria-hidden="true" />
+            <p className="card__title" role="status">Reading photo</p>
+            <p className="card__text">Getting it ready for editing</p>
           </>
         ) : (
           <>
-            <svg className="uploader__frame-icon" width="44" height="44" viewBox="0 0 44 44" fill="none" aria-hidden="true">
-              <rect x="2" y="2" width="40" height="40" rx="8" stroke="currentColor" strokeWidth="1.75"/>
-              <rect x="9" y="9" width="26" height="26" rx="4" stroke="currentColor" strokeWidth="1.25" opacity="0.45"/>
-            </svg>
-            <p className="uploader__title">Frame your photos.</p>
-            <p className="uploader__subtitle">Tap to choose · photos &amp; video</p>
+            <span className="uploader__icon"><span className="ic ic--image" aria-hidden="true" /></span>
+            <p className="card__title">Frame your photos.</p>
+            <p className="card__text">Tap to choose a photo or video</p>
           </>
         )}
-      </div>
+      </button>
 
       {error && (
-        <p className="uploader__error" role="alert">{error}</p>
+        <p className="uploader__error" role="alert">
+          <span className="ic ic--circle-alert" aria-hidden="true" /><span>{error}</span>
+        </p>
       )}
 
       <input
@@ -107,13 +105,13 @@ export default function Uploader({ onMediaLoaded, initialError = null }) {
         tabIndex={-1}
       />
 
-      <div className="uploader__buildstamp" aria-label={`Build ${__BUILD_ID__}`}>{__BUILD_ID__}</div>
-
-      <div className="uploader__features">
-        {['Border & grain', 'Custom text', 'Pinch to zoom', 'Save to Photos'].map(f => (
-          <span key={f} className="uploader__feature-chip">{f}</span>
+      <ul className="uploader__features" role="list" aria-label="What you can do">
+        {['Borders and color from your photo', 'Grain, highlights and text', 'Save straight to Photos'].map(f => (
+          <li key={f} className="t-meta">{f}</li>
         ))}
-      </div>
+      </ul>
+
+      <p className="uploader__buildstamp t-mono" aria-label={`Build ${__BUILD_ID__}`}>{__BUILD_ID__}</p>
     </div>
   )
 }

@@ -38,8 +38,9 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait',
         // §3.1: theme_color MUST equal the <meta name="theme-color"> light value.
-        theme_color: '#F2EDE6',
-        background_color: '#F2EDE6',
+        // = the style guide's --canvas (sand palette, light), as resolved in a browser.
+        theme_color: '#E9E8DF',
+        background_color: '#E9E8DF',
         categories: ['photo', 'graphics', 'utilities'],
         icons: [
           // §3.3: separate assets for `any` and `maskable` — never one for both.

@@ -2,7 +2,7 @@
 .border-canvas {
   position: relative;
   width: 100%;
-  background: var(--border);
+  background: var(--paper-2);
   /* The container is the pointer surface AND the clip. It fills the available
      area (see App.css fit rules) so an inspect zoom can use the whole screen;
      clipping here still keeps the zoom out of the dock. */
@@ -20,9 +20,8 @@
 
 /* Visible focus ring for the keyboard pan/zoom path (§10.1). */
 .border-canvas:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-  border-radius: var(--r-sm, 6px);
+  outline: var(--ring) solid var(--focus);
+  outline-offset: var(--ring-offset);
 }
 
 .border-canvas__el {
@@ -47,16 +46,20 @@
   z-index: 2;
 }
 
+/* Guides drawn over the photo use the media role and difference blending, so
+   they invert whatever is under them and read on any image. */
 .border-canvas__grid-line {
-  stroke: rgba(255, 255, 255, 0.32);
+  stroke: var(--on-media);
+  stroke-opacity: 0.32;
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
   mix-blend-mode: difference;
 }
 
 .border-canvas__snap-line {
-  stroke: var(--accent, #ff4d8d);
+  stroke: var(--on-media);
   stroke-width: 2;
+  mix-blend-mode: difference;
   vector-effect: non-scaling-stroke;
 }
 
@@ -69,36 +72,13 @@
   min-height: 200px;
 }
 
-.border-canvas__spinner {
-  width: 32px;
-  height: 32px;
-  border: 2.5px solid var(--border-strong);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 /* Inspect-zoom badge: makes it unmistakable that this zoom is a view, not a
    crop — and gives a one-tap way back to 1x. */
 .border-canvas__zoombadge {
+  /* A style-guide button placed over the photo. Opaque paper with a frame,
+     so it stays readable on any image without a scrim. */
   position: absolute;
-  top: 10px;
-  right: 10px;
+  inset-block-start: var(--space-2);
+  inset-inline-end: var(--space-2);
   z-index: 5;
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: #fff;
-  background: rgba(20, 16, 12, 0.62);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: none;
-  border-radius: var(--r-pill, 999px);
-  -webkit-tap-highlight-color: transparent;
 }
-.border-canvas__zoombadge:active { transform: scale(0.95); }

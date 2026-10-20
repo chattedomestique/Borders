@@ -21,18 +21,41 @@ npm run lint    # ESLint
 
 - `src/palette.js` — pure color engine: median-cut palette extraction + border-color harmonies drawn from the photo.
 - `src/components/BorderCanvas/` — the Canvas 2D render engine (`renderFrame`) + gestures; the export renders a fresh, overlay-free frame.
-- `src/components/Controls/` — the sub-tabbed bottom dock (Frame / Fill / Grain / Text), token-driven primitives (Slider, EditableValue, Toggle, SwatchGroup).
+- `src/components/Controls/` — the sub-tabbed bottom dock (Frame / Fill / Grain / Mark / Text), built from the style guide's elements (`src/components/ui.jsx`).
 - `src/App.jsx` + `src/useHistory.js` — settings state over a coalescing undo/redo hook; `src/persist.js` mirrors settings to localStorage.
 - `vite.config.js` — `vite-plugin-pwa` (Workbox) owns the service worker, manifest, and precache.
+
+## Design system
+
+The UI is built on the owner's style guide (`chattedomestique/styleguide`, branch
+`claude/generic-style-guide`), vendored into `src/vendor/styleguide` (CSS, fonts,
+icons) and `public/sg` (its layout scripts) by `scripts/sync-styleguide.mjs`,
+which records the source commit in `src/vendor/styleguide/VERSION.md`. To update:
+rebuild the style guide, then run `node scripts/sync-styleguide.mjs ../styleguide`.
+
+- Only the elements the app uses are shipped: button, card, appbar, toolbar,
+  tabs, segmented, slider, chip, swatch, switch, dialog, field, input, divider,
+  spinner (about a third of the full bundle).
+- The look is set on `<html>`: `data-palette="sand"` — a warm-tinted neutral
+  with an ink accent, so the chrome carries no colour beside the photo.
+  Light / dark and higher contrast follow the device.
+- The app's CSS reads the style guide's roles only, and is unlayered so it wins
+  over every `sg.*` layer; it holds no element-level resets for that reason.
+- React owns state. Of the style guide's scripts, only those that measure layout
+  are loaded (core / `SG.fit`, segmented, toolbar); the ones that own state
+  (tabs, chip, dialog, slider) are reimplemented in `ui.jsx`, because two owners
+  of `aria-selected` fight.
+- One documented exception to "no gradients": a colour channel's slider track,
+  which shows the colours it reaches (data, like a swatch).
 
 ## Alignment with The Personal PWA Playbook
 
 This repo is being brought into line with the Playbook. Done:
 
 - **N1** — the build owns the service worker (`vite-plugin-pwa`); no hand-rolled SW, no hand-bumped cache version.
-- **N3 / N4** — save via `navigator.share({ files })` first, `<a download>` desktop fallback; JPEG (0.92), not PNG; `AbortError` swallowed as a clean cancel.
+- **N3 / N4** — save via `navigator.share({ files })` first, `<a download>` desktop fallback; JPEG (0.95), not PNG, rendered by a separate full-resolution pass (up to the 4096 px / 16.7 Mpx canvas ceiling); `AbortError` swallowed as a clean cancel.
 - **N8** — overlays (grid, guides, text bboxes) never export; the export renders a fresh frame with `overlay = null`.
-- **N5 / N6** — downscale on import to ~2048 px (also bakes EXIF orientation); two-stage intake validation (pick-time + decode-time) that reaches the UI, with a decoding state.
+- **N5 / N6** — import passes the original bytes through untouched up to 4096 px (every phone photo to ~12 MP) and only resamples above that; two-stage intake validation (pick-time + decode-time) that reaches the UI, with a decoding state.
 - **N10** — `npm run lint` is green and a CI `verify` job (lint + test + build + smoke) gates `deploy`, with a concurrency guard.
 - **§12** — Vitest on the pure color engine (`palette.js`): primaries, grey saturation, rgb↔hsl round-trip, hue wrap, hex↔hsl (the slider path) identity.
 - **N11 (tier 1)** — settings persisted to localStorage and restored onto the next photo.

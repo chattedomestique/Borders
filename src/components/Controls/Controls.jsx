@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { Icon, Segmented, Tabs, Switch, SwatchSet } from '../ui'
+import { useModalDialog } from '../useModalDialog'
 import './Controls.css'
 import { hexToHsl, hslCss } from '../../palette'
 
@@ -13,11 +15,6 @@ const CROP_RATIOS = [
 ]
 
 // Perceived-luminance test so a checkmark on a swatch stays legible.
-function isLightHex(hex) {
-  const h = hex.replace('#', '')
-  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16)
-  return (0.299 * r + 0.587 * g + 0.114 * b) > 150
-}
 
 // System stacks + self-hosted OFL fonts from open-source foundries
 // (see src/fonts.css and src/assets/fonts/CREDITS.md).
@@ -92,11 +89,12 @@ const FONT_GROUPS = FONTS.reduce((acc, f) => {
   return acc
 }, [])
 
+// Letters fit four cells on a phone; the radio's own name says it in words.
 const ALIGNS = [
-  { id: 'left',    label: 'L' },
-  { id: 'center',  label: 'C' },
-  { id: 'right',   label: 'R' },
-  { id: 'justify', label: 'J' },
+  { id: 'left',    label: 'L', aria: 'Align left' },
+  { id: 'center',  label: 'C', aria: 'Align centre' },
+  { id: 'right',   label: 'R', aria: 'Align right' },
+  { id: 'justify', label: 'J', aria: 'Justify' },
 ]
 
 const TEXT_BG_MODES = [
@@ -119,59 +117,51 @@ const ECHO_BLENDS = [
   { id: 'lighten', label: 'Lighten' },
 ]
 
-function Toggle({ on, onChange, label }) {
-  return (
-    <button
-      className={`controls__toggle${on ? ' controls__toggle--on' : ''}`}
-      onClick={() => onChange(!on)}
-      role="switch" aria-checked={on} aria-label={label}
-    >
-      <span className="controls__toggle-thumb"/>
-    </button>
-  )
-}
-
 /**
  * Range slider that resets to its default on double-tap / double-click of the
  * handle. `def` is the default value; `on(value)` receives the numeric value
  * (from drags and from the reset). All other props pass through to the input.
  */
-function Slider({ def, on, ...rest }) {
+function Slider({ def, on, className = '', style, ...rest }) {
   const lastTap = useRef(0)
   const reset = () => { if (def != null) on(def) }
+  // The style guide draws the rail and its filled part behind a transparent
+  // native track, from --p (0…1). Its own script would set --p; React owns the
+  // value here, so React sets it.
+  const min = Number(rest.min ?? 0), max = Number(rest.max ?? 100), v = Number(rest.value ?? min)
+  const p = max > min ? (v - min) / (max - min) : 0
   return (
-    <input
-      type="range" {...rest}
-      onChange={e => on(Number(e.target.value))}
-      onDoubleClick={reset}
-      onPointerDown={() => {
-        const now = Date.now()
-        if (now - lastTap.current < 320) { reset(); lastTap.current = 0 }
-        else lastTap.current = now
-      }}
-    />
+    <div className={`slider controls__slider${className ? ` ${className}` : ''}`}
+      style={{ ...style, '--p': Math.min(1, Math.max(0, p)) }}>
+      <div className="slider__track">
+        <input
+          type="range" className="slider__input" {...rest}
+          onChange={e => on(Number(e.target.value))}
+          onDoubleClick={reset}
+          onPointerDown={() => {
+            const now = Date.now()
+            if (now - lastTap.current < 320) { reset(); lastTap.current = 0 }
+            else lastTap.current = now
+          }}
+        />
+      </div>
+    </div>
   )
 }
 
-// A centered dialog for precise value entry. Replaces the old inline number
-// input, which on iOS auto-zoomed onto the field and never zoomed back out.
-// The backdrop dims + blurs; the input is >=17px so iOS never auto-zooms.
+// Precise value entry: the style guide's form dialog (a card on a native
+// <dialog>). Replaces the old inline number input, which on iOS auto-zoomed onto
+// the field and never zoomed back out. The input is 16px+ so iOS never zooms.
 function ValueModal({ label, value, min, max, step, suffix, format, onCommit, onClose }) {
   const [draft, setDraft] = useState(String(value))
   const inputRef = useRef(null)
-  const triggerRef = useRef(null)
+  // The hook returns focus to the value that opened this, whichever way it ends.
+  const ref = useModalDialog(true, onClose)
 
   useEffect(() => {
-    triggerRef.current = document.activeElement
     const el = inputRef.current
     if (el) { el.focus(); el.select() }
-    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); onClose() } }
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      try { triggerRef.current?.focus?.() } catch { /* trigger gone */ }
-    }
-  }, [onClose])
+  }, [])
 
   const submit = () => {
     const n = parseFloat(draft)
@@ -183,34 +173,41 @@ function ValueModal({ label, value, min, max, step, suffix, format, onCommit, on
     const from = Number.isNaN(base) ? value : base
     setDraft(String(Math.min(max, Math.max(min, from + dir * step))))
   }
+  const name = label || 'Value'
 
   return createPortal(
-    <div className="valuemodal" role="dialog" aria-modal="true"
-      aria-label={label ? `Edit ${label}` : 'Edit value'}
-      onPointerDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="valuemodal__card">
-        <div className="valuemodal__title">{label || 'Value'}</div>
-        <div className="valuemodal__field">
-          <button type="button" className="valuemodal__step" aria-label="Decrease" onClick={() => bump(-1)}>−</button>
-          <input
-            ref={inputRef} className="valuemodal__input"
-            type="number" inputMode={min < 0 ? 'text' : 'decimal'}
-            value={draft} min={min} max={max} step={step}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit() } }}
-            aria-label={label || 'Value'}
-          />
-          <button type="button" className="valuemodal__step" aria-label="Increase" onClick={() => bump(1)}>+</button>
+    <dialog ref={ref} className="dialog card valuemodal" data-size="sm" aria-labelledby="valuemodal-t">
+      <form method="dialog" className="dialog__form" onSubmit={(e) => { e.preventDefault(); submit() }}>
+        <header className="card__bar">
+          <p className="card__label" id="valuemodal-t">{name}</p>
+          <button className="card__ctl" type="button" onClick={onClose} aria-label="Cancel">
+            <Icon name="close" />
+          </button>
+        </header>
+        <div className="card__body valuemodal__body">
+          <div className="valuemodal__field">
+            <button type="button" className="btn" data-shape="circle" aria-label={`Decrease ${name}`}
+              onClick={() => bump(-1)}><Icon name="minus" /></button>
+            <input
+              ref={inputRef} className="input num valuemodal__input"
+              type="number" inputMode={min < 0 ? 'text' : 'decimal'}
+              value={draft} min={min} max={max} step={step}
+              onChange={(e) => setDraft(e.target.value)}
+              aria-label={name} aria-describedby="valuemodal-range"
+            />
+            <button type="button" className="btn" data-shape="circle" aria-label={`Increase ${name}`}
+              onClick={() => bump(1)}><Icon name="plus" /></button>
+          </div>
+          <p className="t-meta num valuemodal__range" id="valuemodal-range">
+            {format ? `${format(min)} to ${format(max)}` : `${min}${suffix} to ${max}${suffix}`}
+          </p>
         </div>
-        <div className="valuemodal__range">
-          {format ? `${format(min)} – ${format(max)}` : `${min}${suffix} – ${max}${suffix}`}
+        <div className="dialog__actions">
+          <button type="button" className="btn" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn" data-variant="primary">Set</button>
         </div>
-        <div className="valuemodal__actions">
-          <button type="button" className="valuemodal__btn" onClick={onClose}>Cancel</button>
-          <button type="button" className="valuemodal__btn valuemodal__btn--primary" onClick={submit}>OK</button>
-        </div>
-      </div>
-    </div>,
+      </form>
+    </dialog>,
     document.body,
   )
 }
@@ -237,14 +234,14 @@ function EditableValue({ value, min, max, step = 1, onChange, format, suffix = '
 
   return (
     <div className="controls__valuectl" style={style}>
-      <button type="button" className="controls__stepbtn" onClick={() => nudge(-1)}
-        disabled={value <= min} aria-label={`Decrease ${label || 'value'}`}>−</button>
-      <button type="button" className="controls__value controls__value--btn"
+      <button type="button" className="btn" data-shape="circle" data-size="sm" onClick={() => nudge(-1)}
+        disabled={value <= min} aria-label={`Decrease ${label || 'value'}`}><Icon name="minus" /></button>
+      <button type="button" className="controls__value num"
         onClick={() => setEditing(true)} aria-label={`${label || 'Value'} ${display}, tap to type`}>
         {display}
       </button>
-      <button type="button" className="controls__stepbtn" onClick={() => nudge(1)}
-        disabled={value >= max} aria-label={`Increase ${label || 'value'}`}>+</button>
+      <button type="button" className="btn" data-shape="circle" data-size="sm" onClick={() => nudge(1)}
+        disabled={value >= max} aria-label={`Increase ${label || 'value'}`}><Icon name="plus" /></button>
       {editing && (
         <ValueModal
           label={label} value={value} min={min} max={max} step={step} suffix={suffix} format={format}
@@ -262,32 +259,32 @@ function EditableValue({ value, min, max, step = 1, onChange, format, suffix = '
  * dialled a look in — retyping a dozen sliders to match is the tedious path.
  */
 function AddLayerSheet({ title, layers, labelFor, dotFor, onDefault, onCopy, onClose }) {
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); onClose() } }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
-
+  const ref = useModalDialog(true, onClose)
   return createPortal(
-    <div className="addsheet" role="dialog" aria-modal="true" aria-label={title}
-      onPointerDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="addsheet__card">
-        <div className="addsheet__title">{title}</div>
-        <button className="addsheet__btn addsheet__btn--primary" onClick={onDefault}>
-          Default settings
+    <dialog ref={ref} className="dialog card addsheet" data-size="sm" aria-labelledby="addsheet-t">
+      <header className="card__bar">
+        <p className="card__label" id="addsheet-t">{title}</p>
+        <button className="card__ctl" type="button" onClick={onClose} aria-label="Cancel">
+          <Icon name="close" />
         </button>
-        <div className="addsheet__sep">or copy settings from</div>
+      </header>
+      <div className="card__body addsheet__body">
+        <button className="btn" type="button" data-variant="primary" data-block="" autoFocus onClick={onDefault}>
+          Start from defaults
+        </button>
+        <p className="t-label addsheet__sep">Or copy the settings of</p>
         <div className="addsheet__list">
           {layers.map((l, i) => (
-            <button key={l.id} className="addsheet__item" onClick={() => onCopy(l.id)}>
-              {dotFor && <span className="controls__markdot" style={{ background: dotFor(l) }} aria-hidden="true" />}
-              {labelFor(l, i)}
+            <button key={l.id} type="button" className="btn" data-block="" onClick={() => onCopy(l.id)}>
+              <span className="btn__label">
+                {dotFor && <span className="controls__markdot" style={{ '--swatch': dotFor(l) }} aria-hidden="true" />}
+                {labelFor(l, i)}
+              </span>
             </button>
           ))}
         </div>
-        <button className="addsheet__btn addsheet__btn--ghost" onClick={onClose}>Cancel</button>
       </div>
-    </div>,
+    </dialog>,
     document.body,
   )
 }
@@ -385,10 +382,7 @@ function ParamStrip({ params }) {
             onPointerUp={() => { swipe.current = null }}
             onClick={() => { if (!pickOpen) setPickOpen(true) }}
             aria-haspopup="dialog" aria-expanded={pickOpen}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="7 14 12 19 17 14"/><polyline points="7 10 12 5 17 10"/>
-            </svg>
+            <Icon name="chevrons-up-down" />
             {cur.label}
           </button>
         ) : (
@@ -411,37 +405,21 @@ function ParamStrip({ params }) {
 // Call sites pass `params`; the strip is a drop-in for the old row list.
 const ParamRows = ParamStrip
 
-// A labelled grid of tappable border-colour suggestions (one harmony group).
+// One harmony group of border-colour suggestions: the style guide's swatch set.
+// "Chosen" is the border's current colour, so a swatch reads as selected only
+// while it is what the border actually is.
 function SwatchGroup({ title, hint, action, items, bgMode, bgColor, onApply }) {
   if (!items?.length) return null
+  const current = bgMode === 'color'
+    ? items.find(s => (bgColor || '').toLowerCase() === s.hex.toLowerCase())?.id ?? null
+    : null
   return (
     <>
-      <div className="controls__fontlist-head controls__swatch-head">
-        <span>{title}</span>
-        {action || (hint && <span className="controls__fontlist-count">{hint}</span>)}
+      <div className="controls__group-head">
+        <span className="t-label">{title}</span>
+        {action || (hint && <span className="t-meta">{hint}</span>)}
       </div>
-      <div className="controls__swatches" role="radiogroup" aria-label={title}>
-        {items.map(s => {
-          const active = bgMode === 'color' && (bgColor || '').toLowerCase() === s.hex.toLowerCase()
-          return (
-            <button key={s.id} role="radio" aria-checked={active}
-              className={`controls__swatch${active ? ' controls__swatch--active' : ''}`}
-              onClick={() => onApply?.(s.hex)}
-              title={`${s.label} · ${s.hex}`} aria-label={`${s.label} border ${s.hex}`}>
-              <span className="controls__swatch-chip" style={{ background: s.hex }}>
-                {active && (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                    stroke={isLightHex(s.hex) ? '#111' : '#fff'} strokeWidth="3.2"
-                    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <polyline points="20 6 9 17 4 12"/>
-                  </svg>
-                )}
-              </span>
-              <span className="controls__swatch-label">{s.label}</span>
-            </button>
-          )
-        })}
-      </div>
+      <SwatchSet legend={title} items={items} value={current} onPick={s => onApply?.(s.hex)} />
     </>
   )
 }
@@ -507,6 +485,8 @@ function ColorSliders({ hex, onColor }) {
   }
 
   const h = Math.round(hsl.h), s = Math.round(hsl.s), l = Math.round(hsl.l)
+  // The one place a gradient is drawn: a colour channel's track IS the range
+  // of colours it reaches (data, like a swatch), not decoration.
   const trackSat = `linear-gradient(to right, ${hslCss(hsl.h, 0, hsl.l)}, ${hslCss(hsl.h, 100, hsl.l)})`
   const trackLit = `linear-gradient(to right, #000, ${hslCss(hsl.h, hsl.s, 50)}, #fff)`
 
@@ -515,27 +495,30 @@ function ColorSliders({ hex, onColor }) {
       <div className="controls__row"><label className="controls__label">Hue</label>
         <EditableValue value={h} min={0} max={360} suffix="°" label="Hue" onChange={v => setChan('h', v)} /></div>
       <Slider className="controls__slider--hue" min={0} max={360} step={1}
-        def={Math.round(base.h)} value={h} on={v => setChan('h', v)} />
+        def={Math.round(base.h)} value={h} on={v => setChan('h', v)} aria-label="Hue" />
 
       <div className="controls__row"><label className="controls__label">Saturation</label>
         <EditableValue value={s} min={0} max={100} suffix="%" label="Saturation" onChange={v => setChan('s', v)} /></div>
       <Slider className="controls__slider--tint" style={{ '--track': trackSat }} min={0} max={100} step={1}
-        def={Math.round(base.s)} value={s} on={v => setChan('s', v)} />
+        def={Math.round(base.s)} value={s} on={v => setChan('s', v)} aria-label="Saturation" />
 
       <div className="controls__row"><label className="controls__label">Brightness</label>
         <EditableValue value={l} min={0} max={100} suffix="%" label="Brightness" onChange={v => setChan('l', v)} /></div>
       <Slider className="controls__slider--tint" style={{ '--track': trackLit }} min={0} max={100} step={1}
-        def={Math.round(base.l)} value={l} on={v => setChan('l', v)} />
+        def={Math.round(base.l)} value={l} on={v => setChan('l', v)} aria-label="Brightness" />
 
       <div className="controls__hexrow">
-        <span className="controls__hexhash" aria-hidden="true">#</span>
-        <input className="controls__hexinput" value={hexDraft} onChange={e => onHexInput(e.target.value)}
-          spellCheck={false} autoCapitalize="none" autoCorrect="off" inputMode="text"
-          aria-label="Hex color" />
-        {/* No maxLength: the browser applies it to the raw paste, so '#ff4d8d'
-            would arrive already cut to '#ff4d8'. onHexInput does the clamping. */}
-        <button type="button" className="controls__hexcopy" onClick={copy}
-          aria-label="Copy hex color">{copied ? 'Copied' : 'Copy'}</button>
+        <div className="input-group controls__hexfield">
+          <span className="input-group__start t-mono" aria-hidden="true">#</span>
+          <input className="input t-mono controls__hexinput" value={hexDraft} onChange={e => onHexInput(e.target.value)}
+            spellCheck={false} autoCapitalize="none" autoCorrect="off" inputMode="text"
+            aria-label="Hex color" />
+          {/* No maxLength: the browser applies it to the raw paste, so '#ff4d8d'
+              would arrive already cut to '#ff4d8'. onHexInput does the clamping. */}
+        </div>
+        <button type="button" className="btn" data-size="sm" onClick={copy} aria-label="Copy hex color">
+          <span className="btn__label"><Icon name={copied ? 'check' : 'copy'} />{copied ? 'Copied' : 'Copy'}</span>
+        </button>
       </div>
     </div>
   )
@@ -548,35 +531,34 @@ function ColorField({ value, onChange, label }) {
   const v = normalizeHex(value) || '#000000'
   return (
     <>
-      <button type="button" className="controls__color-swatch controls__color-swatch--btn"
-        style={{ background: v }} onClick={() => setOpen(true)}
-        aria-label={`${label || 'Color'} ${v}, tap to change`} />
+      <button type="button" className="btn controls__colorbtn" data-shape="circle"
+        onClick={() => setOpen(true)} aria-label={`${label || 'Color'} ${v}, tap to change`}>
+        <span className="controls__colorchip" style={{ '--swatch': v }} aria-hidden="true" />
+      </button>
       {open && <ColorModal label={label} value={v} onChange={onChange} onClose={() => setOpen(false)} />}
     </>
   )
 }
 
 function ColorModal({ label, value, onChange, onClose }) {
-  const triggerRef = useRef(null)
-  useEffect(() => {
-    triggerRef.current = document.activeElement
-    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); onClose() } }
-    document.addEventListener('keydown', onKey)
-    return () => { document.removeEventListener('keydown', onKey); try { triggerRef.current?.focus?.() } catch { /* gone */ } }
-  }, [onClose])
-
+  const ref = useModalDialog(true, onClose)
+  const v = normalizeHex(value) || '#000000'
   return createPortal(
-    <div className="valuemodal" role="dialog" aria-modal="true" aria-label={label ? `Edit ${label}` : 'Edit color'}
-      onPointerDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="valuemodal__card colormodal__card">
-        <div className="valuemodal__title">{label || 'Color'}</div>
-        <div className="colormodal__preview" style={{ background: normalizeHex(value) || '#000000' }} />
+    <dialog ref={ref} className="dialog card colormodal" data-size="sm" aria-labelledby="colormodal-t">
+      <header className="card__bar">
+        <p className="card__label" id="colormodal-t">{label || 'Color'}</p>
+        <button className="card__ctl" type="button" onClick={onClose} aria-label="Done">
+          <Icon name="check" />
+        </button>
+      </header>
+      <div className="card__body colormodal__body">
+        <div className="colormodal__preview" style={{ '--swatch': v }} role="img" aria-label={`Current color ${v}`} />
         <ColorSliders hex={value} onColor={onChange} />
-        <div className="valuemodal__actions" style={{ gridTemplateColumns: '1fr' }}>
-          <button type="button" className="valuemodal__btn valuemodal__btn--primary" onClick={onClose}>Done</button>
-        </div>
       </div>
-    </div>,
+      <div className="dialog__actions">
+        <button type="button" className="btn" data-variant="primary" data-block="" onClick={onClose}>Done</button>
+      </div>
+    </dialog>,
     document.body,
   )
 }
@@ -607,32 +589,17 @@ function BgControls({ settings, onUpdate, pickMode, onPickMode, borderSuggestion
   const accents = borderSuggestions.filter(s => s.group === 'accent')
 
   const eyedrop = (
-    <button
-      className={`controls__eyedropper-mini${pickMode ? ' controls__eyedropper-mini--active' : ''}`}
-      onClick={onPickMode} aria-pressed={pickMode} aria-label="Pick a color from the photo">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
-        <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
-        <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
-        <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
-      </svg>
-      {pickMode ? 'Tap photo' : 'Eyedrop'}
+    <button type="button" className="btn" data-size="sm" onClick={onPickMode} aria-pressed={pickMode}
+      aria-label="Pick a color from the photo">
+      <span className="btn__label"><Icon name="pipette" />{pickMode ? 'Tap the photo' : 'Eyedrop'}</span>
     </button>
   )
 
   return (
     <section className="controls__section controls__section--dock" aria-label="Border fill">
-      <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }} role="tablist">
-        {BG_SUBTABS.map(t => {
-          const active = sub === t.id
-          return (
-            <button key={t.id} role="tab" aria-selected={active}
-              className={`controls__seg-btn${active ? ' controls__seg-btn--active' : ''}`}
-              onClick={() => pick(t.id)}>{t.label}</button>
-          )
-        })}
-      </div>
+      <Tabs label="Border fill" tabs={BG_SUBTABS} value={sub} onChange={pick} idBase="fill" />
+      <div role="tabpanel" id="fill-panel" aria-labelledby={`fill-tab-${sub}`}
+        className="controls__panel">
 
       {sub === 'photo' && (
         <SwatchGroup title="From your photo" hint="tap to apply" items={tones}
@@ -667,6 +634,7 @@ function BgControls({ settings, onUpdate, pickMode, onPickMode, borderSuggestion
             value: frostVibrance, onChange: v => onUpdate('frostVibrance', v) },
         ]} />
       )}
+      </div>
     </section>
   )
 }
@@ -684,13 +652,9 @@ function FrameControls({ borderThickness, cornerRadius, cropRatio = 'free', aspe
   const setSub = onSub
   return (
     <section className="controls__section controls__section--dock" aria-label="Frame">
-      <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }} role="tablist">
-        {FRAME_SUBTABS.map(t => (
-          <button key={t.id} role="tab" aria-selected={sub === t.id}
-            className={`controls__seg-btn${sub === t.id ? ' controls__seg-btn--active' : ''}`}
-            onClick={() => setSub(t.id)}>{t.label}</button>
-        ))}
-      </div>
+      <Tabs label="Frame" tabs={FRAME_SUBTABS} value={sub} onChange={setSub} idBase="frame" />
+      <div role="tabpanel" id="frame-panel" aria-labelledby={`frame-tab-${sub}`}
+        className="controls__panel">
 
       {sub === 'border' && (
         <>
@@ -702,10 +666,7 @@ function FrameControls({ borderThickness, cornerRadius, cropRatio = 'free', aspe
               value: cornerRadius, onChange: v => onUpdate('cornerRadius', v) },
           ]} />
 
-          <div className="controls__row controls__row--spaced">
-            <label className="controls__label">Show photo</label>
-            <Toggle on={showMedia} onChange={v => onUpdate('showMedia', v)} label="Toggle photo visibility"/>
-          </div>
+          <Switch label="Show photo" checked={showMedia} onChange={v => onUpdate('showMedia', v)} />
         </>
       )}
 
@@ -713,24 +674,20 @@ function FrameControls({ borderThickness, cornerRadius, cropRatio = 'free', aspe
         <>
           {/* What the chosen ratio applies to: trim the photo, or matte it into
               a frame of that ratio (photo keeps its own aspect, uncropped). */}
-          <div className="controls__seg" role="radiogroup" aria-label="Aspect mode"
-            style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
-            <button role="radio" aria-checked={aspectMode !== 'fit'}
-              className={`controls__seg-btn${aspectMode !== 'fit' ? ' controls__seg-btn--active' : ''}`}
-              onClick={() => onUpdate('aspectMode', 'crop')}>Crop photo</button>
-            <button role="radio" aria-checked={aspectMode === 'fit'}
-              className={`controls__seg-btn${aspectMode === 'fit' ? ' controls__seg-btn--active' : ''}`}
-              onClick={() => onUpdate('aspectMode', 'fit')}>Fit photo</button>
-          </div>
-          <p className="controls__hint" style={{ margin: '0 0 2px' }}>
+          <Segmented label="Aspect mode" value={aspectMode === 'fit' ? 'fit' : 'crop'}
+            onChange={v => onUpdate('aspectMode', v)}
+            options={[{ id: 'crop', label: 'Crop photo' }, { id: 'fit', label: 'Fit photo' }]} />
+          <p className="controls__hint">
             {aspectMode === 'fit'
               ? 'Frame takes this ratio; photo is matted inside, uncropped.'
               : 'Photo is trimmed to this ratio.'}
           </p>
-          <label className="controls__label" style={{ marginBottom: 2 }}>
+          <label className="controls__label">
             {cropRatio === 'free' ? 'Aspect ratio' : (aspectMode === 'fit' ? 'Frame ratio' : 'Crop ratio')}
           </label>
-          <div className="controls__layer-strip">
+          {/* Choice chips on one scrolling line. The chosen ratio carries a flip
+              cue: tap it again to turn it on its side. */}
+          <div className="chips scroller controls__chips" role="group" aria-label="Ratio">
             {CROP_RATIOS.map(r => {
               const isPortrait  = cropRatio === r.id
               const isLandscape = r.alt !== null && cropRatio === r.alt
@@ -742,17 +699,10 @@ function FrameControls({ borderThickness, cornerRadius, cropRatio = 'free', aspe
                 else if (canFlip) { onUpdate('cropRatio', isPortrait ? r.alt : r.id) }
               }
               return (
-                <button key={r.id}
-                  className={`controls__ratio-chip${isActive ? ' controls__ratio-chip--active' : ''}`}
-                  onClick={handleClick} aria-pressed={isActive}>
+                <button key={r.id} type="button" className="chip num" onClick={handleClick} aria-pressed={isActive}
+                  aria-label={isActive && canFlip ? `${displayLabel}, tap to flip` : displayLabel}>
                   {displayLabel}
-                  {isActive && canFlip && (
-                    <svg className="controls__ratio-flip" width="11" height="11" viewBox="0 0 24 24" fill="none"
-                      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <polyline points="23 4 23 10 17 10"/>
-                      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                    </svg>
-                  )}
+                  {isActive && canFlip && <Icon name="refresh-cw" className="controls__flip" />}
                 </button>
               )
             })}
@@ -762,25 +712,17 @@ function FrameControls({ borderThickness, cornerRadius, cropRatio = 'free', aspe
 
       {sub === 'grid' && (
         <>
-          <div className="controls__row">
-            <label className="controls__label">Snap to grid</label>
-            <Toggle on={!!snapEnabled} onChange={() => onSnapToggle?.()} label="Toggle snapping"/>
-          </div>
+          <Switch label="Snap to grid" checked={!!snapEnabled} onChange={() => onSnapToggle?.()} />
           {snapEnabled && (
             <>
-              <label className="controls__label" style={{ margin: '4px 0 2px' }}>Divisions</label>
-              <div className="controls__seg" role="radiogroup" aria-label="Grid divisions"
-                style={{ gridTemplateColumns: `repeat(${GRID_OPTIONS.length}, 1fr)` }}>
-                {GRID_OPTIONS.map(n => (
-                  <button key={n} role="radio" aria-checked={gridDivisions === n}
-                    className={`controls__seg-btn${gridDivisions === n ? ' controls__seg-btn--active' : ''}`}
-                    onClick={() => onGridDivisions?.(n)}>{n}×{n}</button>
-                ))}
-              </div>
+              <label className="controls__label">Divisions</label>
+              <Segmented label="Grid divisions" value={gridDivisions} onChange={n => onGridDivisions?.(n)}
+                options={GRID_OPTIONS.map(n => ({ id: n, label: `${n}×${n}` }))} />
             </>
           )}
         </>
       )}
+      </div>
     </section>
   )
 }
@@ -795,13 +737,9 @@ function GrainControls({ grainAmount, grainVariability, grainSpread, grainMonoch
   const [sub, setSub] = useState('amount')
   return (
     <section className="controls__section controls__section--dock" aria-label="Grain">
-      <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }} role="tablist">
-        {GRAIN_SUBTABS.map(t => (
-          <button key={t.id} role="tab" aria-selected={sub === t.id}
-            className={`controls__seg-btn${sub === t.id ? ' controls__seg-btn--active' : ''}`}
-            onClick={() => setSub(t.id)}>{t.label}</button>
-        ))}
-      </div>
+      <Tabs label="Grain" tabs={GRAIN_SUBTABS} value={sub} onChange={setSub} idBase="grain" />
+      <div role="tabpanel" id="grain-panel" aria-labelledby={`grain-tab-${sub}`}
+        className="controls__panel">
 
       {sub === 'amount' && (
         <>
@@ -827,13 +765,46 @@ function GrainControls({ grainAmount, grainVariability, grainSpread, grainMonoch
           <Slider id="spread-slider" min={0} max={100} step={1} def={0}
             value={grainSpread} on={v => onUpdate('grainSpread', v)} />
 
-          <div className="controls__row controls__row--spaced">
-            <label className="controls__label">Monochrome</label>
-            <Toggle on={grainMonochrome} onChange={v => onUpdate('grainMonochrome', v)} label="Toggle monochrome grain"/>
-          </div>
+          <Switch label="Monochrome" checked={grainMonochrome} onChange={v => onUpdate('grainMonochrome', v)} />
         </>
       )}
+      </div>
     </section>
+  )
+}
+
+/**
+ * The layers of one kind (marks, text) as one scrolling row: Add, then a chip
+ * per layer — the chosen one is the layer the panel edits — then Remove for
+ * that chosen layer. One remove control at full target size, instead of a
+ * small × inside every chip (those were 20px targets).
+ */
+function LayerStrip({ kind, layers, selectedId, labelFor, dotFor, onAdd, onSelect, onRemove }) {
+  const selIndex = layers.findIndex(l => l.id === selectedId)
+  const sel = selIndex >= 0 ? layers[selIndex] : null
+  return (
+    <div className="controls__layers">
+      <button type="button" className="btn" data-size="sm" onClick={onAdd} aria-label={`Add ${kind}`}>
+        <span className="btn__label"><Icon name="plus" />Add</span>
+      </button>
+      {layers.length > 0 && (
+        <div className="chips scroller controls__layer-chips" role="group" aria-label={`${kind}s`}>
+          {layers.map((l, i) => (
+            <button key={l.id} type="button" className="chip" aria-pressed={l.id === selectedId}
+              onClick={() => onSelect(l.id)}>
+              {dotFor && <span className="controls__markdot" style={{ '--swatch': dotFor(l) }} aria-hidden="true" />}
+              <span className="truncate">{labelFor(l, i)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {sel && (
+        <button type="button" className="btn" data-shape="circle" data-size="sm"
+          onClick={() => onRemove(sel.id)} aria-label={`Remove ${labelFor(sel, selIndex)}`}>
+          <Icon name="trash-2" />
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -874,47 +845,26 @@ function MarkControls({ layers, selectedId, selected, ul, onAdd, onRemove, onSel
   const [addOpen, setAddOpen] = useState(false)
 
   const noneHint = (
-    <p className="controls__hint" style={{ textAlign: 'center', padding: '4px 0 2px' }}>
+    <p className="controls__hint" data-align="center">
       {layers.length === 0 ? 'Tap Add to lay down a highlight.' : 'Tap a mark above to edit it.'}
     </p>
   )
 
   return (
     <section className="controls__section controls__section--dock" aria-label="Highlight marks">
-      <div className="controls__layer-strip">
-        <button className="controls__layer-add"
-          onClick={() => layers.length ? setAddOpen(true) : onAdd()} aria-label="Add highlight">
-          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-            <path d="M7 2v10M2 7h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-          </svg>
-          <span>Add</span>
-        </button>
-        {layers.map((l, i) => (
-          <div key={l.id}
-            className={`controls__layer-chip${l.id === selectedId ? ' controls__layer-chip--active' : ''}`}>
-            <button className="controls__layer-chip__label"
-              onClick={() => onSelect(l.id)} aria-pressed={l.id === selectedId}>
-              <span className="controls__markdot" style={{ background: l.color }} aria-hidden="true" />
-              Mark {i + 1}
-            </button>
-            <button className="controls__layer-chip__remove"
-              onClick={() => onRemove(l.id)} aria-label={`Remove mark ${i + 1}`}>×</button>
-          </div>
-        ))}
-      </div>
+      <LayerStrip kind="mark" layers={layers} selectedId={selectedId}
+        labelFor={(l, i) => `Mark ${i + 1}`} dotFor={l => l.color}
+        onAdd={() => layers.length ? setAddOpen(true) : onAdd()}
+        onSelect={onSelect} onRemove={onRemove} />
 
-      <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }} role="tablist">
-        {MARK_SUBTABS.map(t => (
-          <button key={t.id} role="tab" aria-selected={sub === t.id}
-            className={`controls__seg-btn${sub === t.id ? ' controls__seg-btn--active' : ''}`}
-            onClick={() => setSub(t.id)}>{t.label}</button>
-        ))}
-      </div>
+      <Tabs label="Mark" tabs={MARK_SUBTABS} value={sub} onChange={setSub} idBase="mark" />
+      <div role="tabpanel" id="mark-panel" aria-labelledby={`mark-tab-${sub}`}
+        className="controls__panel">
 
       {!selected ? noneHint : (<>
         {sub === 'shape' && (
           <>
-            <p className="controls__hint" style={{ margin: '0 0 2px' }}>Drag the mark on the photo, or tap a value.</p>
+            <p className="controls__hint">Drag the mark on the photo, or tap a value.</p>
             <ParamRows params={[
               { key: 'w', label: 'Width', suffix: '%', min: 4, max: 100, step: 1, def: 62,
                 value: Math.round((selected.w ?? 0.62) * 100), onChange: v => ul('w', v / 100) },
@@ -934,23 +884,25 @@ function MarkControls({ layers, selectedId, selected, ul, onAdd, onRemove, onSel
           <>
             <div className="controls__color-row controls__color-row--active">
               <ColorField value={selected.color} label="Highlight color" onChange={v => ul('color', v)} />
-              <span className="controls__color-hint" style={{ flex: 1 }}>Ink color</span>
-              <EditableValue value={selected.opacity ?? 85} min={5} max={100} suffix="%"
-                style={{ fontSize: 11 }} label="Opacity" onChange={v => ul('opacity', v)} />
+              <span className="controls__color-hint">Ink color</span>
+              <EditableValue value={selected.opacity ?? 85} min={5} max={100} suffix="%" label="Opacity" onChange={v => ul('opacity', v)} />
             </div>
             <Slider min={5} max={100} step={1} def={85}
               value={selected.opacity ?? 85} on={v => ul('opacity', v)} aria-label="Highlight opacity" />
 
-            <label className="controls__label" style={{ margin: '4px 0 2px' }}>Blend</label>
-            <div className="controls__seg" role="radiogroup" aria-label="Blend mode"
-              style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+            <label className="controls__label">Blend</label>
+            {/* Six modes: past the segmented control's four, so choice chips on
+                one scrolling line (the next chip peeking in is the cue). */}
+            <div className="chips scroller controls__chips" role="radiogroup" aria-label="Blend mode">
               {MARK_BLENDS.map(m => (
-                <button key={m.id} role="radio" aria-checked={(selected.blend ?? 'multiply') === m.id}
-                  className={`controls__seg-btn${(selected.blend ?? 'multiply') === m.id ? ' controls__seg-btn--active' : ''}`}
-                  onClick={() => ul('blend', m.id)}>{m.label}</button>
+                <label key={m.id} className="chip">
+                  <input className="chip__input" type="radio" name="mark-blend" value={m.id}
+                    checked={(selected.blend ?? 'multiply') === m.id} onChange={() => ul('blend', m.id)} />
+                  {m.label}
+                </label>
               ))}
             </div>
-            <p className="controls__hint" style={{ margin: '2px 0 0' }}>
+            <p className="controls__hint">
               Multiply is how real highlighter ink behaves — it only darkens.
             </p>
           </>
@@ -958,15 +910,9 @@ function MarkControls({ layers, selectedId, selected, ul, onAdd, onRemove, onSel
 
         {sub === 'edge' && (
           <>
-            <div className="controls__seg" role="radiogroup" aria-label="Edge style"
-              style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
-              {MARK_EDGES.map(m => (
-                <button key={m.id} role="radio" aria-checked={(selected.edge ?? 'marker') === m.id}
-                  className={`controls__seg-btn${(selected.edge ?? 'marker') === m.id ? ' controls__seg-btn--active' : ''}`}
-                  onClick={() => ul('edge', m.id)}>{m.label}</button>
-              ))}
-            </div>
-            <p className="controls__hint" style={{ margin: '0 0 2px' }}>{EDGE_HINT[selected.edge ?? 'marker']}</p>
+            <Segmented label="Edge style" value={selected.edge ?? 'marker'} onChange={v => ul('edge', v)}
+              options={MARK_EDGES} />
+            <p className="controls__hint">{EDGE_HINT[selected.edge ?? 'marker']}</p>
 
             <ParamRows params={[
               (selected.edge ?? 'marker') !== 'clean' && {
@@ -981,23 +927,15 @@ function MarkControls({ layers, selectedId, selected, ul, onAdd, onRemove, onSel
             ]} />
 
             {(selected.grain ?? 0) > 0 && (
-              <div className="controls__row controls__row--spaced">
-                <label className="controls__label">Dissolve</label>
-                <Toggle on={!!selected.grainDissolve} onChange={v => ul('grainDissolve', v)}
-                  label="Toggle dissolve grain"/>
-              </div>
+              <Switch label="Dissolve" checked={!!selected.grainDissolve} onChange={v => ul('grainDissolve', v)} />
             )}
           </>
         )}
 
         {sub === 'texture' && (
           <>
-            <div className="controls__row controls__row--spaced">
-              <label className="controls__label">Riso print</label>
-              <Toggle on={(selected.texture ?? 'none') === 'riso'}
-                onChange={v => ul('texture', v ? 'riso' : 'none')} label="Toggle riso texture"/>
-            </div>
-            <p className="controls__hint" style={{ margin: '0 0 2px' }}>
+            <Switch label="Riso print" checked={(selected.texture ?? 'none') === 'riso'} onChange={v => ul('texture', v ? 'riso' : 'none')} />
+            <p className="controls__hint">
               Rotated halftone screen, uneven drum coverage, and a misregistered pass.
             </p>
 
@@ -1016,6 +954,7 @@ function MarkControls({ layers, selectedId, selected, ul, onAdd, onRemove, onSel
         )}
       </>)}
 
+      </div>
       {addOpen && (
         <AddLayerSheet
           title="New highlight" layers={layers}
@@ -1041,7 +980,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
   const [addOpen, setAddOpen] = useState(false)
 
   const noLayerHint = (
-    <p className="controls__hint" style={{ textAlign: 'center', padding: '4px 0 2px' }}>
+    <p className="controls__hint" data-align="center">
       {textLayers.length === 0 ? 'Tap Add to create a text layer.' : 'Tap a layer above to edit it.'}
     </p>
   )
@@ -1049,49 +988,29 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
   return (
     <section className="controls__section controls__section--dock" aria-label="Text layers">
       {/* Layer strip — always visible */}
-      <div className="controls__layer-strip">
-        <button className="controls__layer-add"
-          onClick={() => textLayers.length ? setAddOpen(true) : onAddLayer()} aria-label="Add text layer">
-          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-            <path d="M7 2v10M2 7h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-          </svg>
-          <span>Add</span>
-        </button>
-        {textLayers.map(layer => (
-          <div key={layer.id}
-            className={`controls__layer-chip${layer.id === selectedLayerId ? ' controls__layer-chip--active' : ''}`}>
-            <button className="controls__layer-chip__label"
-              onClick={() => onSelectLayer(layer.id)} aria-pressed={layer.id === selectedLayerId}>
-              {layer.content.trim() ? layer.content.trim().slice(0, 12) : 'Empty'}
-            </button>
-            <button className="controls__layer-chip__remove"
-              onClick={() => onRemoveLayer(layer.id)} aria-label="Remove layer">×</button>
-          </div>
-        ))}
-      </div>
+      <LayerStrip kind="text layer" layers={textLayers} selectedId={selectedLayerId}
+        labelFor={(l, i) => (l.content.trim() ? l.content.trim().slice(0, 14) : `Layer ${i + 1}`)}
+        onAdd={() => textLayers.length ? setAddOpen(true) : onAddLayer()}
+        onSelect={onSelectLayer} onRemove={onRemoveLayer} />
 
       {/* Sub-tab bar */}
-      <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }} role="tablist">
-        {TEXT_SUBTABS.map(t => (
-          <button key={t.id} role="tab" aria-selected={sub === t.id}
-            className={`controls__seg-btn${sub === t.id ? ' controls__seg-btn--active' : ''}`}
-            onClick={() => setSub(t.id)}>{t.label}</button>
-        ))}
-      </div>
+      <Tabs label="Text" tabs={TEXT_SUBTABS} value={sub} onChange={setSub} idBase="text" />
+      <div role="tabpanel" id="text-panel" aria-labelledby={`text-tab-${sub}`}
+        className="controls__panel">
 
       {/* Content sub-tab */}
       {sub === 'content' && (
         selectedLayer ? (
           <>
             <textarea
-              className="controls__textarea"
+              className="input controls__textarea" aria-label="Text"
               placeholder="Type something…"
               value={selectedLayer.content}
               onChange={e => ul('content', e.target.value)}
               rows={3}
               spellCheck={false}
             />
-            <p className="controls__hint" style={{ textAlign: 'center', marginTop: 0 }}>
+            <p className="controls__hint" data-align="center">
               Tap text on canvas to reposition
             </p>
           </>
@@ -1131,21 +1050,17 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
         selectedLayer ? (
           <>
             <div className="controls__text-row">
-              <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(2, 1fr)', flex: '0 0 auto', width: 80 }}>
-                <button className={`controls__seg-btn${selectedLayer.bold ? ' controls__seg-btn--active' : ''}`}
-                  style={{ fontWeight: 700 }} onClick={() => ul('bold', !selectedLayer.bold)}
-                  aria-pressed={selectedLayer.bold}>B</button>
-                <button className={`controls__seg-btn${selectedLayer.italic ? ' controls__seg-btn--active' : ''}`}
+              {/* Bold and italic are toggles, each a circle holding its letter. */}
+              <div className="controls__toggles" role="group" aria-label="Style">
+                <button type="button" className="btn controls__letter" data-shape="circle" data-size="sm"
+                  style={{ fontWeight: 800 }} onClick={() => ul('bold', !selectedLayer.bold)}
+                  aria-pressed={!!selectedLayer.bold} aria-label="Bold">B</button>
+                <button type="button" className="btn controls__letter" data-shape="circle" data-size="sm"
                   style={{ fontStyle: 'italic' }} onClick={() => ul('italic', !selectedLayer.italic)}
-                  aria-pressed={selectedLayer.italic}>I</button>
+                  aria-pressed={!!selectedLayer.italic} aria-label="Italic">I</button>
               </div>
-              <div className="controls__seg controls__seg--fill" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
-                {ALIGNS.map(a => (
-                  <button key={a.id} role="radio" aria-checked={selectedLayer.align === a.id}
-                    className={`controls__seg-btn${selectedLayer.align === a.id ? ' controls__seg-btn--active' : ''}`}
-                    onClick={() => ul('align', a.id)}>{a.label}</button>
-                ))}
-              </div>
+              <Segmented label="Alignment" value={selectedLayer.align} onChange={v => ul('align', v)}
+                options={ALIGNS} />
             </div>
 
             <ParamRows params={[
@@ -1177,15 +1092,11 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
           <>
             <div className="controls__text-row">
               <ColorField value={selectedLayer.color} label="Text color" onChange={v => ul('color', v)} />
-              <div className="controls__effects-row">
-                <button
-                  className={`controls__effect-btn${selectedLayer.shadow ? ' controls__effect-btn--active' : ''}`}
-                  onClick={() => ul('shadow', !selectedLayer.shadow)} aria-pressed={selectedLayer.shadow}
-                >Shadow</button>
-                <button
-                  className={`controls__effect-btn${selectedLayer.stroke ? ' controls__effect-btn--active' : ''}`}
-                  onClick={() => ul('stroke', !selectedLayer.stroke)} aria-pressed={selectedLayer.stroke}
-                >Outline</button>
+              <div className="chips scroller controls__chips controls__effects" role="group" aria-label="Effects">
+                <button type="button" className="chip" aria-pressed={!!selectedLayer.shadow}
+                  onClick={() => ul('shadow', !selectedLayer.shadow)}>Shadow</button>
+                <button type="button" className="chip" aria-pressed={!!selectedLayer.stroke}
+                  onClick={() => ul('stroke', !selectedLayer.stroke)}>Outline</button>
               </div>
             </div>
 
@@ -1207,22 +1118,15 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
 
             <div className="controls__divider controls__divider--inset"/>
 
-            <div className="controls__seg" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}
-              role="radiogroup" aria-label="Text background">
-              {TEXT_BG_MODES.map(m => (
-                <button key={m.id} role="radio" aria-checked={selectedLayer.bg === m.id}
-                  className={`controls__seg-btn${selectedLayer.bg === m.id ? ' controls__seg-btn--active' : ''}`}
-                  onClick={() => ul('bg', m.id)}>{m.label}</button>
-              ))}
-            </div>
+            <Segmented label="Text background" value={selectedLayer.bg} onChange={v => ul('bg', v)}
+              options={TEXT_BG_MODES} />
 
             {selectedLayer.bg !== 'none' && (
               <>
                 <div className="controls__color-row controls__color-row--active">
                   <ColorField value={selectedLayer.bgColor} label="Background color" onChange={v => ul('bgColor', v)} />
-                  <span className="controls__color-hint" style={{ flex: 1 }}>BG color</span>
-                  <EditableValue value={selectedLayer.bgOpacity} min={10} max={100} suffix="%"
-                    style={{ fontSize: 11 }} onChange={v => ul('bgOpacity', v)} />
+                  <span className="controls__color-hint">Background color</span>
+                  <EditableValue value={selectedLayer.bgOpacity} min={10} max={100} suffix="%" onChange={v => ul('bgOpacity', v)} />
                 </div>
                 <Slider min={10} max={100} step={1} value={selectedLayer.bgOpacity} def={50}
                   on={v => ul('bgOpacity', v)} aria-label="Background opacity"/>
@@ -1230,19 +1134,10 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                 {/* Label and choice share a row, and the two sizes share one
                     param strip — this panel is the tallest in the app and any
                     row added here comes straight off the image. */}
-                <div className="controls__row controls__row--spaced" style={{ gap: 10 }}>
-                  <label className="controls__label">Box size</label>
-                  <div className="controls__seg controls__seg--fill" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}
-                    role="radiogroup" aria-label="Background box size">
-                    {TEXT_BOX_SIZES.map(m => {
-                      const active = (selectedLayer.boxSize ?? 'auto') === m.id
-                      return (
-                        <button key={m.id} role="radio" aria-checked={active}
-                          className={`controls__seg-btn${active ? ' controls__seg-btn--active' : ''}`}
-                          onClick={() => ul('boxSize', m.id)}>{m.label}</button>
-                      )
-                    })}
-                  </div>
+                <div className="controls__row controls__row--spaced controls__row--seg">
+                  <span className="controls__label" id="box-size-l">Box size</span>
+                  <Segmented label="Box size" value={selectedLayer.boxSize ?? 'auto'} onChange={v => ul('boxSize', v)}
+                    options={TEXT_BOX_SIZES} block={false} />
                 </div>
 
                 {(selectedLayer.boxSize ?? 'auto') === 'manual' && (
@@ -1259,10 +1154,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
             <div className="controls__divider controls__divider--inset"/>
 
             {/* Blob stroke — gooey distance-based outline that merges nearby letters */}
-            <div className="controls__row controls__row--spaced">
-              <label className="controls__label">Blob stroke</label>
-              <Toggle on={!!selectedLayer.blobStroke} onChange={v => ul('blobStroke', v)} label="Toggle blob stroke"/>
-            </div>
+            <Switch label="Blob stroke" checked={!!selectedLayer.blobStroke} onChange={v => ul('blobStroke', v)} />
 
             {selectedLayer.blobStroke && (
               <>
@@ -1314,16 +1206,8 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                     <Slider id="blob-grain-rough" min={0} max={100} step={1} def={0}
                       value={selectedLayer.blobGrainRough ?? 0} on={v => ul('blobGrainRough', v)} />
 
-                    <div className="controls__row controls__row--spaced">
-                      <label className="controls__label">Dissolve</label>
-                      <Toggle on={!!selectedLayer.blobGrainDissolve}
-                        onChange={v => ul('blobGrainDissolve', v)} label="Toggle blob grain dissolve"/>
-                    </div>
-                    <div className="controls__row controls__row--spaced">
-                      <label className="controls__label">Monochrome grain</label>
-                      <Toggle on={selectedLayer.blobGrainMono ?? true}
-                        onChange={v => ul('blobGrainMono', v)} label="Toggle blob monochrome grain"/>
-                    </div>
+                    <Switch label="Dissolve" checked={!!selectedLayer.blobGrainDissolve} onChange={v => ul('blobGrainDissolve', v)} />
+                    <Switch label="Monochrome grain" checked={selectedLayer.blobGrainMono ?? true} onChange={v => ul('blobGrainMono', v)} />
                   </>
                 )}
               </>
@@ -1332,10 +1216,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
             <div className="controls__divider controls__divider--inset"/>
 
             {/* Rear-curtain-sync motion blur — sharp text with a fading trail behind it */}
-            <div className="controls__row controls__row--spaced">
-              <label className="controls__label">Motion blur</label>
-              <Toggle on={!!selectedLayer.motionBlur} onChange={v => ul('motionBlur', v)} label="Toggle motion blur"/>
-            </div>
+            <Switch label="Motion blur" checked={!!selectedLayer.motionBlur} onChange={v => ul('motionBlur', v)} />
 
             {selectedLayer.motionBlur && (
               <>
@@ -1407,17 +1288,9 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                       value={selectedLayer.trailGrainSpread ?? 0}
                       on={v => ul('trailGrainSpread', v)} />
 
-                    <div className="controls__row controls__row--spaced">
-                      <label className="controls__label">Dissolve</label>
-                      <Toggle on={!!selectedLayer.trailGrainDissolve}
-                        onChange={v => ul('trailGrainDissolve', v)} label="Toggle dissolve grain mode"/>
-                    </div>
+                    <Switch label="Dissolve" checked={!!selectedLayer.trailGrainDissolve} onChange={v => ul('trailGrainDissolve', v)} />
 
-                    <div className="controls__row controls__row--spaced">
-                      <label className="controls__label">Monochrome grain</label>
-                      <Toggle on={selectedLayer.trailGrainMono ?? true}
-                        onChange={v => ul('trailGrainMono', v)} label="Toggle monochrome trail grain"/>
-                    </div>
+                    <Switch label="Monochrome grain" checked={selectedLayer.trailGrainMono ?? true} onChange={v => ul('trailGrainMono', v)} />
                   </>
                 )}
               </>
@@ -1426,10 +1299,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
             <div className="controls__divider controls__divider--inset"/>
 
             {/* Echo — discrete decaying ghost copies (After Effects-style) */}
-            <div className="controls__row controls__row--spaced">
-              <label className="controls__label">Echo</label>
-              <Toggle on={!!selectedLayer.echo} onChange={v => ul('echo', v)} label="Toggle echo"/>
-            </div>
+            <Switch label="Echo" checked={!!selectedLayer.echo} onChange={v => ul('echo', v)} />
 
             {selectedLayer.echo && (
               <>
@@ -1482,13 +1352,9 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
                 <Slider id="echo-blur" min={0} max={60} step={1} def={0}
                   value={selectedLayer.echoBlur ?? 0} on={v => ul('echoBlur', v)} />
 
-                <div className="controls__seg" role="radiogroup" aria-label="Echo blend"
-                  style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginTop: 8 }}>
-                  {ECHO_BLENDS.map(m => (
-                    <button key={m.id} role="radio" aria-checked={(selectedLayer.echoBlend ?? 'stack') === m.id}
-                      className={`controls__seg-btn${(selectedLayer.echoBlend ?? 'stack') === m.id ? ' controls__seg-btn--active' : ''}`}
-                      onClick={() => ul('echoBlend', m.id)}>{m.label}</button>
-                  ))}
+                <div className="controls__spaced">
+                  <Segmented label="Echo blend" value={selectedLayer.echoBlend ?? 'stack'}
+                    onChange={v => ul('echoBlend', v)} options={ECHO_BLENDS} />
                 </div>
 
                 {/* Experimental per-echo transforms */}
@@ -1521,6 +1387,7 @@ function TextControls({ textLayers, selectedLayerId, selectedLayer, ul, onAddLay
         ) : noLayerHint
       )}
 
+      </div>
       {addOpen && (
         <AddLayerSheet
           title="New text layer" layers={textLayers}
