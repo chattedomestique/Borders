@@ -1,15 +1,18 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-palette="sand">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
 
     <title>Border Studio</title>
     <meta name="description" content="Add beautiful borders and frames to your photos and videos — save directly to your iOS Photos library." />
 
     <!-- PWA — the manifest link + theme-color are injected by vite-plugin-pwa. -->
-    <meta name="theme-color" content="#F2EDE6" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#181513" media="(prefers-color-scheme: dark)" />
+    <!-- Both equal the style guide's --canvas in the sand palette, resolved in a
+         browser (light / dark). Change them together with data-palette. -->
+    <meta name="theme-color" content="#E9E8DF" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0F0F0B" media="(prefers-color-scheme: dark)" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <!-- §3.4: `default`, not `black-translucent` — the translucent style forces
@@ -26,10 +29,19 @@
     <meta property="og:title" content="Border Studio" />
     <meta property="og:description" content="Add beautiful borders and frames to your photos." />
     <meta property="og:type" content="website" />
-    <script type="module" crossorigin src="/Borders/assets/index-D8vPbjNg.js"></script>
-    <link rel="stylesheet" crossorigin href="/Borders/assets/index-DFf17yRt.css">
+    <script type="module" crossorigin src="/Borders/assets/index-B7KkdbDk.js"></script>
+    <link rel="stylesheet" crossorigin href="/Borders/assets/index-Bwv4dmSk.css">
   <link rel="manifest" href="/Borders/manifest.webmanifest"></head>
   <body>
     <div id="root"></div>
+    <!-- The style guide's layout scripts (see src/vendor/styleguide/VERSION.md):
+         core (SG.fit), the segmented control's fit, the toolbar's pages. Plain
+         scripts by design (they work from file://), so not part of the bundle. -->
+    <script src="/Borders/sg/core.min.js" defer></script>
+    <script src="/Borders/sg/js/44-segmented.min.js" defer></script>
+    <!-- 70-scrubber defines SG.afterParse, which 71-toolbar needs (not listed in
+         the style guide's manifest). Inert without .scrubber elements. -->
+    <script src="/Borders/sg/js/70-scrubber.min.js" defer></script>
+    <script src="/Borders/sg/js/71-toolbar.min.js" defer></script>
   </body>
 </html>
